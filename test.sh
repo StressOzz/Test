@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.100
+# Version: 5.110
 ZM_VERSION_EOF
 set -e
 
@@ -1269,6 +1269,8 @@ _fk_b4_watch() { _zmL forkozz && _fk_b4_watch "$@"; }
 _fk_ghdl_patch() { _zmL forkozz && _fk_ghdl_patch "$@"; }
 _fk_subck_patch() { _zmL forkozz && _fk_subck_patch "$@"; }
 _fk_hdr_patch() { _zmL forkozz && _fk_hdr_patch "$@"; }
+_fk_autogrp_watch() { _zmL forkozz && _fk_autogrp_watch "$@"; }
+_fk_autogrp_sync() { _zmL forkozz && _fk_autogrp_sync "$@"; }
 _fk_listsvia_patch() { _zmL forkozz && _fk_listsvia_patch "$@"; }
 _fk_subvia_patch() { _zmL forkozz && _fk_subvia_patch "$@"; }
 _fk_reality_patch() { _zmL forkozz && _fk_reality_patch "$@"; }
@@ -6465,6 +6467,8 @@ ST_SUB_INFO="$ST_DIR/sub.userinfo"
 ST_SUB_URL="$ST_DIR/sub.url"
 ST_SUB_TITLE="$ST_DIR/sub.title"
 ST_SUB_NODE="$ST_DIR/sub.node"
+ST_SUB_GRP="$ST_DIR/sub.group"
+ST_SUB_GRPS="$ST_DIR/sub.autogrp"
 ST_SUB_EXCL="$ST_DIR/sub.exclude"
 ST_SUB_HIDE="$ST_DIR/sub.hidden"
 ST_EXIT="$ST_DIR/exit"
@@ -6769,7 +6773,7 @@ steer_action() {
 			w="${mode#?}"; w="${w%%\~*}"; mode="${mode#?$w?}"
 			_st_sec_ok "$w" || { echo '{"error":"нет такой секции — обновите страницу"}'; return 1; }
 			case "$action" in
-				lists|devs_set|list_set|list_get|list_reset|svc_find|svc_dom|sub_status|sub_probe|sub_tcp|lat_mode|node_pol|sub_home|sub_links_get|sub_set|sub_links|sub_update|sub_remove|sub_node|sub_filter|sub_hide|sub_pick|sub_ping) ;;
+				lists|devs_set|list_set|list_get|list_reset|svc_find|svc_dom|sub_status|sub_probe|sub_tcp|lat_mode|node_pol|sub_home|sub_links_get|sub_set|sub_links|sub_update|sub_remove|sub_node|sub_group|sub_filter|sub_hide|sub_pick|sub_ping) ;;
 				*) echo '{"error":"это действие общее для всех секций"}'; return 1 ;;
 			esac
 			( _st_bind "$w"; steer_action "$action" "$mode" ); return $? ;;
@@ -7400,6 +7404,9 @@ FK_REPO="yandexru45/netshift"
 FK_PIN="0.9.12"
 FK_MARK="/usr/lib/netshift/zm-managed"
 FK_UC="/opt/zapret-manager-luci/netshift.uc"
+ZM_AG_JQ="/opt/zapret-manager-luci/autogrp.jq"
+ZM_AG_FK_JQ="/opt/zapret-manager-luci/autogrp-fk.jq"
+FK_AG_FILE="$ZM_STATE_DIR/fk.autogrp.json"
 FK_SB_OWN="$ZM_STATE_DIR/netshift.singbox"
 FK_DEPS="ca-bundle kmod-inet-diag kmod-tun curl jq ucode ucode-mod-fs ucode-mod-uci kmod-nft-tproxy coreutils-base64 bind-dig ip-full"
 FK_NFT="NetShiftTable"
@@ -7735,6 +7742,7 @@ _fk_service0() {
 	_fk_subck_patch
 	_fk_hdr_patch
 	_fk_dnslan_patch noreload
+	_fk_autogrp_sync quiet cached
 	mkdir -p /etc/sing-box
 	_fk_log_mark
 	: > "$JOBS_DIR/forkop-svc.out"
@@ -12557,6 +12565,157 @@ _fk_hdr_patch() {
 		cat "$b" > "$f"; rm -f "$b"
 	fi
 	rm -f "$t.jq" "$t.json"
+	_fk_wspath_patch
+	return 0
+}
+
+_fk_wspath_patch() {
+	local f=/usr/lib/netshift/helpers.sh b t="/tmp/zm-fkwsp.$$"
+	[ -f "$f" ] || return 0
+	grep -qF 'kv("path"; (((\$ss.wsSettings.path // "") | tostring | split("?") | .[0]) // "")),' "$f" && return 0
+	[ "$(grep -c 'kv("path"; (\$ss.wsSettings.path // "")),$' "$f")" = 1 ] || return 0
+	command -v jq >/dev/null 2>&1 || return 0
+	b="$f.zm-wsp"
+	cp -f "$f" "$b" || return 0
+	sed -i 's/kv("path"; (\$ss.wsSettings.path \/\/ "")),$/kv("path"; (((\$ss.wsSettings.path \/\/ "") | tostring | split("?") | .[0]) \/\/ "")),/' "$f"
+	awk '/^xray_json_to_uri_lines\(\) \{/ { f = 1 } f && /jq -er .$/ { p = 1; next } p && /^    . "\$src_file"/ { exit } p { print }' "$f" > "$t.jq"
+	printf '%s' '[{"remarks":"A","outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":"a.example","port":443,"users":[{"id":"u"}]}]},"streamSettings":{"network":"ws","security":"tls","wsSettings":{"path":"/nl?ed=2048"}}}]}]' > "$t.json"
+	if sh -n "$f" 2>/dev/null && [ -s "$t.jq" ] && jq -er -f "$t.jq" "$t.json" 2>/dev/null | grep -q '[?&]path=/nl\(&\|#\|$\)'; then
+		rm -f "$b"
+		logger -t zapret-manager "$(_fk_name): серверы WebSocket с путём вида /путь?ed=… больше не теряют путь"
+	else
+		cat "$b" > "$f"; rm -f "$b"
+	fi
+	rm -f "$t.jq" "$t.json"
+	return 0
+}
+
+_fk_ag_secs() {
+	local s
+	for s in $(uci -q show netshift 2>/dev/null | sed -n "s/^netshift\.\([A-Za-z0-9_]*\)\.proxy_config_type='subscription'$/\1/p"); do
+		[ "$(uci -q get "netshift.$s.connection_type")" = proxy ] && [ -n "$(uci -q get "netshift.$s.subscription_url")" ] && echo "$s"
+	done
+}
+
+_fk_ag_urlkey() { uci -q get "netshift.$1.subscription_url" | md5sum | cut -c1-12; }
+
+_fk_ag_fetch() {
+	local s="$1" u="$2" out="$3" ua hw os md kv
+	ua="$(uci -q get "netshift.$s.subscription_user_agent")"
+	case "$ua" in [Hh][Aa][Pp][Pp]/*) ;; *) ua="Happ/1.0.0" ;; esac
+	hw="$(uci -q get "netshift.$s.subscription_hwid")"
+	[ -n "$hw" ] || hw="$( ( . /usr/lib/netshift/helpers.sh >/dev/null 2>&1 && command -v generate_hwid >/dev/null 2>&1 && generate_hwid ) 2>/dev/null)"
+	printf '%s' "$hw" | grep -qE '^[A-Za-z0-9._:-]{1,128}$' || hw=""
+	os="$(uci -q get "netshift.$s.subscription_device_os")"; [ -n "$os" ] || os="OpenWrt Linux"
+	md="$(uci -q get "netshift.$s.subscription_device_model")"; [ -n "$md" ] || md="$(cat /tmp/sysinfo/model 2>/dev/null)"; [ -n "$md" ] || md="OpenWrt Router"
+	kv="$(uci -q get "netshift.$s.subscription_os_version")"; [ -n "$kv" ] || kv="$(uname -r)"
+	set -- -A "$ua" -H "X-Device-OS: $os" -H "X-Device-Model: $md" -H "X-Ver-OS: $kv" -H "Accept-Language: ru-RU,en,*" -H "X-Device-Locale: EN"
+	[ -n "$hw" ] && set -- "$@" -H "X-HWID: $hw"
+	[ "$(uci -q get "netshift.$s.subscription_insecure")" = 1 ] && set -- "$@" -k
+	rm -f "$out"
+	curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" "$@" -o "$out" "$u" 2>/dev/null && [ -s "$out" ]
+}
+
+_fk_ag_flags() {
+	local s want ch=0
+	for s in $(uci -q show netshift 2>/dev/null | sed -n "s/^netshift\.\([A-Za-z0-9_]*\)=section$/\1/p"); do
+		want=""
+		[ -s "$FK_AG_FILE" ] && [ "$(jq -r --arg s "$s" '(.[$s].groups // []) | length' "$FK_AG_FILE" 2>/dev/null)" -gt 0 ] 2>/dev/null && want=1
+		if [ -n "$want" ]; then
+			[ "$(uci -q get "netshift.$s.zm_autogrp")" = 1 ] || { uci -q set "netshift.$s.zm_autogrp=1"; ch=1; }
+		elif [ -n "$(uci -q get "netshift.$s.zm_autogrp")" ]; then
+			uci -q delete "netshift.$s.zm_autogrp"; ch=1
+		fi
+	done
+	[ "$ch" = 1 ] && uci -q commit netshift
+	[ "$ch" = 1 ]
+}
+
+_fk_ag_engine() {
+	[ -s "$FK_AG_FILE" ] && [ "$(jq '[.[].groups[]?] | length' "$FK_AG_FILE" 2>/dev/null)" -gt 0 ] 2>/dev/null || return 1
+	grep -q '^# ZM_AUTOGRP$' /usr/bin/netshift 2>/dev/null && return 1
+	_fk_ucj device_setup >/dev/null 2>&1
+	grep -q '^# ZM_AUTOGRP$' /usr/bin/netshift 2>/dev/null
+}
+
+_fk_autogrp_sync() {
+	local quiet="$1" how="$2" t="$JOBS_DIR/fk-ag.$$" s u k old_k ok chg=0 n
+	command -v jq >/dev/null 2>&1 && [ -s "$ZM_AG_JQ" ] && [ -s "$ZM_AG_FK_JQ" ] && _fk_installed || return 0
+	mkdir -p "$JOBS_DIR" "$ZM_STATE_DIR"
+	printf '{}' > "$t.all"
+	for s in $(_fk_ag_secs); do
+		k="$(_fk_ag_urlkey "$s")"
+		old_k="$(jq -r --arg s "$s" '.[$s].key // empty' "$FK_AG_FILE" 2>/dev/null)"
+		if [ "$how" = cached ] && [ -n "$old_k" ] && [ "$old_k" = "$k" ]; then
+			jq -c --arg s "$s" --slurpfile o "$FK_AG_FILE" '.[$s] = $o[0][$s]' "$t.all" > "$t.x" && mv -f "$t.x" "$t.all"
+			continue
+		fi
+		printf '{"groups":[]}' > "$t.sec"; ok=1
+		for u in $(uci -q get "netshift.$s.subscription_url"); do
+			if _fk_ag_fetch "$s" "$u" "$t.raw" && jq -c -f "$ZM_AG_JQ" "$t.raw" > "$t.g" 2>/dev/null && [ -s "$t.g" ]; then
+				jq -c --slurpfile g "$t.g" '.groups += $g[0].groups' "$t.sec" > "$t.x" && mv -f "$t.x" "$t.sec"
+			else
+				ok=0
+			fi
+		done
+		if [ "$ok" = 1 ]; then
+			jq -c --arg s "$s" --arg k "$k" --slurpfile g "$t.sec" '
+				.[$s] = { key: $k, groups: ($g[0].groups | reduce .[] as $x ({ seen: {}, out: [] };
+					($x.name) as $n | (if .seen[$n] then $n + " · " + ((.seen[$n] + 1) | tostring) else $n end) as $nn
+					| .seen[$n] = ((.seen[$n] // 0) + 1) | .out += [ $x | .name = $nn ]) | .out) }' "$t.all" > "$t.x" && mv -f "$t.x" "$t.all"
+		elif [ -n "$old_k" ] && [ "$old_k" = "$k" ]; then
+			jq -c --arg s "$s" --slurpfile o "$FK_AG_FILE" '.[$s] = $o[0][$s]' "$t.all" > "$t.x" && mv -f "$t.x" "$t.all"
+			[ -n "$quiet" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО остались прежними"
+		else
+			[ -n "$quiet" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО появятся при следующем обновлении"
+		fi
+	done
+	jq -c 'with_entries(select((.value.groups // []) | length > 0))' "$t.all" > "$t.x" 2>/dev/null && mv -f "$t.x" "$t.all"
+	if [ "$(jq -cS . "$t.all" 2>/dev/null)" != "$(jq -cS . "$FK_AG_FILE" 2>/dev/null || echo '{}')" ]; then
+		if [ "$(cat "$t.all")" = "{}" ]; then rm -f "$FK_AG_FILE"; else ( umask 077; cp -f "$t.all" "$FK_AG_FILE" ); fi
+		chg=1
+	fi
+	rm -f "$t.all" "$t.sec" "$t.raw" "$t.g" "$t.x"
+	_fk_ag_flags && chg=1
+	_fk_ag_engine && chg=1
+	if [ -z "$quiet" ]; then
+		n="$(jq -r '[.[].groups[]?] | length' "$FK_AG_FILE" 2>/dev/null)"
+		if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
+			echo "   ✓ Группы АВТО из подписки: $(jq -r '[.[].groups[] | "«\(.name)» — \(.m | length)"] | join(", ")' "$FK_AG_FILE" 2>/dev/null)"
+		elif [ -n "$(_fk_ag_secs)" ]; then
+			echo "   · В подписке нет групп АВТО"
+		fi
+	fi
+	[ "$chg" = 1 ] || return 0
+	logger -t zapret-manager "$(_fk_name): группы АВТО из подписки обновлены ($(jq -r '[.[].groups[]?] | length' "$FK_AG_FILE" 2>/dev/null || echo 0))"
+	[ "$how" = noreload ] || [ "$how" = cached ] && return 0
+	_fk_up || return 0
+	[ -n "$quiet" ] || _fk_say "Применяем группы АВТО: Forkozz пересобирает конфиг sing-box"
+	if _zm_run 240 /usr/bin/netshift reload >/dev/null 2>&1; then [ -n "$quiet" ] || echo "   ✓ Готово"
+	else [ -n "$quiet" ] || echo "!! Forkozz не применил группы — нажмите «Применить»"; fi
+	return 0
+}
+
+_fk_autogrp_watch() {
+	local m="$JOBS_DIR/fk.ag.try" f="" need=""
+	command -v jq >/dev/null 2>&1 && [ -s "$ZM_AG_JQ" ] && _fk_installed && _fk_enabled && _fk_up || return 0
+	[ -n "$(find "$m" -mmin -30 2>/dev/null)" ] && return 0
+	if [ -z "$(_fk_ag_secs)" ]; then
+		[ -f "$FK_AG_FILE" ] || return 0
+		need=1
+	elif [ ! -f "$FK_AG_FILE" ]; then need=1
+	else
+		f="$(find /etc/netshift/subscriptions -name '*.json' -newer "$FK_AG_FILE" 2>/dev/null | head -n1)"
+		[ -n "$f" ] && need=1
+		for f in $(_fk_ag_secs); do
+			[ "$(jq -r --arg s "$f" '.[$s].key // empty' "$FK_AG_FILE" 2>/dev/null)" = "$(_fk_ag_urlkey "$f")" ] || need=1
+		done
+		[ "$(jq '[.[].groups[]?] | length' "$FK_AG_FILE" 2>/dev/null)" -gt 0 ] 2>/dev/null && ! grep -q '^# ZM_AUTOGRP$' /usr/bin/netshift 2>/dev/null && need=1
+	fi
+	[ -n "$need" ] || return 0
+	mkdir -p "$JOBS_DIR"; : > "$m"
+	_job_running forkop && return 0
+	( _fk_autogrp_sync quiet >/dev/null 2>&1 ) >/dev/null 2>&1 </dev/null &
 	return 0
 }
 
@@ -14221,6 +14380,8 @@ do_fk_subs() {
 	_fk_hdr_patch
 	_fk_dnslan_patch noreload
 	_fk_sub_update || { echo "ОШИБКА: подписка не обновилась — проверьте ссылку"; return 1; }
+	_fk_say "Ищем в подписке группы АВТО"
+	_fk_autogrp_sync
 	_fk_ext_auto all "$lx"
 	_fk_say "Готово: подписки обновлены"
 }
@@ -14974,6 +15135,7 @@ zm_watch() {
 		_fk_b4_watch
 		_fk_ru_watch
 		_fk_rs_watch
+		_fk_autogrp_watch
 		if _fk_installed && _fk_enabled && _fk_up && _fk_fip_stale && ! _job_running forkop && [ -z "$(find "$JOBS_DIR/fk.fip.try" -mmin -30 2>/dev/null)" ]; then
 			: > "$JOBS_DIR/fk.fip.try"
 			logger -t zapret-manager "$(_fk_name): пул Fake IP изменился — перезапускаем"
@@ -27708,7 +27870,7 @@ do_steer_onfail() {
 	_rb_say "Готово"
 }
 
-_st_node_label() { local n; n="$(cat "$ST_SUB_NODE" 2>/dev/null)"; [ -n "$n" ] && printf '«%s»' "$n" || printf 'автовыбор'; }
+_st_node_label() { local n; n="$(cat "$ST_SUB_NODE" 2>/dev/null)"; [ -n "$n" ] && { printf '«%s»' "$n"; return; }; n="$(_st_grp_cur)"; [ -n "$n" ] && printf 'группа «%s»' "$n" || printf 'автовыбор'; }
 
 do_steer_switch() {
 	local prev="${1:--}" rc why pol
@@ -28619,8 +28781,126 @@ _st_sub_names_fix() {
 	if [ -s "$ST_SUB_HIDE.tmp" ]; then mv -f "$ST_SUB_HIDE.tmp" "$ST_SUB_HIDE"; else rm -f "$ST_SUB_HIDE.tmp" "$ST_SUB_HIDE"; fi
 }
 
+_st_grp_has() { [ -n "$1" ] && [ -s "$ST_SUB_GRPS" ] && ZM_W="$1" awk -F'\t' '$1 == ENVIRON["ZM_W"] { f = 1 } END { exit !f }' "$ST_SUB_GRPS"; }
+
+_st_grp_cur() { local g; g="$(head -n1 "$ST_SUB_GRP" 2>/dev/null)"; [ -n "$g" ] && _st_grp_has "$g" && printf '%s' "$g"; }
+
+_st_grp_ids() {
+	[ -s "$ST_SUB.map" ] && [ -s "$ST_SUB_GRPS" ] || return 0
+	LC_ALL=C ZM_W="$1" awk -F'\t' -v G="$ST_SUB_GRPS" -v M="$ST_SUB.map" -v S="$ST_SUB" '
+		function hx(c) { return index("0123456789abcdef", tolower(c)) - 1 }
+		function pdec(v,    o, i, n, a, b) {
+			o = ""; n = length(v)
+			for (i = 1; i <= n; i++) {
+				if (substr(v, i, 1) == "%" && i + 2 <= n) { a = hx(substr(v, i + 1, 1)); b = hx(substr(v, i + 2, 1)); if (a >= 0 && b >= 0) { o = o sprintf("%c", a * 16 + b); i += 2; continue } }
+				o = o substr(v, i, 1)
+			}
+			return o
+		}
+		function qv(l, k,    q, n, i, p) {
+			q = l; sub(/#.*$/, "", q); if (!index(q, "?")) return ""
+			sub(/^[^?]*\?/, "", q); n = split(q, p, "&")
+			for (i = 1; i <= n; i++) if (index(p[i], k "=") == 1) return pdec(substr(p[i], length(k) + 2))
+			return ""
+		}
+		BEGIN {
+			while ((getline l < G) > 0) { split(l, a, "\t"); if (a[1] == ENVIRON["ZM_W"]) { nm = split(a[3], W, " ") } }
+			while ((getline l < M) > 0) { split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] }
+			ln = 0; while ((getline l < S) > 0) { ln++; if (ln in K) { pt = qv(l, "path"); if (pt == "") pt = qv(l, "serviceName"); sub(/\?.*$/, "", pt); P[ln] = pt } }
+		}
+		{ r++; id[r] = $1; lk[r] = ($1 in K) ? K[$1] : ""; sk[r] = lk[r] "|" P[$1] }
+		END {
+			for (j = 1; j <= nm; j++) {
+				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); f = 0
+				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m) { on[i] = 1; f = 1 }
+				if (!f) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x) on[i] = 1
+			}
+			for (i = 1; i <= r; i++) if (on[i]) print id[i]
+		}' "$2"
+}
+
+_st_stub_ids() {
+	[ -s "$ST_SUB.map" ] || return 0
+	LC_ALL=C awk -F'\t' -v G="$ST_SUB_GRPS" -v M="$ST_SUB.map" '
+		BEGIN {
+			while ((getline l < G) > 0) { split(l, a, "\t"); GN[a[1]] = 1 }
+			while ((getline l < M) > 0) { split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] }
+		}
+		{
+			id[NR] = $1; k = ($1 in K) ? K[$1] : ""; key[NR] = k
+			c = (index($5, "\342\254\207") || index($5, "\342\254\206") || ($5 in GN)) ? 1 : 0; cand[NR] = c
+			if (!c && k != "") real[k] = 1
+		}
+		END { for (i = 1; i <= NR; i++) if (cand[i] && key[i] != "" && (key[i] in real)) print id[i] }' "$1"
+}
+
+_st_grps_json() {
+	local t="$1" g ids sep="" st
+	[ -s "$ST_SUB_GRPS" ] && [ -n "$t" ] || { printf '[]'; return 0; }
+	st=" $(_st_stub_ids "$t" | tr '\n' ' ') "
+	printf '['
+	while IFS="$(printf '\t')" read -r g _ _ || [ -n "$g" ]; do
+		[ -n "$g" ] || continue
+		ids="$(_st_grp_ids "$g" "$t" | while read -r i; do case "$st" in *" $i "*) ;; *) printf '%s,' "$i" ;; esac; done | sed 's/,$//')"
+		[ -n "$ids" ] || continue
+		printf '%s{"name":"%s","ids":[%s]}' "$sep" "$(esc "$g")" "$ids"
+		sep=","
+	done < "$ST_SUB_GRPS"
+	printf ']'
+}
+
+_st_autogrp_sync() {
+	local quiet="$1" u t="$ST_RUN/ag.$$" n g
+	[ -s "$ST_SUB_URL" ] || { rm -f "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRP"; return 0; }
+	[ -s "$ZM_AG_JQ" ] || return 0
+	u="$(head -n1 "$ST_SUB_URL")"
+	mkdir -p "$ST_RUN" "$ST_VDIR"
+	: > "$ST_SUB_GRPS.chk"
+	if ! curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" -o "$t" "$u" 2>/dev/null || [ ! -s "$t" ]; then
+		rm -f "$t"
+		[ -n "$quiet" ] || [ ! -s "$ST_SUB_GRPS" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО остались прежними"
+		return 1
+	fi
+	if ! command -v jq >/dev/null 2>&1; then
+		grep -q '"balancers"' "$t" 2>/dev/null || { rm -f "$t" "$ST_SUB_GRPS"; return 0; }
+		if [ -z "$quiet" ]; then
+			echo "   → В подписке есть группы АВТО — для них нужен небольшой пакет jq"
+			_zm_pkg_add jq >/dev/null 2>&1
+		fi
+		command -v jq >/dev/null 2>&1 || { rm -f "$t"; : > "$ST_SUB_GRPS.nojq"; [ -n "$quiet" ] || echo "   ! jq не установился — группы АВТО пока недоступны"; return 1; }
+	fi
+	rm -f "$ST_SUB_GRPS.nojq"
+	if jq -c -f "$ZM_AG_JQ" "$t" > "$t.j" 2>/dev/null; then
+		jq -r '.groups[] | [ .name, ((.iv // 0) | tostring), ([ .m[] | "\(.p)|\(.h)|\(.port)|\(.path | split(" ") | join("%20"))" ] | reduce .[] as $k ([]; if index([$k]) == null then . + [$k] else . end) | join(" ")) ] | @tsv' "$t.j" > "$t.g" 2>/dev/null
+	else
+		: > "$t.g"
+	fi
+	if [ -s "$t.g" ]; then ( umask 077; cat "$t.g" > "$ST_SUB_GRPS" ); else rm -f "$ST_SUB_GRPS"; fi
+	rm -f "$t" "$t.j" "$t.g"
+	g="$(head -n1 "$ST_SUB_GRP" 2>/dev/null)"
+	if [ -n "$g" ] && ! _st_grp_has "$g"; then
+		rm -f "$ST_SUB_GRP"
+		[ -n "$quiet" ] || echo "   · группы «$g» в подписке больше нет — Steer выбирает узел автоматически"
+	fi
+	[ -n "$quiet" ] && return 0
+	n="$(grep -c . "$ST_SUB_GRPS" 2>/dev/null)"
+	if [ "${n:-0}" -gt 0 ]; then
+		echo "   ✓ Группы АВТО из подписки: $(awk -F'\t' '{ n = split($3, a, " "); printf "%s«%s» — %d", (NR > 1 ? ", " : ""), $1, n }' "$ST_SUB_GRPS")"
+	fi
+	return 0
+}
+
+_st_autogrp_bg() {
+	[ -s "$ST_SUB_URL" ] && [ -s "$ZM_AG_JQ" ] || return 0
+	[ -f "$ST_SUB_GRPS.chk" ] && [ ! "$ST_SUB" -nt "$ST_SUB_GRPS.chk" ] && return 0
+	[ -n "$(find "$ST_SUB_GRPS.chk" -mmin -30 2>/dev/null)" ] && return 0
+	mkdir -p "$ST_VDIR"; : > "$ST_SUB_GRPS.chk"
+	( _st_autogrp_sync quiet >/dev/null 2>&1 ) >/dev/null 2>&1 </dev/null &
+	return 0
+}
+
 _st_sub_filter() {
-	local t want hid all n mk
+	local t want hid all n mk st g gi of r
 	mk="$(head -n1 "$ST_SUB_EXCL" 2>/dev/null | tr '\t' ' ')"
 	[ -n "$(printf '%s' "$mk" | tr -d ' |,')" ] || mk=-
 	t="$(_st_nodes)"; all="$(grep -c . "$t" 2>/dev/null)"
@@ -28637,6 +28917,24 @@ _st_sub_filter() {
 			set -- $n
 			case "$hid" in *" $1 "*) ;; *) printf 'tun\t%s\t%s\t%s\n' "$2" "$3" "$mk"; return 0 ;; esac
 		fi
+	fi
+	st="$(_st_stub_ids "$t" | tr '\n' ' ')"
+	[ -n "$st" ] && [ "$(echo $hid $st | wc -w)" -lt "$all" ] && hid="$hid $st"
+	g="$(_st_grp_cur)"
+	if [ -n "$g" ]; then
+		gi=" $(_st_grp_ids "$g" "$t" | tr '\n' ' ') "
+		of=""; [ "$(_st_pick)" = ping ] && [ -s "$ST_SUB_ORDER" ] && of="$ST_SUB_ORDER"
+		r="$(ZM_MK="$mk" awk -F'\t' -v h="$hid " -v gi="$gi" -v of="$of" '
+			BEGIN { mk = ENVIRON["ZM_MK"]; if (of != "") while ((getline l < of) > 0) if (!(l in rk)) rk[l] = ++r }
+			index(h, " " $1 " ") || !index(gi, " " $1 " ") { next }
+			{ c++; key[c] = ($5 in rk) ? rk[$5] : 100000 + NR; pr[c] = $2; ix[c] = $3; o[c] = c }
+			END {
+				for (i = 2; i <= c; i++) { x = o[i]; j = i - 1; while (j > 0 && key[o[j]] > key[x]) { o[j + 1] = o[j]; j-- } o[j + 1] = x }
+				for (i = 1; i <= c; i++) { p = pr[o[i]]; if (!(p in L)) ord[++np] = p; L[p] = L[p] (L[p] == "" ? "" : ",") ix[o[i]] }
+				for (i = 1; i <= np; i++) printf "tun\t%s\t%s\t%s\n", ord[i], L[ord[i]], mk
+			}' "$t")"
+		if [ -n "$r" ]; then printf '%s\n' "$r"; return 0; fi
+		echo "!! В группе «$g» сейчас нет доступных узлов — Steer выбирает из всех" >&2
 	fi
 	if [ "$(_st_pick)" = ping ] && [ -s "$ST_SUB_ORDER" ]; then
 		ZM_MK="$mk" awk -F'\t' -v h="$hid " -v of="$ST_SUB_ORDER" '
@@ -28817,6 +29115,7 @@ _st_sub_fetch() {
 	chmod 600 "$ST_SUB_URL"
 	if [ -n "$STL_SUB_TITLE" ]; then printf '%s\n' "$STL_SUB_TITLE" > "$ST_SUB_TITLE"; else rm -f "$ST_SUB_TITLE"; fi
 	_rb_say "Подписка «$(_st_sub_label)» скачана"
+	_st_autogrp_sync
 	_st_sub_node_gone
 }
 
@@ -28890,6 +29189,7 @@ do_steer_sub_links() {
 	rm -f "$ST_SUB.bak"
 	_st_sub_commit
 	rm -f "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_INFO"
+	_st_autogrp_sync quiet
 	_st_sub_node_gone
 	_rb_say "Список серверов сохранён"
 	if _st_use_vpn && _st_installed; then _rb_say "Перезапускаем VPN-туннель с новым списком серверов"; _st_sub_apply
@@ -29065,7 +29365,7 @@ do_steer_sub_remove() {
 	_st_phase sub
 	rm -f "$ST_STOP_FLAG"
 	_st_use_vpn && was=1
-	rm -f "$ST_SUB" "$ST_SUB.bak" "$ST_SUB.map" "$ST_SUB_NODES" "$ST_SUB_NODES.meta" "$ST_SUB_NODES.hp" "$ST_SUB_INFO" "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_NODE" "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_SUB_PING" "$ST_SUB_ORDER"
+	rm -f "$ST_SUB" "$ST_SUB.bak" "$ST_SUB.map" "$ST_SUB_NODES" "$ST_SUB_NODES.meta" "$ST_SUB_NODES.hp" "$ST_SUB_INFO" "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_NODE" "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_SUB_PING" "$ST_SUB_ORDER" "$ST_SUB_GRP" "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.nojq"
 	[ -n "$ST_SEC" ] || echo warp > "$ST_EXIT"
 	_st_vpn_zone off
 	[ -n "$(_st_sec_with main eval '[ -s "$ST_SUB_URL" ] && echo 1')$(_st_secs_url)" ] || _st_sub_auto_set off >/dev/null
@@ -29231,9 +29531,23 @@ steer_sub_action() {
 			local prev
 			prev="$(cat "$ST_SUB_NODE" 2>/dev/null)"; prev="${prev:-auto}"
 			if [ -n "$mode" ]; then printf '%s\n' "$mode" > "$ST_SUB_NODE"; else rm -f "$ST_SUB_NODE"; fi
-			rm -f "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_VPN_WATCH"
+			rm -f "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_VPN_WATCH" "$ST_SUB_GRP"
 			if _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && _st_work; then
 				job_start steer do_steer_switch "$prev"
+			else
+				printf '{"ok":true,"saved":true}\n'
+			fi
+			;;
+		sub_group)
+			[ -s "$ST_SUB" ] || { echo '{"error":"подписки нет"}'; return 1; }
+			[ -n "$mode" ] && ! _st_grp_has "$mode" && { echo '{"error":"такой группы в подписке нет — обновите страницу"}'; return 1; }
+			mkdir -p "$ST_VDIR"
+			local gprev
+			gprev="$(cat "$ST_SUB_NODE" 2>/dev/null)"; gprev="${gprev:-auto}"
+			rm -f "$ST_SUB_NODE" "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_VPN_WATCH"
+			if [ -n "$mode" ]; then printf '%s\n' "$mode" > "$ST_SUB_GRP"; else rm -f "$ST_SUB_GRP"; fi
+			if _st_use_vpn && _st_installed && [ ! -f "$ST_OFF" ] && [ -z "$(_st_blocker)" ] && _st_work; then
+				job_start steer do_steer_switch "$gprev"
 			else
 				printf '{"ok":true,"saved":true}\n'
 			fi
@@ -29296,7 +29610,7 @@ _st_nodes_json() {
 }
 
 steer_sub_status() {
-	local has=false kind="" url="" title="" ext=false vexit=warp node="" up="" down="" total="" expire="" list=null vpn=null mt=0 hidden="" t
+	local has=false kind="" url="" title="" ext=false vexit=warp node="" up="" down="" total="" expire="" list=null vpn=null mt=0 hidden="" t stubs="" grps="[]" grp="" nojq=false
 	_st_vpn_ok && ext=true
 	vexit="$(_st_exit)"
 	if [ -s "$ST_SUB" ]; then
@@ -29313,8 +29627,13 @@ steer_sub_status() {
 		if [ "$ext" = true ] && t="$(_st_nodes)"; then
 			list="$(_st_nodes_json "$t")"
 			hidden="$(cut -f1,5 "$t" | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | tr '\n' ',' | sed 's/,$//')"
+			stubs="$(_st_stub_ids "$t" | tr '\n' ',' | sed 's/,$//')"
+			grps="$(_st_grps_json "$t")"
 		fi
 		node="$(cat "$ST_SUB_NODE" 2>/dev/null)"
+		grp="$(_st_grp_cur)"
+		_st_autogrp_bg
+		[ -f "$ST_SUB_GRPS.nojq" ] && ! command -v jq >/dev/null 2>&1 && nojq=true
 	fi
 	_st_use_vpn && _st_owns "steer-spec" && vpn="$(_st_vpn_json)"
 	printf '{"ext":%s,"has":%s,"kind":"%s","url":"%s","title":"%s","exit":"%s","auto":"%s","node":"%s","quota":{"up":"%s","down":"%s","total":"%s","expire":"%s"},"updated":%s,"list":%s,"vpn":%s,"hidden":[%s],"exclude":"%s","hide_names":[%s],"fell":"%s","pick":"%s","pick_iv":%s,"pick_tol":%s,"ping_at":%s,"ping":{%s},"order_head":"%s","lat_mode":"%s","ping_blk":[%s],"ping_tcp":[%s],"home":"%s","node_pol":"%s"}\n' \
@@ -29325,7 +29644,8 @@ steer_sub_status() {
 		"$(esc "$(_st_order_head)")" \
 		"$(_st_lat_mode)" "$([ -s "$ST_SUB_PING" ] && awk -F'\t' -v q='"' 'function j(s,    o, i, c, n) { o = ""; n = length(s); for (i = 1; i <= n; i++) { c = substr(s, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else if (c < " ") o = o " "; else o = o c } return o } $3 == "b" { n = j($1); printf "%s%s%s%s", (c++ ? "," : ""), q, n, q }' "$ST_SUB_PING")" \
 		"$([ -s "$ST_SUB_PING" ] && awk -F'\t' -v q='"' 'function j(s,    o, i, c, n) { o = ""; n = length(s); for (i = 1; i <= n; i++) { c = substr(s, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else if (c < " ") o = o " "; else o = o c } return o } $3 == "t" { n = j($1); printf "%s%s%s%s", (c++ ? "," : ""), q, n, q }' "$ST_SUB_PING")" \
-		"$(esc "$(head -n1 "$ST_SUB_HOME" 2>/dev/null)")" "$(_st_node_pol)"
+		"$(esc "$(head -n1 "$ST_SUB_HOME" 2>/dev/null)")" "$(_st_node_pol)" | sed '$ s/}$//'
+	printf ',"group":"%s","groups":%s,"stubs":[%s],"grp_nojq":%s}\n' "$(esc "$grp")" "$grps" "$stubs" "$nojq"
 }
 
 _st_hp_build() {
@@ -29431,6 +29751,7 @@ _st_bind() {
 	ST_SUB_NODE="$d/sub.node"; ST_SUB_EXCL="$d/sub.exclude"; ST_SUB_HIDE="$d/sub.hidden"; ST_SUB_NODES="$d/sub.nodes"
 	ST_SUB_FELL="$d/sub.node.fell"; ST_NODE_POL="$d/node.pol"; ST_SUB_HOME="$d/sub.node.home"
 	ST_SUB_PICK="$d/sub.pick"; ST_LAT_MODE="$d/lat.mode"; ST_SUB_PING="$d/sub.ping"; ST_SUB_ORDER="$d/sub.order"
+	ST_SUB_GRP="$d/sub.group"; ST_SUB_GRPS="$d/sub.autogrp"
 	STL_VPN_DEVS="$STL_VPN_DEV ${STL_VPN_PFX}_vless ${STL_VPN_PFX}_hy2 ${STL_VPN_PFX}_trojan ${STL_VPN_PFX}_ss ${STL_VPN_PFX}_socks ${STL_VPN_PFX}_http ${STL_VPN_PFX}_vmess"
 }
 
@@ -34593,6 +34914,24 @@ function patch_device_engine() {
 	script = replace(script, new_guard, '    if uci -q show netshift | grep -qE "\\.(zm_direct_fallback|zm_sub_priority|zm_auto_ping)=\'1\'$"; then\n');
 	script = replace(script, '    if uci -q show netshift | grep -qE "\\.(zm_direct_fallback|zm_sub_priority|zm_auto_ping)=\'1\'$"; then\n',
 		'    if uci -q show netshift | grep -qE "\\.(zm_direct_fallback|zm_sub_priority|zm_auto_ping|zm_bt_src)=\'1\'$"; then\n');
+	script = replace(script, '    if uci -q show netshift | grep -qE "\\.(zm_direct_fallback|zm_sub_priority|zm_auto_ping|zm_bt_src)=\'1\'$"; then\n',
+		'    if uci -q show netshift | grep -qE "\\.(zm_direct_fallback|zm_sub_priority|zm_auto_ping|zm_bt_src|zm_autogrp)=\'1\'$"; then\n');
+	if (index(script, "\n# ZM_AUTOGRP\n") < 0) {
+		let agcall = '._zm_priority_feeds = $feeds\' | ucode ', agsave = "sing_box_save_config() {\n";
+		if (length(split(script, agcall)) == 2 && length(split(script, agsave)) == 2) {
+			script = replace(script, agcall, '._zm_priority_feeds = $feeds\' | zm_autogrp_cfg | ucode ');
+			script = replace(script, agsave, '# ZM_AUTOGRP\n' +
+				'zm_autogrp_cfg() {\n' +
+				'    local zm_c zm_r zm_f=/opt/zapret-manager-luci/state/fk.autogrp.json zm_j=/opt/zapret-manager-luci/autogrp-fk.jq\n' +
+				'    zm_c="$(cat)"\n' +
+				'    if [ -s "$zm_f" ] && [ -s "$zm_j" ] && zm_r="$(printf \'%s\' "$zm_c" | jq -c --slurpfile ag "$zm_f" -f "$zm_j" 2> /dev/null)" && [ -n "$zm_r" ]; then\n' +
+				'        printf \'%s\' "$zm_r"\n' +
+				'    else\n' +
+				'        printf \'%s\' "$zm_c"\n' +
+				'    fi\n' +
+				'}\n\n' + agsave);
+		}
+	}
 	if (index(script, "# ZM_SUBSCRIPTION_PRIORITY_FEEDS") < 0) {
 		let feed_anchor = '                subscription_outbound_feeds_json="$SUBSCRIPTION_OUTBOUND_FEEDS_JSON"\n';
 		let reset_anchor = "sing_box_configure_outbounds() {\n";
@@ -35987,7 +36326,7 @@ function auto_tag(sec, px, g) {
 	try { conf = json(s(fs.readfile(SB_CONF))); } catch (e) {}
 	for (let ob in (conf && type(conf.outbounds) == "array" ? conf.outbounds : []))
 		if (ob.tag == group_tag(sec) && valid(s(ob.default))) return s(ob.default);
-	for (let t in tags) if (valid(t)) return t;
+	for (let t in tags) if (valid(t) && index(t, "-zm-autogrp-") < 0) return t;
 	return null;
 }
 
@@ -36019,9 +36358,9 @@ function sec_names(c, sec) {
 
 function node_info(px, names, t) {
 	let p = px[t] || {}, h = type(p.history) == "array" && length(p.history) ? p.history[length(p.history) - 1] : null;
-	let feed = match(t, /-zm-priority-feed-[0-9]+: (.*)$/);
-	return { name: s(names[t] || (feed ? "Подписка: " + feed[1] : t)), country: "", type: s(p.type), now: s(p.now || ""), delay: h ? int(h.delay || 0) : -1,
-		members: (lc(s(p.type)) == "urltest" || index(t, "-zm-priority-") >= 0 || index(t, "-zm-ping-") >= 0) && type(p.all) == "array" ? p.all : null };
+	let feed = match(t, /-zm-priority-feed-[0-9]+: (.*)$/), ag = match(t, /-zm-autogrp-[0-9]+: (.*)$/);
+	return { name: s(names[t] || (feed ? "Подписка: " + feed[1] : ag ? ag[1] : t)), country: "", type: s(p.type), now: s(p.now || ""), delay: h ? int(h.delay || 0) : -1,
+		members: (lc(s(p.type)) == "urltest" || index(t, "-zm-priority-") >= 0 || index(t, "-zm-ping-") >= 0) && type(p.all) == "array" ? p.all : null, autogrp: !!ag };
 }
 
 function b64any(v) {
@@ -36346,6 +36685,13 @@ function cmd_servers(sec) {
 		}
 		if (length(rawl) && excl_any(xv)) sub_hidden = filter(rawl, (n) => excl_sub_hit(n, xv));
 	}
+	let agl = [], agiv = {};
+	if (length(filter(g.all, (t) => nodes[t] && nodes[t].autogrp))) {
+		let cf = null;
+		try { cf = json(s(fs.readfile(SB_CONF))); } catch (e) { cf = null; }
+		for (let ob in (cf && type(cf.outbounds) == "array" ? cf.outbounds : [])) if (type(ob) == "object" && index(s(ob.tag), "-zm-autogrp-") >= 0) agiv[s(ob.tag)] = s(ob.interval);
+	}
+	for (let t in g.all) if (nodes[t] && nodes[t].autogrp) push(agl, { tag: t, name: nodes[t].name, n: length(nodes[t].members || []), iv: agiv[t] || "" });
 	let home = node_pol() == "back" ? home_read(sec) : null, rl = rl_view(sec);
 	if (rl) {
 		let rn = {};
@@ -36355,7 +36701,7 @@ function cmd_servers(sec) {
 	}
 	out({ group: group_tag(sec), reality: rl, auto_tag: auto_tag(sec, px, g), now: fallback.override || s(g.now), list: g.all, nodes, sub: sec_mode(xm) == "sub" ? sub_info(sec) : null,
 		hidden: length(xv.h), exclude: s(xm.zm_exclude), hide_names: xv.h, sub_hidden, fell, fallback, priority: flag(xm.zm_sub_priority), ping: ping_on(xm), lat_mode: lat_mode(), lat: lat ? { running: lrun, at: int(lat.at || 0), error: s(lat.error), mode: s(lat.mode) } : null,
-		home: home ? s(home.name || home.tag) : "", home_tag: home ? s(home.tag) : "", node_pol: node_pol() });
+		home: home ? s(home.name || home.tag) : "", home_tag: home ? s(home.tag) : "", node_pol: node_pol(), autogrp: agl });
 }
 
 const LAT_URLS = [ "https://www.gstatic.com/generate_204", "http://cp.cloudflare.com/generate_204",
@@ -37587,6 +37933,139 @@ else if (mode == "route") cmd_route(ARGV[1], ARGV[2], ARGV[3]);
 else fail("неизвестная команда");
 ZM_INSTALLER_EOF
 chmod 0644 '/opt/zapret-manager-luci/netshift.uc'
+cat > '/opt/zapret-manager-luci/autogrp.jq' << 'ZM_INSTALLER_EOF'
+def lc: ascii_downcase;
+def cut_q: tostring | (split("?") | .[0]) // "";
+def secs:
+  if type == "number" then floor
+  elif type != "string" or . == "" then null
+  else (.[-1:]) as $u | (.[:-1]) as $n
+    | ($n | tonumber? // null) as $v
+    | if $v == null then null
+      elif $u == "s" then $v | floor
+      elif $u == "m" then $v * 60 | floor
+      elif $u == "h" then $v * 3600 | floor
+      else null end
+  end;
+def proto:
+  if .protocol == "hysteria" then "hysteria2" else .protocol end;
+def peer:
+  if .protocol == "hysteria" then { address: .settings.address, port: .settings.port }
+  else (.settings.vnext[0] // .settings.servers[0]
+        // (if ((.settings.address // "") | tostring) != "" then .settings else {} end)) end;
+def cred($p):
+  if .protocol == "vless" then ($p.users[0].id // $p.id // "")
+  elif .protocol == "hysteria" then (.streamSettings.hysteriaSettings.auth // .settings.auth // "")
+  else ($p.password // .settings.password // "") end;
+def tpath:
+  (.streamSettings // {}) as $s
+  | ($s.network // "tcp") as $n
+  | if $n == "ws" then ($s.wsSettings.path // "")
+    elif $n == "grpc" then ($s.grpcSettings.serviceName // "")
+    elif $n == "xhttp" or $n == "splithttp" then (($s.xhttpSettings // $s.splithttpSettings // {}).path // "")
+    elif $n == "httpupgrade" then ($s.httpupgradeSettings.path // "")
+    else "" end
+  | cut_q;
+def sni:
+  (.streamSettings // {}) as $s
+  | ($s.tlsSettings.serverName // $s.realitySettings.serverName // "") | tostring;
+def usable:
+  select(type == "object")
+  | select(.protocol == "vless" or .protocol == "trojan" or .protocol == "shadowsocks" or .protocol == "hysteria")
+  | select(((.streamSettings.sockopt.dialerProxy // "") | tostring) == "")
+  | select(.protocol != "hysteria" or (((.streamSettings.hysteriaSettings.version // .settings.version // 2) | tostring) == "2"));
+def member:
+  peer as $p
+  | { p: proto, h: (($p.address // "") | tostring | lc), port: (($p.port // 0) | tonumber? // 0),
+      c: (cred($p) | tostring), path: tpath, sni: (sni | lc) }
+  | select(.h != "" and .port > 0);
+def trimmed:
+  tostring | explode
+  | (until(length == 0 or .[0] > 32; .[1:])) | (until(length == 0 or .[-1] > 32; .[:-1])) | implode;
+def in_sel($sel): .tag as $t | ($sel | length) == 0 or any($sel[]; ($t | tostring) | startswith(.));
+
+(if type == "array" then . else [.] end)
+| [ .[] | select(type == "object")
+    | ((.routing.balancers // []) | if type == "array" then . else [] end) as $bal
+    | select(($bal | length) > 0)
+    | ([ $bal[] | (.selector // [])[] | tostring ] | unique) as $sel
+    | (.remarks // "" | trimmed) as $name
+    | ((.burstObservatory.pingConfig.interval // .observatory.probeInterval // null) | secs) as $iv
+    | [ (.outbounds // [])[] | usable | select(in_sel($sel)) | member ] as $m
+    | (reduce $m[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end)) as $u
+    | select(($u | length) >= 2)
+    | { name: (if $name == "" then "АВТО" else $name end), iv: $iv, m: $u }
+  ]
+| reduce .[] as $g ({ seen: {}, out: [] };
+    ($g.name) as $n
+    | (if .seen[$n] then $n + " · " + ((.seen[$n] + 1) | tostring) else $n end) as $nn
+    | .seen[$n] = ((.seen[$n] // 0) + 1)
+    | .out += [ $g | .name = $nn ])
+| { groups: .out }
+ZM_INSTALLER_EOF
+chmod 0644 '/opt/zapret-manager-luci/autogrp.jq'
+cat > '/opt/zapret-manager-luci/autogrp-fk.jq' << 'ZM_INSTALLER_EOF'
+def lc: ascii_downcase;
+def cut_q: tostring | (split("?") | .[0]) // "";
+def gtypes: [ "selector", "urltest", "direct", "block", "dns" ];
+def leafkey($strict):
+  [ (.type | tostring), ((.server // "") | tostring | lc), ((.server_port // 0) | tostring),
+    ((.uuid // .password // "") | tostring) ]
+  + (if $strict then [ ((.transport.path // .transport.service_name // "") | cut_q),
+                       ((.tls.server_name // "") | tostring | lc) ] else [] end)
+  | join("|");
+def memkey($strict):
+  [ .p, .h, (.port | tostring), .c ] + (if $strict then [ .path, .sni ] else [] end) | join("|");
+def kids($obs; $t; $d):
+  if $d > 5 then []
+  else ($obs[$t] // null) as $o
+    | if $o == null then []
+      elif ($o.outbounds | type) == "array" then [ $o.outbounds[] as $c | kids($obs; $c; $d + 1)[] ]
+      elif (gtypes | index($o.type // "")) != null then []
+      else [ $t ] end
+  end;
+def ivstr($iv):
+  if ($iv | type) != "number" then "3m"
+  else ([ ([ $iv, 30 ] | max), 600 ] | min) as $s
+    | if $s % 60 == 0 then "\($s / 60 | floor)m" else "\($s)s" end
+  end;
+
+($ag[0] // {}) as $A
+| if (.outbounds | type) != "array" or ($A | type) != "object" then .
+  else
+    reduce ($A | to_entries[]) as $e (.;
+      ($e.key | tostring) as $sec
+      | ($sec + "-out") as $gt
+      | ((.outbounds | map(select(type == "object" and .tag != null) | { key: (.tag | tostring), value: . }) | from_entries)) as $obs
+      | ($obs[$gt] // null) as $sel
+      | if $sel == null or $sel.type != "selector" or ($sel.outbounds | type) != "array" then .
+        else
+          (kids($obs; $gt; 0) | reduce .[] as $t ([]; if index([$t]) == null then . + [$t] else . end)) as $leaves
+          | ($leaves | map({ t: ., s: ($obs[.] | leafkey(true)), l: ($obs[.] | leafkey(false)) })) as $lk
+          | ($obs[$sec + "-urltest-out"] // {}) as $ut
+          | ([ (($e.value.groups // []) | to_entries[]) as $g
+              | ([ $g.value.m[] as $m
+                  | ($m | memkey(true)) as $ks | ($m | memkey(false)) as $kl
+                  | ([ $lk[] | select(.s == $ks) | .t ]) as $hit
+                  | (if ($hit | length) > 0 then $hit else [ $lk[] | select(.l == $kl) | .t ] end)[] ]
+                | reduce .[] as $t ([]; if index([$t]) == null then . + [$t] else . end)) as $mem
+              | select(($mem | length) >= 2)
+              | ($sec + "-zm-autogrp-" + (($g.key + 1) | tostring) + ": " + ($g.value.name | tostring)) as $tag
+              | select($obs[$tag] == null)
+              | { type: "urltest", tag: $tag, outbounds: $mem,
+                  url: ($ut.url // "https://www.gstatic.com/generate_204"),
+                  interval: ivstr($g.value.iv), tolerance: ($ut.tolerance // 50),
+                  interrupt_exist_connections: true } ]) as $new
+          | if ($new | length) == 0 then .
+            else
+              ([ $sel.outbounds[] | (($obs[.] // {}).type // "") as $ty | ($ty == "selector" or $ty == "urltest") ] | index(false) // ($sel.outbounds | length)) as $pos
+              | .outbounds = (.outbounds | map(if type == "object" and .tag == $gt
+                  then .outbounds = (.outbounds[:$pos] + [ $new[].tag ] + .outbounds[$pos:]) else . end)) + $new
+            end
+        end)
+  end
+ZM_INSTALLER_EOF
+chmod 0644 '/opt/zapret-manager-luci/autogrp-fk.jq'
 cat > '/opt/zapret-manager-luci/b64.uc' << 'ZM_INSTALLER_EOF'
 import { open } from 'fs';
 let a = ARGV;
@@ -43866,7 +44345,7 @@ var PHASE_TEXT = {
 };
 
 var STEER_TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'byp', label: 'Исключения', common: true }, { id: 'set', label: 'Настройки', common: true } ];
-var SEC_BOUND = { lists: 1, devs_set: 1, sub_status: 1, sub_probe: 1, sub_tcp: 1, lat_mode: 1, node_pol: 1, sub_home: 1, sub_links_get: 1, sub_set: 1, sub_links: 1, sub_update: 1, sub_remove: 1, sub_node: 1, sub_filter: 1, sub_hide: 1, sub_pick: 1, sub_ping: 1 };
+var SEC_BOUND = { lists: 1, devs_set: 1, sub_status: 1, sub_probe: 1, sub_tcp: 1, lat_mode: 1, node_pol: 1, sub_home: 1, sub_links_get: 1, sub_set: 1, sub_links: 1, sub_update: 1, sub_remove: 1, sub_node: 1, sub_group: 1, sub_filter: 1, sub_hide: 1, sub_pick: 1, sub_ping: 1 };
 
 function latClass(ms) {
 	if (!(ms > 0)) return 'zm-lat-none';
@@ -46276,7 +46755,7 @@ return view.extend({
 		}
 
 		function nodeCard(opts) {
-			var cls = 'zm-node' + (opts.active ? ' zm-active' : '') + (opts.live && !opts.active ? ' zm-node-live' : '') + (opts.dead ? ' zm-node-dead' : '') + (opts.blk ? ' zm-node-blk' : '');
+			var cls = 'zm-node' + (opts.active ? ' zm-active' : '') + (opts.live && !opts.active ? ' zm-node-live' : '') + (opts.dead ? ' zm-node-dead' : '') + (opts.blk ? ' zm-node-blk' : '') + (opts.grp ? ' zm-node-grp' : '');
 			return E('div', { 'class': cls, 'title': opts.title || '', 'aria-current': opts.active ? 'true' : null, 'click': opts.click }, [
 				E('div', { 'class': 'zm-node-name' }, [ String(opts.name || '') ]),
 				E('div', { 'class': 'zm-node-foot' }, [
@@ -46318,8 +46797,15 @@ return view.extend({
 			}
 
 			var q = subData.quota || {}, hasQ = q.up !== '' || q.down !== '' || q.total !== '';
-			var allNodes = (subData.list && subData.list.nodes) || [], hidMap = subHidden();
+			var stubMap = {};
+			(subData.stubs || []).forEach(function(i) { stubMap[i] = true; });
+			var allNodes = ((subData.list && subData.list.nodes) || []).filter(function(n) { return !stubMap[n.index]; }), hidMap = subHidden();
 			var nodes = allNodes.filter(function(n) { return !hidMap[n.index]; });
+			var grps = (subData.groups || []).map(function(g) {
+				var ids = {}; (g.ids || []).forEach(function(i) { ids[i] = true; });
+				return { name: g.name, nodes: nodes.filter(function(n) { return ids[n.index]; }) };
+			}).filter(function(g) { return g.nodes.length > 0; });
+			var curGrp = grps.filter(function(g) { return g.name === subData.group; })[0] || null;
 			subCard.appendChild(zm.subMeta({
 				title: String(subData.title || (subData.kind === 'url' ? 'Подписка' : 'Свои серверы')),
 				used: hasQ ? (+q.up || 0) + (+q.down || 0) : null, total: +q.total || null, unlimited: hasQ && !(+q.total > 0), expire: q.expire, updated: subData.updated,
@@ -46463,9 +46949,17 @@ return view.extend({
 			}
 			var grid = E('div', { 'class': 'zm-nodes' });
 			grid.appendChild(nodeCard({
-				name: 'Авто', foot: isPing ? 'самый быстрый по пингу' + (subData.order_head && !subData.node ? ' · ' + subData.order_head : '') : 'первый рабочий узел', active: !subData.node,
-				click: function() { if (subData.node && !busy) subAct('sub_node', '', 'Выбираем узел автоматически'); }
+				name: 'Авто', foot: isPing ? 'самый быстрый по пингу' + (subData.order_head && !subData.node && !curGrp ? ' · ' + subData.order_head : '') : 'первый рабочий узел', active: !subData.node && !curGrp,
+				click: function() { if ((subData.node || curGrp) && !busy) subAct('sub_node', '', 'Выбираем узел автоматически'); }
 			}));
+			grps.forEach(function(g) {
+				var on = !subData.node && curGrp === g;
+				grid.appendChild(nodeCard({
+					name: g.name, foot: g.nodes.length + ' ' + plural(g.nodes.length, 'узел', 'узла', 'узлов') + (isPing ? ' · по пингу' : ' · по порядку'),
+					active: on, grp: true, title: 'Группа АВТО из подписки: ' + g.nodes.map(function(n) { return n.name; }).join(', '),
+					click: function() { if (!on && !busy) subAct('sub_group', g.name, 'Выбираем группу «' + g.name + '»'); }
+				}));
+			});
 			function pingRank(n) {
 				var l = latOf(n);
 				if (!l || l.busy || l.pend) return 1e8;
@@ -46488,7 +46982,7 @@ return view.extend({
 				else if (l) { txt = 'нет ответа'; cls = 'zm-lat-bad'; dead = true; }
 				var foot = [ PROTO_NAMES[n.proto] || '', n.type !== 'quic' ? n.type : '', n.security && n.security !== 'none' ? n.security : '', n.vision ? 'vision' : '' ].filter(function(x) { return x; }).join(' · ');
 				var live = !!(vpn && !subData.node && subData.vpn && subData.vpn.up && subData.vpn.node === n.name);
-				if (live) ttl = 'Сейчас трафик идёт через этот узел — его выбрал режим «Авто»' + (ttl ? '. ' + ttl : '');
+				if (live) ttl = 'Сейчас трафик идёт через этот узел — его выбрал ' + (curGrp ? 'режим группы «' + curGrp.name + '»' : 'режим «Авто»') + (ttl ? '. ' + ttl : '');
 				grid.appendChild(nodeCard({
 					name: n.name || 'Узел ' + (ni + 1), foot: foot, lat: txt, latCls: cls, dead: dead, live: live,
 					active: subData.node === n.name, title: ttl, blk: !!(l && l.blocked),
@@ -46496,6 +46990,9 @@ return view.extend({
 				}));
 			});
 			if (!hideMode) subCard.appendChild(grid);
+			if (!hideMode && curGrp && !subData.node) subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Группа АВТО из подписки — как в Happ: Steer работает только через её ' + curGrp.nodes.length + ' ' + plural(curGrp.nodes.length, 'узел', 'узла', 'узлов') + ' — ' +
+				(isPing ? 'первым стоит самый быстрый по пингу' : 'первый отвечающий по порядку подписки (чтобы первым был самый быстрый, включите «По пингу»)') + '. Узел оборвался — ядро steer само переходит на следующий узел группы. Нажмите на узел, чтобы закрепить его.'));
+			if (!hideMode && subData.grp_nojq) subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'В подписке есть группы АВТО (как в Happ). Нажмите «Обновить» у подписки — панель поставит небольшой пакет jq и покажет их.'));
 			var hn = subData.hide_names || [];
 			hidePick.update(allNodes.filter(function(n) { return !!n.name; }).map(function(n, ni) {
 				var byName = hn.indexOf(n.name || '') >= 0;
@@ -53062,6 +53559,7 @@ html.zm-theme-dark .zm-node:not(.zm-active) { background: #22272e; border-color:
 .zm-node:hover { border-color: #1a7f37; transform: translateY(-1px); }
 .zm-node.zm-active { border-color: #1a7f37; background: rgba(26,127,55,.12); box-shadow: 0 0 0 2px rgba(26,127,55,.3); }
 .zm-node.zm-node-dead { opacity: .6; }
+.zm-node.zm-node-grp:not(.zm-active) { box-shadow: inset 3px 0 0 #1a7f37; }
 .zm-node-name { font-weight: 600; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
 .zm-node.zm-active .zm-node-name::before { content: none; }
 .zm-node.zm-sec .zm-node-name::before { content: none; }
@@ -59492,12 +59990,35 @@ return view.extend({
 				autoTag = list.filter(function(t) { return ns[t] && ns[t].members; })[0];
 			var auto = autoTag ? ns[autoTag] : null;
 			var isAuto = !!(autoTag && servers.now === autoTag);
+			var groups = (servers.autogrp || []).filter(function(g) { return ns[g.tag] && ns[g.tag].members && list.indexOf(g.tag) >= 0; });
+			var grp = groups.filter(function(g) { return g.tag === servers.now; })[0] || null;
 			var curTag = servers.now, seen = {};
 			while (ns[curTag] && ns[curTag].members && ns[curTag].now && !seen[curTag]) {
 				seen[curTag] = true;
 				curTag = ns[curTag].now;
 			}
-			return { ns: ns, list: list, autoTag: autoTag, auto: auto, isAuto: isAuto, curTag: curTag, cur: ns[curTag] || {} };
+			return { ns: ns, list: list, autoTag: autoTag, auto: auto, isAuto: isAuto, groups: groups, grp: grp, curTag: curTag, cur: ns[curTag] || {} };
+		}
+
+		function grpShort(n) {
+			var t = String(n || '').replace(/\s*\|\s*(АВТО|AUTO|Авто)\s*$/i, '').trim();
+			return 'группа «' + (t || String(n || '')) + '»';
+		}
+		function grpIv(n) {
+			var m = /^(\d+)(s|m)$/.exec(String((n && n.iv) || ''));
+			if (!m) return 'минуту';
+			var v = +m[1];
+			return m[2] === 'm' ? (v === 1 ? 'минуту' : v + ' ' + plural(v, 'минуту', 'минуты', 'минут')) : v + ' ' + plural(v, 'секунду', 'секунды', 'секунд');
+		}
+		function grpKey() { return 'zm.fk.grp.' + ((cfg && cfg.sec) || ''); }
+		function grpPick(groups) {
+			var want = '';
+			try { want = localStorage.getItem(grpKey()) || ''; } catch (e) {}
+			return groups.filter(function(g) { return g.tag === want; })[0] || groups[0];
+		}
+		function grpSelect(g) {
+			try { localStorage.setItem(grpKey(), g.tag); } catch (e) {}
+			pickServer(g.tag, grpShort(g.name));
 		}
 
 		function serverMembers(tags, ns) {
@@ -59516,7 +60037,7 @@ return view.extend({
 			var s = srvState();
 			if (!s || !s.curTag) return '';
 			var hc = (cfg && cfg.hide_names || []).length;
-			return (s.auto ? (s.isAuto ? 'авто · ' : 'вручную · ') : '') + nodeName(s.cur) + (hc ? ' · скрыто серверов: ' + hc : '');
+			return (s.grp ? grpShort(s.grp.name) + ' · ' : s.auto ? (s.isAuto ? 'авто · ' : 'вручную · ') : '') + nodeName(s.cur) + (hc ? ' · скрыто серверов: ' + hc : '');
 		}
 
 		function tunKindOf(n) {
@@ -60338,8 +60859,8 @@ return view.extend({
 				}
 				return;
 			}
-			var S = srvState(), ns = S.ns, autoTag = S.autoTag, auto = S.auto, isAuto = S.isAuto, curTag = S.curTag, cur = S.cur;
-			var manual = S.list.filter(function(t) { return t !== autoTag && !(ns[t] && ns[t].hidden); });
+			var S = srvState(), ns = S.ns, autoTag = S.autoTag, auto = S.auto, isAuto = S.isAuto, curTag = S.curTag, cur = S.cur, groups = S.groups, grp = S.grp;
+			var manual = S.list.filter(function(t) { return t !== autoTag && !(ns[t] && (ns[t].hidden || ns[t].autogrp)); });
 
 			var sub = servers.sub;
 			var direct = !!(servers.fallback && servers.fallback.direct);
@@ -60348,7 +60869,7 @@ return view.extend({
 				title: subName(sub.title) || 'Подписка',
 				used: sub.used, total: sub.total, unlimited: sub.unlimited, expire: sub.expire, updated: sub.updated,
 				refill: sub.refill, announce: sub.announce, announce_url: sub.announce_url, support: sub.support, web: sub.web,
-				count: { label: 'Серверов', n: manual.length, all: Math.max(S.list.filter(function(t) { return t !== autoTag; }).length, manual.length + (Array.isArray(servers.sub_hidden) ? servers.sub_hidden.length : 0)) },
+				count: { label: 'Серверов', n: manual.length, all: Math.max(S.list.filter(function(t) { return t !== autoTag && !(ns[t] && ns[t].autogrp); }).length, manual.length + (Array.isArray(servers.sub_hidden) ? servers.sub_hidden.length : 0)) },
 				fmt: sub.fmt
 			}));
 			if (!direct && servers.home) srvCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-home-banner', 'role': 'note' }, [
@@ -60368,9 +60889,16 @@ return view.extend({
 			else if (!direct && servers.fell && (isAuto || nodeName(cur) !== servers.fell)) srvCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show', 'role': 'note' }, [
 				E('span', {}, [ 'Сервер «', String(servers.fell), '» перестал отвечать — Forkozz сам переключился на ' + (isAuto ? 'автовыбор. Чтобы вернуть его, переключите режим на «Вручную» и выберите его в списке.' : 'другой рабочий сервер. Чтобы вернуть его, нажмите на него в списке.') ])
 			]));
-			if (auto) srvCard.appendChild(row('Режим', seg([ { id: 'auto', label: 'Авто' }, { id: 'manual', label: 'Вручную' } ], isAuto ? 'auto' : 'manual', function(m) {
+			if (auto || groups.length) srvCard.appendChild(row('Режим', seg((auto ? [ { id: 'auto', label: 'Авто' } ] : []).concat(groups.length ? [ { id: 'group', label: 'Группа АВТО' } ] : [], [ { id: 'manual', label: 'Вручную' } ]),
+				isAuto ? 'auto' : grp ? 'group' : 'manual', function(m) {
 				if (m === 'auto') pickServer(autoTag, 'автовыбор');
+				else if (m === 'group') grpSelect(grpPick(groups));
 				else if (curTag) pickServer(curTag, nodeName(cur));
+			})));
+			if (grp) srvCard.appendChild(E('div', { 'class': 'zm-nodes zm-fk-grps', 'style': 'margin-top:4px' }, groups.map(function(g) {
+				var on = g.tag === grp.tag, gn = ns[g.tag] || {}, lf = on && gn.now && ns[gn.now] ? ns[gn.now] : null;
+				return node(g.name, g.n + ' ' + plural(g.n, 'сервер', 'сервера', 'серверов'), on,
+					function() { if (!on) grpSelect(g); }, lf && lf.delay >= 0 ? fkLat(lf) : null, 'zm-node-grp');
 			})));
 			srvCard.appendChild(row('Сейчас', E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
 				E('b', {}, [ direct ? 'Напрямую' : curTag ? nodeName(cur) : '—' ]),
@@ -60378,7 +60906,7 @@ return view.extend({
 				!direct && cur.delay >= 0 ? fkLat(cur) : E([])
 			])));
 
-			var tags = (isAuto ? serverMembers(auto.members || [], ns) : manual).filter(function(t) { return !(ns[t] && ns[t].hidden); });
+			var tags = (isAuto ? serverMembers(auto.members || [], ns) : grp ? serverMembers(ns[grp.tag].members || [], ns) : manual).filter(function(t) { return !(ns[t] && ns[t].hidden); });
 			var hn = servers.hide_names || [], shown = {};
 			var hpItems = S.list.filter(function(t) { return t !== autoTag && ns[t] && !ns[t].members; }).map(function(t) {
 				var n = ns[t], nm = n.name || t, byName = hn.indexOf(nm) >= 0;
@@ -60455,7 +60983,7 @@ return view.extend({
 						? 'Если выбранный вручную сервер перестал отвечать, Forkozz через 2–4 минуты переходит на рабочий и остаётся на нём.'
 						: 'Если выбранный вручную сервер перестал отвечать, Forkozz через 2–4 минуты переходит на рабочий, а выбранный проверяет раз в 10 минут и возвращается на него, как только он ответит. Перед выбором сервер проверяется.'));
 			}
-			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
+			srvCard.appendChild(E('p', { 'class': 'zm-hint' }, grp ? 'Группа АВТО из подписки — как в Happ: Forkozz раз в ' + grpIv(grp) + ' проверяет ' + grp.n + ' ' + plural(grp.n, 'сервер', 'сервера', 'серверов') + ' группы, работает через самый быстрый и сам переходит на другой, если сервер перестал отвечать. Нажмите на сервер, чтобы закрепить его.' : isAuto ? servers.priority ? 'Авто: используется первая доступная подписка в порядке ссылок. После её восстановления Forkozz возвращается к ней, даже если резервная быстрее. Нажатие на сервер включает ручной выбор.' : servers.ping ? 'Авто по пингу: включён самый быстрый сервер. Если он оборвётся, Forkozz за 20–40 секунд перейдёт на самый быстрый из рабочих. Нажмите на сервер, чтобы закрепить его.' : 'Авто: Forkozz сам выбирает лучший из этих серверов. Нажмите на сервер, чтобы закрепить его.' : servers.priority ? 'Нажмите на сервер, чтобы переключиться. Чтобы снова использовать автоматический порядок подписок, выберите «Авто».' : 'Нажмите на сервер, чтобы переключиться. Выбор держится до перезагрузки роутера.'));
 			srvCard.appendChild(rlPanel(ns));
 		}
 
@@ -69878,6 +70406,7 @@ html.zm-theme-dark[data-theme] #zmw-view .zm-node.zm-node-live:not(.zm-active) {
 	background: color-mix(in srgb, var(--zm-sel) 8%, transparent) !important;
 }
 html[data-theme] #zmw-view .zm-node.zm-node-live:not(.zm-active) { border-style: dashed; border-color: var(--zm-sel); }
+html[data-theme] #zmw-view .zm-node.zm-node-grp:not(.zm-active) { box-shadow: inset 3px 0 0 var(--zm-sel); }
 html[data-theme] #zmw-view .zm-node.zm-node-live:not(.zm-active)::after {
 	content: 'сейчас'; position: absolute; z-index: 2; top: -9px; right: 10px; padding: 0 8px; border-radius: 999px; pointer-events: none;
 	font-size: 10.5px; font-weight: 700; line-height: 17px; letter-spacing: .02em; text-transform: none;
