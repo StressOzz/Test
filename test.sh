@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.059
+# Version: 5.079
 ZM_VERSION_EOF
 set -e
 
@@ -910,6 +910,7 @@ _discord_str_add() { _zmL zapret && _discord_str_add "$@"; }
 ts_check() { _zmL remote && ts_check "$@"; }
 strategy_list_v() { _zmL zapret && strategy_list_v "$@"; }
 strategy_set_v() { _zmL zapret && strategy_set_v "$@"; }
+strategy_main_off() { _zmL zapret && strategy_main_off "$@"; }
 do_flowseal_download() { _zmL zapret && do_flowseal_download "$@"; }
 strategy_list_flowseal() { _zmL zapret && strategy_list_flowseal "$@"; }
 strategy_list_youtube() { _zmL zapret && strategy_list_youtube "$@"; }
@@ -2070,7 +2071,7 @@ ZM_PEND_DIR="$JOBS_DIR/pend"
 ZM_PEND_RKN="/opt/zapret/ipset/.zm-pend-rkn"
 _pend_list() {
 	printf '%s\n' "$CONF" "$ZO_RKN_FLAG" "$ZO_USER_FLAG" "$ZO_IPID_FLAG" "$ZO_DOH_FLAG" "$ZO_GV_FLAG" "$ZC_FILE" "$ZC_BAK" "$ZC_AFTER" \
-		"$YV_OFF_FLAG" "$DV_OFF_FLAG" "$ZP_OWN" "$ZP_MANUAL" "$ZO_SCRIPT"
+		"$YV_OFF_FLAG" "$DV_OFF_FLAG" "$ZP_OWN" "$ZP_MANUAL" "$ZO_SCRIPT" "$MAIN_OFF_FLAG"
 }
 _pend_on() { [ -f "$ZM_PEND_DIR/on" ]; }
 _pend_clear() { rm -rf "$ZM_PEND_DIR"; rm -f "$ZM_PEND_RKN"; }
@@ -2176,6 +2177,11 @@ status() {
 
 	local zs_yv=false zs_qy=false zs_ex=false zs_rk=false zs_rko=false zs_rkf=false zs_ws=false zs_ul=false zs_ulo=false zs_ip=false zs_yt=false zs_zd=false zs_zdon=false zs_s2=false zs_pd=false zs_pw="" zs_hz=false zs_hzu=false zs_gv=""
 	[ -f /opt/zapret-manager-luci/yv_off ] && zs_yv=true
+	local zs_mo=false zs_mf=""
+	if [ -f "$MAIN_OFF_FLAG" ]; then
+		if [ -f "$CONF" ] && [ ! -s "$TEST_BACKUP" ] && _nfq_opt_body | grep -qxF -e "$ZO_EXCL_HL" -e "--hostlist=$ZO_RKN_FILE" -e "$ZO_USER_HL"; then rm -f "$MAIN_OFF_FLAG"
+		else zs_mo=true; read -r zs_mf < "$MAIN_OFF_FLAG"; case "$zs_mf" in fs) ;; *) zs_mf=v ;; esac; fi
+	fi
 	[ -f "$EXPERT_MODE_FILE" ] && zs_ex=true
 	[ -f "$ZO_RKN_FLAG" ] && zs_rk=true
 	[ -f "$ZO_USER_FLAG" ] && zs_ul=true
@@ -2195,13 +2201,13 @@ status() {
 		_zl_used exclude && zs_hzu=true
 		zs_gv="$(_zo_gv_cur)"
 	fi
-	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","gv":"%s","gv_want":"%s","gv_list":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s","hdrezka":%s,"hdrezka_used":%s}\n' \
+	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","gv":"%s","gv_want":"%s","gv_list":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s","hdrezka":%s,"hdrezka_used":%s,"main_off":%s,"main_fam":"%s"}\n' \
 		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")" \
 		"$zs_yv" "$zs_qy" "$zs_ex" "$zs_rk" "$zs_rko" "$zs_rkf" \
 		"$(awk 'NF { n++ } END { print n + 0 }' "$ZO_RKN_FILE" 2>/dev/null | grep . || echo 0)" \
 		"$zs_ws" "$zs_ul" "$zs_ulo" "$(_zo_user_count)" "$testing" "$(esc "$test_now")" \
 		"$zs_ip" "$(_yv_ipid_want)" "$zs_gv" "$(_zo_gv_want)" "$(_gv_ids | tr '\n' ' ' | sed 's/ $//')" \
-		"$zs_yt" "$(esc "$zr2_luci")" "$zs_zd" "$zs_zdon" "$(esc "$zdd")" "$zdo" "$zs_s2" "$zs_pd" "$zs_pw" "$zs_hz" "$zs_hzu"
+		"$zs_yt" "$(esc "$zr2_luci")" "$zs_zd" "$zs_zdon" "$(esc "$zdd")" "$zdo" "$zs_s2" "$zs_pd" "$zs_pw" "$zs_hz" "$zs_hzu" "$zs_mo" "$zs_mf"
 }
 _z2_luci_path() {
 	grep -ho '"admin/[A-Za-z0-9_/-]*zapret2[A-Za-z0-9_/-]*"' /usr/share/luci/menu.d/*.json 2>/dev/null | tr -d '"' | grep -v 'zapret-manager' |
@@ -2290,6 +2296,11 @@ _add_gp_domains() {
 
 YV_OFF_FLAG="/opt/zapret-manager-luci/yv_off"
 DV_OFF_FLAG="/opt/zapret-manager-luci/dv_off"
+MAIN_OFF_FLAG="/opt/zapret-manager-luci/main_off"
+ZM_MAIN_RX='^--hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude[.]txt$|^--hostlist=/opt/zapret/ipset/zapret-hosts-rkn[.]txt$|^--hostlist=/opt/zapret/ipset/zapret-hosts-user[.]txt$'
+ZM_MAIN_KEEP='^[ \t]*#|^--hostlist=/opt/zapret/ipset/zapret-hosts-google[.]txt$'
+ZM_MAIN_LAST="без неё в стратегии не останется ни одного блока и Zapret ничего не будет делать. Если обход не нужен, остановите Zapret кнопкой «Остановить»"
+_nfq_has_prof() { [ -s "$ZC_FILE" ] || _nfq_opt_body | sed '1d;$d' | grep -q '^--'; }
 DISCORD_RX='^--filter-l7=discord,stun$|^--filter-udp=19294-19344,50000-50100$|^--filter-tcp=2053,2083,2087,2096,8443$|^--hostlist-domains=discord[.]media$|^#[ \t]*Dv[0-9]+$'
 
 YV_RX='^#[ \t]*Yv[0-9]+$|^--hostlist=/opt/zapret/ipset/zapret-hosts-google[.]txt$'
@@ -2594,6 +2605,7 @@ _fake_ensure() {
 
 strategy_set_flowseal() {
 	local name="$1" f block q w
+	[ "$name" = off ] && { strategy_main_off fs; return; }
 	f="$(_flowseal_file)"
 	[ -s "$f" ] || { echo '{"error":"список не загружен — сначала обновите"}'; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
@@ -2602,7 +2614,7 @@ strategy_set_flowseal() {
 	[ -z "$block" ] && { echo '{"error":"стратегия не найдена"}'; return 1; }
 	_udp443_on && q=1
 	_zo_wss_on && w=1
-	rm -f "$YV_OFF_FLAG" "$DV_OFF_FLAG"
+	rm -f "$YV_OFF_FLAG" "$DV_OFF_FLAG" "$MAIN_OFF_FLAG"
 	_game_xtreme_undo_opts
 	_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
 	_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
@@ -3087,6 +3099,11 @@ game_set() {
 		_game_xtreme_undo_opts
 		_nfq_drop_profiles "$(_game_rx)"
 		rc=$?
+		if [ "$rc" = 0 ] && [ -f "$MAIN_OFF_FLAG" ] && ! _nfq_has_prof; then
+			mv -f "$CONF.gvbak" "$CONF"
+			printf '{"error":"%s"}\n' "$(esc "Основная стратегия выключена, а игровой блок — последний: $ZM_MAIN_LAST")"
+			return 1
+		fi
 		case $rc in
 			0|3)
 				rm -f "$CONF.gvbak"
@@ -5268,10 +5285,8 @@ _doh_main_text() {
 	echo "	option group 'nogroup'"
 	echo "	option listen_addr '127.0.0.1'"
 	echo "	option force_ip_family 'auto'"
-	if [ "$1" = 1 ]; then
-		echo "	option canary_domains_icloud '1'"
-		echo "	option canary_domains_mozilla '1'"
-	fi
+	echo "	option canary_domains_icloud '$1'"
+	echo "	option canary_domains_mozilla '$1'"
 }
 _doh_other_sections() {
 	awk '/^config[ \t]/ { skip = ($2 == "main") } !skip' "$_doh_file" 2>/dev/null | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed '/./,$!d'
@@ -5350,7 +5365,8 @@ doh_status() {
 			[ "$i" -gt 16 ] && break
 		done
 		[ "$n" = 1 ] && current="$provs"
-		[ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ] && force=true
+		if [ "$(uci -q get https-dns-proxy.config.force_dns)" != "0" ]; then force=true
+		elif [ "$(uci -q get https-dns-proxy.config.canary_domains_mozilla)" != "0" ] && ! _dnsm_present; then _doh_force_apply; fi
 	fi
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && running=true
 	[ -f "$DOH_STOP" ] && ! _doh_pkg && rm -f "$DOH_STOP"
@@ -7842,8 +7858,7 @@ _fk_service0() {
 		_fk_dlc_note
 		_fk_lists_report
 		_fk_lists_errors
-		_fk_sb_settle 60
-		_fk_rs_check; b=$?
+		if _fk_sb_settle 60; then b=1; else _fk_rs_check; b=$?; fi
 		if [ "$b" = 0 ]; then
 			_fk_say "Перезапускаем Forkozz с новой настройкой"
 			_fk_log_mark
@@ -7853,8 +7868,7 @@ _fk_service0() {
 			_fk_svc_report
 			rm -f "$JOBS_DIR/forkop-svc.out"
 			_fk_ready || _fk_wait_up 90
-			_fk_sb_settle 90
-			_fk_rs_check; b=$?
+			if _fk_sb_settle 90; then b=1; else _fk_rs_check; b=$?; fi
 			if [ "$b" = 1 ] && _fk_up; then
 				echo "   ✓ sing-box запустился — наборы правил скачались через VPN"
 				_fk_lists_wait 240 || _rb_warn "Списки ещё скачиваются — они догрузятся сами"
@@ -10344,7 +10358,7 @@ _pg_st_dir() {
 
 _pg_trace() {
 	case "$1" in
-		zapret) echo "pkg:luci-i18n-zapret-ru pkg:luci-app-zapret pkg:zapret /opt/zapret /etc/config/zapret /etc/config/zapret-opkg /etc/init.d/zapret /etc/rc.d/*[0-9]zapret /etc/firewall.zapret /etc/hotplug.d/*/*zapret /etc/config/zapret.apk-new /tmp/zapret $(_zm_luci_files zapret) nft:zapret cron:zm-autobest cron:zm-excl-auto $ZO_RKN_FLAG $ZO_USER_FLAG $ZO_IPID_FLAG $ZO_DOH_FLAG $ZA_MODE_FILE $ZA_LAST $ZA_YT_FILE $ZA_LAST_YT $ZA_TS $ZA_TIME_FILE $ZA_LOG $TEST_KEEP $TEST_BACKUP $ZC_FILE $ZC_BAK $ZC_AFTER $YV_OFF_FLAG $DV_OFF_FLAG $TEST_DIR $TEST_CUSTOM_FILE $ZP_OWN $ZP_MANUAL $ZS2_DIR" ;;
+		zapret) echo "pkg:luci-i18n-zapret-ru pkg:luci-app-zapret pkg:zapret /opt/zapret /etc/config/zapret /etc/config/zapret-opkg /etc/init.d/zapret /etc/rc.d/*[0-9]zapret /etc/firewall.zapret /etc/hotplug.d/*/*zapret /etc/config/zapret.apk-new /tmp/zapret $(_zm_luci_files zapret) nft:zapret cron:zm-autobest cron:zm-excl-auto $ZO_RKN_FLAG $ZO_USER_FLAG $ZO_IPID_FLAG $ZO_DOH_FLAG $ZA_MODE_FILE $ZA_LAST $ZA_YT_FILE $ZA_LAST_YT $ZA_TS $ZA_TIME_FILE $ZA_LOG $TEST_KEEP $TEST_BACKUP $ZC_FILE $ZC_BAK $ZC_AFTER $YV_OFF_FLAG $DV_OFF_FLAG $MAIN_OFF_FLAG $TEST_DIR $TEST_CUSTOM_FILE $ZP_OWN $ZP_MANUAL $ZS2_DIR" ;;
 		zapret2) echo "pkg:luci-i18n-zapret2-ru pkg:luci-app-zapret2 pkg:zapret2 /opt/zapret2 /etc/config/zapret2 /etc/config/zapret2-opkg /etc/init.d/zapret2 /etc/rc.d/*zapret2 /etc/hotplug.d/*/*zapret2 /etc/config/zapret2.apk-new /tmp/zapret2* $(_zm_luci_files zapret2) nft:zapret2 cronrx:zapret2" ;;
 		bytetube)
 			echo "pkg:byedpi /usr/bin/ciadpi /etc/init.d/byedpi /etc/rc.d/*byedpi /etc/config/byedpi /etc/config/byedpi-opkg /usr/bin/bytetube /etc/config/bytetube /etc/init.d/bytetube /etc/rc.d/*bytetube /usr/libexec/bytetube /usr/share/bytetube /etc/bytetube /etc/hotplug.d/firewall/90-bytetube /usr/share/nftables.d/chain-pre/forward/50-bytetube.nft /var/etc/bytetube /var/run/bytetube.started /tmp/bytetube-test /lib/upgrade/keep.d/bytetube /tmp/dhcp.ytb.bak dnsconf:bytetube.conf cronrx:bytetube"
@@ -13717,10 +13731,11 @@ _fk_lists_report() {
 _fk_clash_ok() { _zm_run 6 /usr/bin/netshift clash_api get_proxies 2>/dev/null | grep -q '"proxies"'; }
 
 _fk_sb_settle() {
-	local i=0 max="${1:-60}"
+	local i=0 max="${1:-60}" f=""
 	while [ "$i" -lt "$max" ]; do
 		_fk_clash_ok && return 0
-		[ -n "$(_fk_rs_fatal)" ] && return 1
+		[ -z "$f" ] && [ -n "$(_fk_rs_fatal)" ] && f="$i"
+		[ -n "$f" ] && [ $((i - f)) -ge 24 ] && return 1
 		sleep 3; i=$((i + 3))
 	done
 	return 1
@@ -17222,6 +17237,7 @@ do_tsc_remove() {
 	if [ -x /etc/init.d/tailscale ]; then /etc/init.d/tailscale stop >/dev/null 2>&1; /etc/init.d/tailscale disable >/dev/null 2>&1; fi
 	killall tailscaled >/dev/null 2>&1
 	echo "   ✓ Служба остановлена"
+	_tsc_ip_rules_clean
 	_tsc_unsetup
 	_tsc_say "Удаляем пакет tailscale"
 	_zm_pkg_wipe luci-i18n-tailscale-community-ru luci-app-tailscale-community >/dev/null 2>&1
@@ -17348,6 +17364,18 @@ _tsc_ip_rules_left() {
 	return 1
 }
 
+_tsc_ip_rules_clean() {
+	local f p
+	_tsc_ip_rules_left || return 0
+	for f in -4 -6; do
+		for p in $(ip "$f" rule show 2>/dev/null | grep -E 'lookup 52( |$)|fwmark 0x80000/0xff0000' | sed -n 's/^\([0-9]*\):.*/\1/p'); do
+			ip "$f" rule del pref "$p" 2>/dev/null
+		done
+		ip "$f" route flush table 52 >/dev/null 2>&1
+	done
+	_tsc_ip_rules_left || echo "   ✓ Правила маршрутизации Tailscale убраны"
+}
+
 do_tsc_leftovers_clean() {
 	local f p
 	echo "==> Ищем остатки удалённого доступа (Tailscale)"
@@ -17360,13 +17388,7 @@ do_tsc_leftovers_clean() {
 		echo "   ✓ Forkozz: $TSC_DEV убран из источников трафика"
 	fi
 	rm -f "$TSC_DIR/forkozz.own"
-	for f in -4 -6; do
-		for p in $(ip "$f" rule show 2>/dev/null | grep -E 'lookup 52( |$)|fwmark 0x80000/0xff0000' | sed -n 's/^\([0-9]*\):.*/\1/p'); do
-			ip "$f" rule del pref "$p" 2>/dev/null
-		done
-		ip "$f" route flush table 52 >/dev/null 2>&1
-	done
-	_tsc_ip_rules_left || echo "   ✓ Правила маршрутизации Tailscale убраны"
+	_tsc_ip_rules_clean
 	_tsc_unsetup
 	rm -rf "$TSC_DIR"
 	if [ -n "$(_tsc_leftovers)" ]; then
@@ -17526,7 +17548,7 @@ do_remove_zapret() {
 	_zm_pkg_wipe luci-i18n-zapret-ru luci-app-zapret zapret || rc=1
 	echo "==> Удаляем файлы, стратегии и списки"
 	_zm_wipe /opt/zapret "$CONF" "$CONF-opkg" "$CONF.apk-new" /etc/init.d/zapret /etc/rc.d/*[0-9]zapret /etc/firewall.zapret /etc/hotplug.d/*/*zapret \
-		/tmp/zapret /tmp/zapret.* "$YV_OFF_FLAG" "$DV_OFF_FLAG" "$JOBS_DIR/flowseal_strategies.txt" "$JOBS_DIR/youtube_strategies.txt" "$ZO_RKN_FLAG" "$ZO_USER_FLAG" "$ZO_IPID_FLAG" "$ZO_DOH_FLAG" "$ZO_GV_FLAG" "$ZP_OWN" "$ZP_MANUAL" &&
+		/tmp/zapret /tmp/zapret.* "$YV_OFF_FLAG" "$DV_OFF_FLAG" "$MAIN_OFF_FLAG" "$JOBS_DIR/flowseal_strategies.txt" "$JOBS_DIR/youtube_strategies.txt" "$ZO_RKN_FLAG" "$ZO_USER_FLAG" "$ZO_IPID_FLAG" "$ZO_DOH_FLAG" "$ZO_GV_FLAG" "$ZP_OWN" "$ZP_MANUAL" &&
 		echo "   ✓ Файлы удалены, остатков нет" || rc=1
 	crontab -l 2>/dev/null | awk '{ l = tolower($0) } l ~ /zapret/ && l !~ /zapret-manager|zapret2/ { next } { print }' | crontab - 2>/dev/null
 	sed -i "\\|$ZA_TAG|d; \\|$ZX_AUTO_TAG=|d" "$CRON_FILE" 2>/dev/null
@@ -17821,6 +17843,7 @@ strategy_list_v() {
 
 strategy_set_v() {
 	local version="$1" yv yvk dv gv xt q w
+	[ "$version" = off ] && { strategy_main_off v; return; }
 	_zm_re "$version" '^v[0-9]+$' || { echo '{"error":"некорректная версия"}'; return 1; }
 	_v_ok "$version" || { printf '{"error":"%s"}\n' "$(esc "$([ -n "$(_str_cached StrV)" ] && echo "стратегии $version нет в списке" || _str_miss v)")"; return 1; }
 	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
@@ -17839,6 +17862,7 @@ strategy_set_v() {
 	_game_xtreme_undo_opts
 	_remove_ports_if_present NFQWS_PORTS_UDP "$PORTS_UDP"
 	_remove_ports_if_present NFQWS_PORTS_TCP "$PORTS_TCP"
+	rm -f "$MAIN_OFF_FLAG"
 	sed -i '/^# ZMFS:/d' "$CONF"
 	sed -i "/^[[:space:]]*option NFQWS_OPT '/,\$d" "$CONF"
 	{ echo "	option NFQWS_OPT '"; strategy_vx "$version"; echo "'"; } >> "$CONF"
@@ -17867,6 +17891,35 @@ strategy_set_v() {
 	_nfq_normalize
 	zapret_restart
 	printf '{"ok":true,"strategy":"%s","ts_warning":%s}\n' "$version" "$(_ts_warning)"
+}
+
+strategy_main_off() {
+	local fam="$1" bak="$JOBS_DIR/main_off.bak" cur=v
+	[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
+	grep -q '^# ZMFS:' "$CONF" && cur=fs
+	if [ "$cur" = "$fam" ] && [ -f "$MAIN_OFF_FLAG" ]; then printf '{"ok":true,"main":"off","removed":false}\n'; return 0; fi
+	if [ "$cur" != "$fam" ]; then
+		if [ "$cur" = fs ]; then echo '{"error":"Сейчас стоит набор Flowseal — его основной блок выключается в карточке Flowseal"}'
+		else echo '{"error":"Сейчас стоит стратегия v — её основной блок выключается в карточке v1–v10"}'; fi
+		return 1
+	fi
+	mkdir -p "$JOBS_DIR"; cp -f "$CONF" "$bak"
+	_nfq_drop_profiles "$ZM_MAIN_RX" "" "$ZM_MAIN_KEEP"
+	case $? in
+		0) ;;
+		3) rm -f "$bak"; echo '{"error":"В стратегии нет основного блока — выключать нечего"}'; return 1 ;;
+		*) cat "$bak" > "$CONF"; rm -f "$bak"; echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — основная стратегия не тронута"}'; return 1 ;;
+	esac
+	[ "$fam" = v ] && sed -i "/^[[:space:]]*option NFQWS_OPT '/,/^[[:space:]]*'[[:space:]]*\$/{/^[[:space:]]*#[[:space:]]*v[0-9][0-9]*[[:space:]]*\$/d}" "$CONF"
+	if ! _nfq_has_prof; then
+		cat "$bak" > "$CONF"; rm -f "$bak"
+		printf '{"error":"%s"}\n' "$(esc "Нельзя выключить основную стратегию: $ZM_MAIN_LAST")"
+		return 1
+	fi
+	rm -f "$bak"
+	mkdir -p "$(dirname "$MAIN_OFF_FLAG")"; echo "$fam" > "$MAIN_OFF_FLAG"
+	zapret_restart
+	printf '{"ok":true,"main":"off","removed":true}\n'
 }
 
 do_add_fake_flow() {
@@ -18017,11 +18070,18 @@ strategy_list_youtube() {
 _yv_block_remove() { _nfq_drop_profiles "$YV_RX" "" '^--filter-udp=443$'; }
 
 strategy_set_youtube() {
-	local name="$1" f selected
+	local name="$1" f selected rc
 	if [ "$name" = off ]; then
 		[ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-		_yv_block_remove
-		case $? in
+		[ -f "$MAIN_OFF_FLAG" ] && cp -f "$CONF" "$JOBS_DIR/yv_off.bak"
+		_yv_block_remove; rc=$?
+		if [ -s "$JOBS_DIR/yv_off.bak" ] && ! _nfq_has_prof; then
+			cat "$JOBS_DIR/yv_off.bak" > "$CONF"; rm -f "$JOBS_DIR/yv_off.bak"
+			printf '{"error":"%s"}\n' "$(esc "Основная стратегия выключена, а YouTube — последний блок: $ZM_MAIN_LAST")"
+			return 1
+		fi
+		rm -f "$JOBS_DIR/yv_off.bak"
+		case $rc in
 			0) mkdir -p "$(dirname "$YV_OFF_FLAG")"; touch "$YV_OFF_FLAG"; zapret_restart; printf '{"ok":true,"strategy":"off","removed":true}\n' ;;
 			3) mkdir -p "$(dirname "$YV_OFF_FLAG")"; touch "$YV_OFF_FLAG"; printf '{"ok":true,"strategy":"off","removed":false}\n' ;;
 			*) echo '{"error":"блок стратегий Zapret (NFQWS_OPT) записан не так, как его пишет панель, — YouTube-часть не тронута"}'; return 1 ;;
@@ -18148,6 +18208,7 @@ discord_off() {
 			sed -i -e "/^[[:space:]]*option NFQWS_PORTS_UDP '/s/,19294-19344,50000-50100//" \
 				-e "/^[[:space:]]*option NFQWS_PORTS_TCP '/s/,2053,2083,2087,2096,8443//" "$CONF"
 			_dc_safe "$bak" || { _dc_fail "$bak" "$wasoff" "$ZM_DC_GUARD"; return 1; }
+			[ -f "$MAIN_OFF_FLAG" ] && ! _nfq_has_prof && { _dc_fail "$bak" "$wasoff" "Основная стратегия выключена, а Discord — последний блок: $ZM_MAIN_LAST"; return 1; }
 			rm -f "$bak"
 			mkdir -p "$(dirname "$DV_OFF_FLAG")"; touch "$DV_OFF_FLAG"
 			zapret_restart
@@ -19016,6 +19077,7 @@ zapret_opt_set() {
 				on)
 					[ -f "$ZO_USER_FLAG" ] && { _zo_user_unpatch; rm -f "$ZO_USER_FLAG"; }
 					_zo_rkn_on && { mkdir -p "$ZM_STATE_DIR"; touch "$ZO_RKN_FLAG"; status; return 0; }
+					[ -f "$MAIN_OFF_FLAG" ] && { echo '{"error":"Основная стратегия выключена — списки РКН работают только вместе с ней. Сначала выберите основную стратегию"}'; return 1; }
 					_zo_rkn_fits || { echo '{"error":"текущая стратегия не подходит для списков РКН — выберите другую"}'; return 1; }
 					_zo_rkn_fetch || { printf '{"error":"не удалось скачать список РКН: %s"}\n' "$(esc "$ZM_FETCH_ERR")"; return 1; }
 					_zo_rkn_patch || { echo '{"error":"не удалось включить списки РКН в стратегии"}'; return 1; }
@@ -19029,6 +19091,7 @@ zapret_opt_set() {
 		userlist)
 			case "$val" in
 				on)
+					[ -f "$MAIN_OFF_FLAG" ] && { echo '{"error":"Основная стратегия выключена — свой список работает только вместе с ней. Сначала выберите основную стратегию"}'; return 1; }
 					if [ -f "$ZO_RKN_FLAG" ] || _zo_rkn_on; then rm -f "$ZO_RKN_FLAG"; _zo_rkn_unpatch; [ "$(_zs2_kv "$ZS2_DIR" rkn)" = on ] || rm -f "$ZO_RKN_FILE"; fi
 					rm -f "$ZO_USER_FLAG"
 					_zo_user_patch || { echo '{"error":"текущая стратегия не подходит для обхода по своему списку — выберите другую"}'; return 1; } ;;
@@ -20309,6 +20372,10 @@ _za_youtube() {
 
 _za_main() {
 	local mode="$1" res best bname bok btot cok ctot cname urls applied=0 r
+	if [ -f "$MAIN_OFF_FLAG" ]; then
+		echo "==> Основная стратегия выключена — её не подбираем"
+		_za_last_write "$mode" "" 0 0 0 "" moff; return 0
+	fi
 	cname="$(_nfq_names | sed 's/^#[[:space:]]*//' | grep -viE '^(udp443|DoH|nochange|Yv[0-9]+|Dv[0-9]+|Gv[0-9]+.*)$' | head -n 1)"
 	[ -n "$cname" ] || cname="$(grep -m1 '^# ZMFS:' "$CONF" | sed 's/^# ZMFS://')"
 	do_test_run "$mode" || { _za_last_write "$mode" "" 0 0 0 "" error; return 1; }
@@ -23761,6 +23828,16 @@ doh_force_set() {
 	printf '{"ok":true,"mode":"%s","force_dns":%s}\n' "$1" "$([ "$(_doh_force_want)" = 1 ] && echo true || echo false)"
 }
 
+_doh_bin_broken() { [ -x /usr/sbin/https-dns-proxy ] && _zm_run 5 /usr/sbin/https-dns-proxy -V 2>&1 | grep -qiE 'relocat|symbol'; }
+_doh_libs_up() {
+	[ "$PKG" = opkg ] && _pkg_is_installed libcares || return 1
+	[ "$1" = upd ] && { _zm_run 120 opkg update >/dev/null 2>&1; _zm_pkg_unlock; }
+	opkg list-upgradable 2>/dev/null | grep -q '^libcares ' || return 1
+	echo "==> Обновляем libcares — со старой версией DNS over HTTPS падает"
+	if _zm_run 180 opkg upgrade libcares >/dev/null 2>&1; then echo "   ✓ libcares обновлён"; _zm_pkg_unlock; return 0; fi
+	echo "   ! libcares обновить не удалось"; _zm_pkg_unlock; return 1
+}
+
 do_doh_install() {
 	local installed
 	_fk_installed && { echo "ОШИБКА: стоит $(_fk_name) — он сам шифрует DNS. Удалите $(_fk_name), чтобы поставить DoH"; return 1; }
@@ -23782,6 +23859,7 @@ do_doh_install() {
 	$UPDATE >&2
 	echo "==> Устанавливаем https-dns-proxy и luci-app-https-dns-proxy"
 	$INSTALL https-dns-proxy luci-app-https-dns-proxy >&2 || { echo "ОШИБКА установки"; return 1; }
+	_doh_libs_up
 	_doh_force_apply
 	local p r ok=""
 	for p in quad9 cloudflare google; do
@@ -24394,6 +24472,11 @@ _doh_apply() {
 			bootstrap=""
 			logger -t zapret-manager "DoH: $(_doh_name "$provider") — $note"
 		fi
+	fi
+	if [ "$n" = 0 ] && _doh_bin_broken && _doh_libs_up upd >/dev/null; then
+		logger -t zapret-manager "DoH: https-dns-proxy падал из-за старой libcares — libcares обновлён"
+		/etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+		_doh_wait_local 5053 && n=1
 	fi
 	if [ "$n" = 0 ]; then
 		if [ -n "$prev" ]; then
@@ -25305,8 +25388,8 @@ _stl_spec() {
 	fi
 	t="$(_st_cttl)"
 	if [ "$t" != 0 ] && [ -z "$ZM_STL_NOCTTL" ]; then
-		if [ -n "$dnsj" ]; then dnsj="\"dns\":{\"cache_ttl\":{\"min\":$t},${dnsj#\"dns\":\{}"
-		else dnsj="\"dns\":{\"cache_ttl\":{\"min\":$t}},"; fi
+		if [ -n "$dnsj" ]; then dnsj="\"dns\":{\"cache\":2048,\"cache_ttl\":{\"min\":$t},${dnsj#\"dns\":\{}"
+		else dnsj="\"dns\":{\"cache\":2048,\"cache_ttl\":{\"min\":$t}},"; fi
 	fi
 	printf '{"version":2,%s"lan":{"devices":[%s]},%s"lists":{%s},"outputs":{%s},"rules":[%s]}\n' "$dnsj" "${lan:-\"br-lan\"}" "$clients" "$lists" "$outs" "$rules"
 }
@@ -32572,7 +32655,7 @@ SI_ZA_EOF
 	case "$r" in
 		applied) r="применена $b — $bo из $bt (было $co)" ;; kept) r="оставлена ${cn:-текущая} — $co из $bt; лучшая $b — $bo" ;;
 		close) r="оставлена ${cn:-текущая} — разница в пределах погрешности" ;; nochange) r="пропущен — «Не изменять стратегию»" ;;
-		yoff) r="пропущен — YouTube выключен" ;; ctrl) r="пропущен — без Zapret открылось $co из $bt" ;;
+		yoff) r="пропущен — YouTube выключен" ;; moff) r="пропущен — основная стратегия выключена" ;; ctrl) r="пропущен — без Zapret открылось $co из $bt" ;;
 		none) r="лучшую определить не удалось" ;; *) r="ошибка теста" ;;
 	esac
 	_si_row "Последний автоподбор" "${at:+$at · }$([ "$k" = yt ] && echo 'YouTube · ')$r" "$(case "$r" in применена*) echo ok ;; ошибка*) echo bad ;; *"без Zapret"*) echo warn ;; esac)"
@@ -41901,6 +41984,7 @@ return view.extend({
 			var items = [];
 			if (zrSt !== 0) items.push(row('Zapret', zm.stateBadge(zrSt)));
 			if (zrSt !== 0 && d.strategy) items.push(row('Стратегия', E('span', { 'style': 'display:inline-flex; gap:8px; flex-wrap:wrap; align-items:center' }, [ E('span', {}, [ String(d.strategy) ]),
+				d.main_off ? E('span', { 'class': 'zm-badge zm-warn', 'title': 'Основной блок убран — обход работает только для YouTube, Discord, игр и других включённых блоков' }, [ E('span', { 'class': 'zm-dot' }), 'основная выключена' ]) : '',
 				d.rkn_on ? E('span', { 'class': 'zm-badge zm-ok' }, [ E('span', { 'class': 'zm-dot' }), 'по спискам РКН' ]) : d.ulist_on ? E('span', { 'class': 'zm-badge zm-ok' }, [ E('span', { 'class': 'zm-dot' }), 'по вашему списку' ]) : '',
 				d.s2 ? E('span', { 'class': 'zm-badge zm-sx-info', 'title': 'Часть устройств работает по своей стратегии — вкладка «Доп. секция»' }, [ E('span', { 'class': 'zm-dot' }), 'доп. секция' ]) : '',
 				d.testing ? E('span', { 'class': 'zm-badge zm-warn', 'title': 'Пока идёт тест, роутер по очереди пробует стратегии. Потом вернётся ваша' }, [ E('span', { 'class': 'zm-dot' }), 'идёт тест' + (d.test_now ? ': сейчас ' + d.test_now : '') ]) : '' ])));
@@ -46966,10 +47050,10 @@ return view.extend({
 			});
 		}
 		function mkHide() {
-			return zm.hidePicker({ noun: 'узлы', busy: function() { return busy; },
+			return zm.hidePicker({ noun: 'серверы', words: { hide: 'Скрыть лишние' }, busy: function() { return busy; },
 				onMode: function(on) { hideMode = on; renderSub(); },
-				onSave: function(names, markers) { return subActP('sub_hide', JSON.stringify({ names: names, markers: markers }), 'Применяем список узлов'); },
-				onReset: function() { return subActP('sub_hide', JSON.stringify({ reset: true }), 'Возвращаем все узлы'); } });
+				onSave: function(names, markers) { return subActP('sub_hide', JSON.stringify({ names: names, markers: markers }), 'Применяем список серверов'); },
+				onReset: function() { return subActP('sub_hide', JSON.stringify({ reset: true }), 'Возвращаем все серверы'); } });
 		}
 		var hidePick = mkHide();
 
@@ -50270,12 +50354,15 @@ return view.extend({
 				if (inst && d.strategy) {
 					var run = d.pending && d.pending_was && d.pending_was !== '—' ? String(d.pending_was) : String(d.strategy);
 					var parts = zcParts(run).map(function(p) { return E('span', { 'class': 'zm-zc-part' }, [ p[0], p[1] ? E('small', {}, p[1]) : '' ]); });
+					if (d.main_off) parts.unshift(zcMark('zm-warn', 'основная выключена', 'Основной блок убран — обход работает только для YouTube, Discord, игр и других включённых блоков. Вернуть — выберите стратегию ' + (d.main_fam === 'fs' ? 'Flowseal' : 'v1–v10')));
 					if (d.pending) parts.push(zcMark('zm-warn', 'выбрано ' + d.strategy + ' — ещё не применено', 'Нажмите «Применить» внизу страницы — до этого работает прежняя стратегия'));
 					rows.push(E('div', { 'class': 'zm-zc-row' }, [ E('span', { 'class': 'zm-zc-label' }, 'Стратегия'), E('div', { 'class': 'zm-zc-vals' }, parts) ]));
 					var on = [];
 					if (d.rkn_on) on.push(zcMark('zm-ok', 'по спискам РКН' + (+d.rkn_count ? ' · ' + zcNum(d.rkn_count) : ''), 'Стратегия работает только для сайтов из списка РКН и вашего списка'));
+					else if (d.rkn && d.main_off) on.push(zcMark('zm-warn', 'списки РКН ждут основную стратегию', 'Списки РКН сужают основной блок — включатся сами, когда вы его вернёте'));
 					else if (d.rkn) on.push(zcMark('zm-warn', 'списки РКН ждут другую стратегию', 'Списки РКН включены, но с этой стратегией не работают — выберите другую'));
 					else if (d.ulist_on) on.push(zcMark('zm-ok', 'свой список' + (+d.ulist_count ? ' · ' + zcNum(d.ulist_count) : ''), 'Стратегия работает только для сайтов из вашего списка хостов'));
+					else if (d.ulist && d.main_off) on.push(zcMark('zm-warn', 'свой список ждёт основную стратегию', 'Свой список сужает основной блок — включится сам, когда вы его вернёте'));
 					else if (d.ulist) on.push(zcMark('zm-warn', 'свой список ждёт другую стратегию', 'Обход по своему списку включён, но с этой стратегией не работает — выберите другую'));
 					if (d.s2) on.push(zcMark('zm-sx-info', 'доп. секция', 'Часть устройств работает по своей стратегии — вкладка «Доп. секция»'));
 					if (d.quic_yt) on.push(zcMark('zm-off', 'блок QUIC для YouTube', 'YouTube идёт по TCP — так его проще пробить'));
@@ -50345,6 +50432,7 @@ return view.extend({
 			var vGrid = E('div', { 'class': 'zm-grid zm-vgrid' });
 			var vCard = E('div', { 'class': 'zm-card zm-vcard' }, [
 				E('h3', {}, 'Стратегии ' + V_RANGE.replace('–', ' – ')),
+				E('p', { 'class': 'zm-hint' }, '«Выключить» убирает основной блок — обход для всех сайтов. YouTube, Discord и игры продолжают работать. Вернуть — выберите любую стратегию.'),
 				vGrid
 			]);
 
@@ -50352,7 +50440,7 @@ return view.extend({
 			var fBtn = E('button', { 'class': 'cbi-button', 'click': function() { fLoad(); } }, 'Загрузить список');
 			var fCard = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Стратегии Flowseal'),
-				E('p', { 'class': 'zm-hint' }, 'Стратегия Flowseal полностью заменяет текущую. В ней уже есть основной блок, игровой, блоки для YouTube и Discord.'),
+				E('p', { 'class': 'zm-hint' }, 'Стратегия Flowseal полностью заменяет текущую. В ней уже есть основной блок, игровой, блоки для YouTube и Discord. «Без основного блока» оставляет из набора только YouTube, Discord и игры.'),
 				E('div', { 'class': 'zm-actions' }, [ fBtn ]),
 				fGrid
 			]);
@@ -50421,8 +50509,25 @@ return view.extend({
 				}).catch(function() { pendBusy = false; busy = false; paintPend(); zm.toast('Роутер не ответил', 'error'); return false; });
 			}
 
+			function mainOff(fam) {
+				if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+				if (status.main_off) return;
+				busy = true;
+				zm.toast('Выключаем основную стратегию', 'warning');
+				(fam === 'fs' ? zm.strategySetFlowseal('off') : zm.strategySetV('off')).then(function(r) {
+					busy = false;
+					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); return; }
+					zm.toast(r.pending ? 'Основная стратегия будет выключена — нажмите «Применить»' : 'Основная стратегия выключена — YouTube, Discord и игры работают как прежде', 'info');
+					refreshAll();
+				}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); });
+			}
+			function offTile(on, label, onLabel, fam, title) {
+				return E('div', { 'class': 'zm-tile zm-tile-mainoff' + (on ? ' zm-active' : ''), 'title': title, 'click': function() { mainOff(fam); } }, on ? onLabel : label);
+			}
+
 			function renderV() {
 				vGrid.innerHTML = '';
+				if (!status.flowseal) vGrid.appendChild(offTile(!!status.main_off, 'Выключить', 'Выключена', 'v', 'Убрать основной блок — YouTube, Discord и игры останутся'));
 				(vList.items || []).forEach(function(it) {
 					var words = (' ' + (status.strategy || '') + ' ');
 					vGrid.appendChild(E('div', {
@@ -50446,6 +50551,7 @@ return view.extend({
 			function renderFlowseal(res) {
 				lastFlowseal = res;
 				fGrid.innerHTML = '';
+				if (status.flowseal && res.items && res.items.length) fGrid.appendChild(offTile(!!status.main_off, 'Без основного блока', 'Основной блок выключен', 'fs', 'Оставить из набора ' + status.flowseal + ' только YouTube, Discord и игры'));
 				(res.items || []).forEach(function(it) {
 					fGrid.appendChild(E('div', {
 						'class': 'zm-tile' + (status.flowseal === it.id ? ' zm-active' : ''),
@@ -50481,15 +50587,19 @@ return view.extend({
 						? 'Домены берутся из DoH роутера и меняются вместе с ним: ' + dohDoms + '.'
 						: 'DoH на роутере не настроен — взяты популярные серверы: ' + dohDoms + '.');
 				extraCard.appendChild(zm.swRow(!!(status.zdoh || status.zdoh_on), extraBusy === 'doh' ? 'Обход блокировки DoH — применяем…' : 'Обход блокировки DoH', dohHint, function() { toggleExtra('doh', !(status.zdoh || status.zdoh_on)); }, !!extraBusy));
-				var rknHint = status.rkn && !status.rkn_on
+				var rknHint = status.main_off
+					? (status.rkn ? '⚠ Основная стратегия выключена — списки РКН включатся сами, когда вы её вернёте.' : 'Нужна основная стратегия: списки РКН сужают именно её. Сейчас она выключена.')
+					: status.rkn && !status.rkn_on
 					? '⚠ Текущая стратегия не подходит для списков РКН. Они включатся сами, когда вы выберете подходящую.'
 					: 'Основная стратегия будет обходить блокировку только для сайтов из списка РКН' + (status.rkn_on && status.rkn_count > 0 ? ' (' + status.rkn_count + ' доменов)' : '') + ' и вашего списка хостов, а не для всех сайтов, кроме исключений. Помогает, если стратегия мешает обычным сайтам. Список скачивается из проекта zapret4rocket и сохраняется при смене стратегии.';
-				extraCard.appendChild(zm.swRow(!!status.rkn, extraBusy === 'rkn' ? 'Обход по спискам РКН — применяем…' : 'Обход по спискам РКН', rknHint, function() { toggleExtra('rkn', !status.rkn); }, !!extraBusy));
+				extraCard.appendChild(zm.swRow(!!status.rkn, extraBusy === 'rkn' ? 'Обход по спискам РКН — применяем…' : 'Обход по спискам РКН', rknHint, function() { toggleExtra('rkn', !status.rkn); }, !!extraBusy || (!!status.main_off && !status.rkn)));
 				var ulN = +status.ulist_count || 0;
-				var ulHint = status.ulist && !status.ulist_on
+				var ulHint = status.main_off
+					? (status.ulist ? '⚠ Основная стратегия выключена — обход по своему списку включится сам, когда вы её вернёте.' : 'Нужна основная стратегия: свой список сужает именно её. Сейчас она выключена.')
+					: status.ulist && !status.ulist_on
 					? '⚠ Текущая стратегия не подходит для обхода по своему списку. Он включится сам, когда вы выберете подходящую.'
 					: 'Основная стратегия будет обходить блокировку только для сайтов из вашего списка /opt/zapret/ipset/zapret-hosts-user.txt' + (status.ulist_on ? ' (' + (ulN ? ulN + ' ' + (ulN % 10 === 1 && ulN % 100 !== 11 ? 'домен' : ulN % 10 >= 2 && ulN % 10 <= 4 && (ulN % 100 < 12 || ulN % 100 > 14) ? 'домена' : 'доменов') : 'список пуст') + ')' : '') + ', а не для всех сайтов, кроме исключений. Список правится на вкладке «Редактор списков». Включается что-то одно: со списками РКН ваш список уже учитывается.';
-				extraCard.appendChild(zm.swRow(!!status.ulist, extraBusy === 'userlist' ? 'Обход по пользовательским спискам — применяем…' : 'Обход по пользовательским спискам', ulHint, function() { toggleExtra('userlist', !status.ulist); }, !!extraBusy));
+				extraCard.appendChild(zm.swRow(!!status.ulist, extraBusy === 'userlist' ? 'Обход по пользовательским спискам — применяем…' : 'Обход по пользовательским спискам', ulHint, function() { toggleExtra('userlist', !status.ulist); }, !!extraBusy || (!!status.main_off && !status.ulist)));
 				if (status.ulist_on && !ulN) extraCard.appendChild(E('p', { 'class': 'zm-hint zm-ab-warn', 'style': 'margin:-4px 0 10px 52px' }, 'Список пуст — основная стратегия сейчас не применяется ни к одному сайту. Добавьте домены на вкладке «Редактор списков».'));
 				extraCard.appendChild(zm.swRow(!!status.wssize, extraBusy === 'wssize' ? 'Блок --wssize 1:6 — применяем…' : 'Блок --wssize 1:6', 'Отдельный блок в конце стратегии: для HTTPS уменьшает окно TCP в начале соединения. Помогает с некоторыми блокировками, но может снизить скорость и стабильность. Сохраняется при смене стратегии.', function() { toggleExtra('wssize', !status.wssize); }, !!extraBusy));
 				extraCard.appendChild(zm.swRow(!!status.hdrezka, extraBusy === 'hdrezka' ? 'Исключить домены HDRezka — применяем…' : 'Исключить домены HDRezka', 'Приложение HDRezka может не работать, пока его трафик обрабатывает Zapret. Сайты HDRezka в браузере после этого могут не открываться. Домены сохраняются при обновлении списка исключений.', function() { toggleExtra('hdrezka', !status.hdrezka); }, !!extraBusy));
@@ -51267,6 +51377,7 @@ return view.extend({
 						: l.result === 'kept' ? [ E('b', {}, 'оставлена ' + cur), ' — ' + l.cur_ok + ' из ' + l.total + unit + '; лучшая из проверенных ' + l.best + ' — ' + l.best_ok + ' из ' + l.total ]
 						: l.result === 'nochange' ? [ 'пропущен — включено «Не изменять стратегию»' ]
 						: l.result === 'yoff' ? [ 'пропущен — YouTube выключен в стратегии' ]
+						: l.result === 'moff' ? [ 'пропущен — основная стратегия выключена' ]
 						: l.result === 'close' ? [ E('b', {}, 'оставлена ' + cur), ' — ' + l.cur_ok + ' из ' + l.total + unit + '; ' + l.best + ' — ' + l.best_ok + ' из ' + l.total + ', разница в пределах погрешности' ]
 						: l.result === 'ctrl' ? [ E('b', { 'class': 'zm-ab-warn' }, 'пропущен'), ' — без Zapret открылось ' + l.cur_ok + ' из ' + l.total + unit ]
 						: l.result === 'none' ? [ 'лучшую стратегию определить не удалось, оставлена текущая' ] : [ E('b', { 'class': 'zm-ab-bad' }, 'ошибка'), ' — подробности в журнале теста' ];
@@ -53275,6 +53386,8 @@ html.zm-theme-dark body:not(.zmw-body) .zm-meter-bar { background: rgba(255,255,
 .zm-vcard { container: zmv / inline-size; }
 .zm-grid.zm-vgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .zm-grid.zm-vgrid > .zm-tile { min-width: 0; padding-left: 6px; padding-right: 6px; }
+.zm-grid > .zm-tile-mainoff { flex: 1 0 100%; }
+.zm-grid.zm-vgrid > .zm-tile-mainoff { grid-column: 1 / -1; }
 @container zmv (min-width: 760px) { .zm-grid.zm-vgrid { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
 
 .zm-sp-who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -60170,7 +60283,7 @@ return view.extend({
 				return true;
 			}, function() { zm.toast('Роутер не ответил', 'error'); return false; });
 		}
-		var hidePick = zm.hidePicker({ noun: 'серверы', inline: true, nameSub: function() { return !!(servers && servers.sub); }, busy: function() { return busy || saving; },
+		var hidePick = zm.hidePicker({ noun: 'серверы', words: { hide: 'Скрыть лишние' }, inline: true, nameSub: function() { return !!(servers && servers.sub); }, busy: function() { return busy || saving; },
 			onMode: function(on) { hideMode = on; renderServers(); },
 			onSave: function(names, markers) { return hideAct(JSON.stringify({ sec: cfg && cfg.sec, names: names, markers: markers })); },
 			onReset: function() { return hideAct(JSON.stringify({ sec: cfg && cfg.sec, reset: true })); } });
@@ -65494,7 +65607,7 @@ var LOOK_ACC = [ '#2d5bff', '#7c5cff', '#0ea5e9', '#14b8a6', '#16a34a', '#f59e0b
 var LOOK_ZOOM = [ [ 0.9, '90%' ], [ 1, '100%' ], [ 1.1, '110%' ], [ 1.2, '120%' ] ];
 var ANIM_RE = /^(stars|traffic|music|matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_HEAVY = /^(matrix|neon|synth|noir|metro|embers|lava|fire|metal|silk|ink|plasma|warp)$/, ANIM_DARK = /^(matrix|neon|synth|noir|embers|lava|fire|metal|silk|ink|plasma|warp)$/;
 var LOOK_VIS = [ 'acc', 'tint', 'tcol', 'font', 'mono', 'rad', 'bord', 'shad', 'glass' ];
-var LOOK_DEF = { acc: '', tint: '', tcol: '', font: 'theme', mono: 'theme', zoom: 1, dens: 'n', rad: 'md', bord: 'md', shad: 'md', ctr: 'n', motion: 1, glass: 1, radio: 1, fps: 60, dpr: 2, pause: 1, batt: 0, react: 1, my: null };
+var LOOK_DEF = { acc: '', tint: '', tcol: '', font: 'theme', mono: 'theme', zoom: 1, dens: 'n', rad: 'md', bord: 'md', shad: 'md', ctr: 'n', motion: 1, glass: 1, radio: 1, fps: 60, dpr: 2, pause: 1, batt: 0, react: 1, bg: '', bgt: '', my: null };
 function lookPick(list, v) { return list.filter(function (x) { return x.id === v; })[0]; }
 function lookClean(o) {
 	var r = {}, k;
@@ -65514,6 +65627,7 @@ function lookClean(o) {
 	[ 'motion', 'glass', 'radio', 'pause', 'batt', 'react' ].forEach(function (b) { if (o[b] === 0 || o[b] === 1) r[b] = o[b]; });
 	if ([ 15, 30, 60 ].indexOf(+o.fps) >= 0) r.fps = +o.fps;
 	if (+o.dpr === 1 || +o.dpr === 2) r.dpr = +o.dpr;
+	if ((o.bg === '0' || ANIM_RE.test(o.bg || '')) && /^[a-z]+$/.test(o.bgt || '')) { r.bg = o.bg; r.bgt = o.bgt; }
 	r.my = myClean(o.my);
 	return r;
 }
@@ -65560,6 +65674,7 @@ function lookSync() {
 		LOOK = o;
 		sset(K_LOOK, lookJson(), true);
 		if (themePref() === 'custom' && LOOK.my) { sset(K_ANIM, LOOK.my.a || '0', true); animMark(); }
+		bgFromRouter();
 		lookApply(); applyTheme(); dustSync();
 		if (lookPageRender) lookPageRender();
 	}).catch(function () {});
@@ -65700,12 +65815,24 @@ function mySnap() {
 	return myClean(o);
 }
 function animMark() { sset(K_ANIMFOR, themePref() || 'auto', true); }
+function bgKeep() {
+	var t = themePref() || 'auto', v = themeAnimNorm(sget(K_ANIM)) || '0';
+	if (LOOK.bg === v && LOOK.bgt === t) return;
+	LOOK.bg = v; LOOK.bgt = t;
+	lookSave();
+}
+function bgFromRouter() {
+	if (!LOOK.bg || LOOK.bgt !== (themePref() || 'auto') || sget(K_ANIM) === LOOK.bg) return;
+	sset(K_ANIM, LOOK.bg, true);
+	animMark();
+}
 function animFix() {
 	var t = themePref() || 'auto', f = sget(K_ANIMFOR), v = sget(K_ANIM);
 	if (f === t && v != null) return;
 	if (f == null && v != null && !(v === '0' && themeFx())) { animMark(); return; }
 	sset(K_ANIM, themeFx() || '0', true);
 	animMark();
+	bgFromRouter();
 }
 function animKind() { var v = sget(K_ANIM); if (lookOnBattery()) return ''; if (v === '1') return 'stars'; if (v === 'theme') return themeFx(); return ANIM_RE.test(v || '') ? v : ''; }
 function animReact() { var k = animKind(); return !!k && (k === 'music' || !!LOOK.react); }
@@ -66855,6 +66982,7 @@ var animMenuEls = null;
 function animSet(id) {
 	sset(K_ANIM, id || '0', true);
 	animMark();
+	bgKeep();
 	if (LOOK.my && themePref() === 'custom') { var a = themeAnimNorm(id || ''); if (LOOK.my.a !== a) { LOOK.my.a = a; lookSave(); } }
 	dustSync();
 	animMenuPaint();
@@ -66915,6 +67043,7 @@ function themeSync() {
 		sset(K_THEME, t === 'auto' ? null : t, true);
 		sset(K_ANIM, themeFx() || '0', true);
 		animMark();
+		bgFromRouter();
 		applyTheme();
 		lookApply();
 		dustSync();
@@ -66933,6 +67062,7 @@ function setTheme(id, keep) {
 	themeSave(id);
 	if (!keep) sset(K_ANIM, themeFx() || '0', true);
 	animMark();
+	bgKeep();
 	document.documentElement.classList.add('zmw-theme-anim');
 	applyTheme();
 	lookApply();
@@ -67236,7 +67366,7 @@ function lookPage() {
 			LOOK = lookClean(o.look); lookSave();
 			if (radio.show !== !!LOOK.radio) window.zmwRadio.set(!!LOOK.radio);
 			th = o.theme === 'minimal' ? 'micro' : o.theme === 'blocks' ? 'contrast' : o.theme;
-			if (o.anim === '0' || o.anim === 'theme' || o.anim === '1' || ANIM_RE.test(o.anim || '')) { sset(K_ANIM, o.anim, true); animMark(); }
+			if (o.anim === '0' || o.anim === 'theme' || o.anim === '1' || ANIM_RE.test(o.anim || '')) { sset(K_ANIM, o.anim, true); animMark(); bgKeep(); }
 			if (th && (th === 'auto' || themeById(th))) setTheme(th, true);
 			else { lookApply(); applyTheme(); dustSync(); }
 			toast('Настройки оформления применены', 'info');
