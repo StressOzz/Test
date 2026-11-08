@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.079
+# Version: 5.089
 ZM_VERSION_EOF
 set -e
 
@@ -260,7 +260,11 @@ _zm_gml_patch() {
 ZM_GHP_FILE="$ZM_STATE_DIR/ghproxy"
 ZM_GHP_FAIL="$JOBS_DIR/ghproxy.fail"
 ZM_GHP_LOG="$JOBS_DIR/ghproxy.log"
+ZM_GHP_NET="$JOBS_DIR/ghnet"
+ZM_GHP_GOOD="$JOBS_DIR/ghproxy.good"
 ZM_GHP_LIST="gh-proxy.org ghfast.top gh.llkk.cc ghproxy.net"
+ZM_GHP_HOSTS="github.com raw.githubusercontent.com"
+ZM_GHP_TRY=3
 _zm_ghp_load() {
 	[ -n "$ZM_GHP_MODE" ] && return 0
 	ZM_GHP_MODE=off
@@ -273,6 +277,7 @@ _zm_gh_host() {
 	esac
 	return 1
 }
+_zm_ghp_hn() { local h="${1#https://}"; printf '%s' "${h%%/*}"; }
 _zm_ghp_say() {
 	[ -n "$ZM_JOB_LOG" ] && printf '%s\n' "$1" >> "$ZM_JOB_LOG" 2>/dev/null
 	mkdir -p "$JOBS_DIR" 2>/dev/null
@@ -285,11 +290,16 @@ _zm_ghp_why() {
 		curl:7) echo "не удалось подключиться" ;;
 		curl:28) echo "не ответил вовремя" ;;
 		curl:35|wget:5) echo "ошибка защищённого соединения" ;;
-		curl:52|curl:56|curl:18) echo "соединение оборвалось" ;;
+		curl:60) echo "чужой сертификат — похоже, адрес подменён" ;;
+		curl:52|curl:56|curl:18|curl:55|curl:16|curl:92|curl:8) echo "соединение оборвалось" ;;
 		wget:4) echo "ошибка сети" ;;
+		wget:1) echo "не скачалось" ;;
+		*:211) echo "вместо файла пришла веб-страница" ;;
+		*:212) echo "файл пришёл повреждённым" ;;
 		*) return 1 ;;
 	esac
 }
+_zm_ghp_clean() { case "$1:$2" in curl:5|curl:6|curl:7|curl:22|curl:35|curl:60) return 0 ;; esac; return 1; }
 _zm_ghp_out() {
 	local t="$1" a nx=""
 	shift
@@ -304,52 +314,128 @@ _zm_ghp_out() {
 	done
 	return 0
 }
+_zm_ghp_half() {
+	local n="$1"
+	case "$n" in ''|*[!0-9]*) printf '%s' "$n"; return 0 ;; esac
+	n=$(( (n + 1) / 2 ))
+	[ "$n" -lt "$2" ] && n="$2"
+	[ "$n" -gt "$1" ] && n="$1"
+	printf '%s' "$n"
+}
 _zm_ghp_exec() {
-	local t="$1" pre="$2" a x=0
-	shift 2
+	local t="$1" pre="$2" d="$3" a x=0 hv="" sp=""
+	shift 3
 	for a; do
 		[ "$x" = 0 ] && { set --; x=1; }
+		if [ -n "$hv" ]; then set -- "$@" "$(_zm_ghp_half "$a" "$hv")"; hv=""; continue; fi
+		case "$t:$a" in
+			curl:--connect-timeout) hv=3 ;;
+			curl:-m|curl:--max-time|wget:-T) hv=5 ;;
+			curl:-y|curl:--speed-time) sp=1 ;;
+		esac
 		if _zm_gh_host "$a"; then set -- "$@" "$pre$a"; else set -- "$@" "$a"; fi
 	done
-	command "$t" "$@"
+	if [ "$t" = curl ] && [ -n "$d" ] && [ -z "$sp" ]; then command curl --speed-limit 512 --speed-time 20 "$@"
+	else command "$t" "$@"; fi
+}
+_zm_ghp_try() {
+	local t="$1" pre="$2" d="$3" o="$4" rc
+	shift 4
+	_zm_ghp_exec "$t" "$pre" "$d" "$@"; rc=$?
+	[ "$rc" = 0 ] || return "$rc"
+	[ -n "$o" ] && [ "$o" != /dev/null ] && [ -s "$o" ] || return 0
+	[ -n "$ZM_FETCH_ANY" ] || ! head -c 1024 "$o" 2>/dev/null | grep -qiE '<(!doctype|html|head|body)' || return 211
+	[ -z "$ZM_GHP_CHECK" ] || "$ZM_GHP_CHECK" "$o" || return 212
+	return 0
+}
+_zm_ghp_mark() {
+	mkdir -p "$JOBS_DIR" 2>/dev/null
+	printf '%s %s\n' "$2" "$(date +%s)" > "$ZM_GHP_NET.$1.$$" 2>/dev/null && mv -f "$ZM_GHP_NET.$1.$$" "$ZM_GHP_NET.$1" 2>/dev/null
+	return 0
+}
+_zm_ghp_probe() {
+	if _zm_has curl; then command curl -s -o /dev/null -I --connect-timeout 3 --max-time 5 "https://$1/" 2>/dev/null; return; fi
+	_zm_has wget && command wget -q -T 5 --spider "https://$1/" >/dev/null 2>&1
+}
+_zm_ghp_st() {
+	local s="" t="" now
+	now="$(date +%s)"
+	if [ -z "$2" ] && [ -f "$ZM_GHP_NET.$1" ] && read -r s t < "$ZM_GHP_NET.$1"; then
+		case "$t" in ''|*[!0-9]*) ;; *)
+			case "$s" in
+				up) [ $((now - t)) -lt 300 ] && { echo up; return 0; } ;;
+				down) [ $((now - t)) -lt 600 ] && { echo down; return 0; } ;;
+			esac ;;
+		esac
+	fi
+	if _zm_ghp_probe "$1"; then s=up; else s=down; fi
+	_zm_ghp_mark "$1" "$s"
+	echo "$s"
+}
+_zm_ghp_order() {
+	local g="" m
+	[ -f "$ZM_GHP_GOOD" ] && read -r g < "$ZM_GHP_GOOD"
+	case " $ZM_GHP_LIST " in *" $g "*) [ -n "$g" ] && printf '%s' "$g" ;; *) g="" ;; esac
+	for m in $ZM_GHP_LIST; do [ "$m" = "$g" ] || printf ' %s' "$m"; done
 }
 _zm_ghp_run() {
-	local t="$1" a gh="" rc why out nm m
+	local t="$1" a gh="" h rc why out nm m n=0
 	shift
 	for a; do _zm_gh_host "$a" && { gh="$a"; break; }; done
 	[ -n "$gh" ] || { command "$t" "$@"; return; }
 	_zm_ghp_load
-	command "$t" "$@"; rc=$?
-	if [ "$rc" = 0 ]; then [ "$ZM_GHP_MODE" = off ] && rm -f "$ZM_GHP_FAIL" 2>/dev/null; return 0; fi
-	why="$(_zm_ghp_why "$t" "$rc")" || return $rc
-	if [ "$ZM_GHP_MODE" != auto ] || [ -n "$ZM_GHP_NOMIR" ]; then
-		[ "$ZM_GHP_MODE" = off ] && { mkdir -p "$JOBS_DIR" 2>/dev/null; date +%s > "$ZM_GHP_FAIL" 2>/dev/null; }
-		return $rc
-	fi
-	nm="${gh%%\?*}"; nm="${nm##*/}"; [ -n "$nm" ] || nm="$gh"
 	out="$(_zm_ghp_out "$t" "$@")"
-	if [ -z "$out" ] && [ "$t:$rc" != curl:6 ] && [ "$t:$rc" != curl:7 ]; then
-		_zm_ghp_say "   · GitHub: $nm — $why. Через зеркало не повторяем: часть ответа уже получена"
-		return $rc
+	if [ -n "$ZM_GHP_NOMIR" ]; then _zm_ghp_try "$t" "" 1 "$out" "$@"; return; fi
+	h="$(_zm_ghp_hn "$gh")"
+	nm="${gh%%\?*}"; nm="${nm##*/}"; [ -n "$nm" ] || nm="$gh"
+	if [ "$ZM_GHP_MODE" != auto ]; then
+		while :; do
+			n=$((n + 1))
+			[ "$n" -gt 1 ] && [ -n "$out" ] && [ "$out" != /dev/null ] && rm -f "$out" 2>/dev/null
+			_zm_ghp_try "$t" "" 1 "$out" "$@"; rc=$?
+			[ "$rc" = 0 ] && { rm -f "$ZM_GHP_FAIL" 2>/dev/null; return 0; }
+			_zm_ghp_why "$t" "$rc" >/dev/null || return "$rc"
+			[ "$n" -lt "$ZM_GHP_TRY" ] || break
+			[ -n "$out" ] || _zm_ghp_clean "$t" "$rc" || break
+			[ "$rc" = 211 ] && break
+		done
+		mkdir -p "$JOBS_DIR" 2>/dev/null; date +%s > "$ZM_GHP_FAIL" 2>/dev/null
+		return "$rc"
 	fi
-	_zm_ghp_say "   · GitHub: $nm не скачался напрямую — $why. Пробуем через зеркала"
-	for m in $ZM_GHP_LIST; do
+	if [ "$(_zm_ghp_st "$h")" = down ]; then
+		_zm_ghp_say "   · $h сейчас недоступен — $nm качаем сразу через зеркало"
+	else
+		n=1
+		_zm_ghp_try "$t" "" 1 "$out" "$@"; rc=$?
+		[ "$rc" = 0 ] && { _zm_ghp_mark "$h" up; return 0; }
+		why="$(_zm_ghp_why "$t" "$rc")" || return "$rc"
+		if [ -z "$out" ] && ! _zm_ghp_clean "$t" "$rc"; then
+			_zm_ghp_say "   · GitHub: $nm — $why. Через зеркало не повторяем: часть ответа уже получена"
+			return "$rc"
+		fi
+		_zm_ghp_mark "$h" down
+		_zm_ghp_say "   · GitHub: $nm не скачался напрямую — $why. Следующие 10 минут $h качаем сразу через зеркала"
+	fi
+	rc=1
+	for m in $(_zm_ghp_order); do
+		[ "$n" -lt "$ZM_GHP_TRY" ] || break
+		n=$((n + 1))
 		[ -n "$out" ] && [ "$out" != /dev/null ] && rm -f "$out" 2>/dev/null
-		_zm_ghp_exec "$t" "https://$m/" "$@"; rc=$?
+		_zm_ghp_try "$t" "https://$m/" "" "$out" "$@"; rc=$?
 		if [ "$rc" = 0 ]; then
-			if [ -n "$out" ] && [ "$out" != /dev/null ] && ! _zm_dl_sane "$out"; then
-				_zm_ghp_say "   · $m: вместо файла пришла страница ошибки"
-				rc=1; continue
-			fi
-			_zm_ghp_say "   ✓ $nm скачан через зеркало $m. Следующие загрузки — снова напрямую"
+			printf '%s\n' "$m" > "$ZM_GHP_GOOD" 2>/dev/null
+			_zm_ghp_say "   ✓ $nm скачан через зеркало $m"
 			return 0
 		fi
 		why="$(_zm_ghp_why "$t" "$rc")" || why="ошибка $rc"
+		[ "$rc" = 22 ] && why="зеркало ответило ошибкой"
 		_zm_ghp_say "   · $m: не скачалось — $why"
+		[ -n "$out" ] || _zm_ghp_clean "$t" "$rc" || break
 	done
-	_zm_ghp_say "   !! $nm не скачался ни напрямую, ни через зеркала ($(echo $ZM_GHP_LIST | sed 's/ /, /g'))"
+	rm -f "$ZM_GHP_GOOD" 2>/dev/null
+	_zm_ghp_say "   !! $nm не скачался ни напрямую, ни через зеркала (попыток: $n)"
 	[ "$rc" = 0 ] && rc=1
-	return $rc
+	return "$rc"
 }
 _zm_has() { local d IFS=:; for d in ${PATH:-/usr/sbin:/usr/bin:/sbin:/bin}; do [ -n "$d" ] && [ -x "$d/$1" ] && [ ! -d "$d/$1" ] && return 0; done; return 1; }
 curl() { _zm_ghp_run curl "$@"; }
@@ -381,12 +467,12 @@ _zm_fetch() {
 	return 1
 }
 _zm_fetch_one() {
-	local u="$1" o="$2" tm="${3:-120}" rg="$4" ef code rc e i
+	local u="$1" o="$2" tm="${3:-120}" rg="$4" ef code rc e i cr=""
 	ZM_FETCH_ERR=""; ZM_FETCH_SIZE=0
 	ef="$o.zmerr"
 	rm -f "$o"
 	if _zm_has curl; then
-		code="$(curl -fsSL --connect-timeout 10 --max-time "$tm" ${rg:+-r "$rg"} -A "Mozilla/5.0" -o "$o" -w '%{http_code}' "$u" 2>"$ef")"; rc=$?
+		code="$(curl -fsSL --connect-timeout 10 --max-time "$tm" ${rg:+-r "$rg"} -A "Mozilla/5.0" -o "$o" -w '%{http_code}' "$u" 2>"$ef")"; rc=$?; cr="$rc"
 		code="$(printf '%s' "$code" | tail -c 3)"
 		e="$(tail -n 1 "$ef" 2>/dev/null | sed 's/^curl: ([0-9]*) //')"; rm -f "$ef"
 		if [ "$rc" = 0 ] && _zm_fetch_ok "$o"; then return 0; fi
@@ -402,12 +488,13 @@ _zm_fetch_one() {
 		elif [ "$rc" = 0 ]; then ZM_FETCH_ERR="вместо файла пришла веб-страница"
 		else ZM_FETCH_ERR="$(_zm_ghp_why curl "$rc" || echo "${e:-curl: ошибка $rc}")"; fi
 	fi
-	if [ -z "$rg" ] && _zm_has wget; then
-		e="$(ZM_GHP_NOMIR=1; wget -T 20 -U "Mozilla/5.0" -O "$o" "$u" 2>&1)"; rc=$?
+	if [ -n "$cr" ] && _zm_gh_host "$u" && { [ "$cr" = 0 ] || [ "$cr" = 22 ] || _zm_ghp_why curl "$cr" >/dev/null; }; then :
+	elif [ -z "$rg" ] && _zm_has wget; then
+		e="$(ZM_GHP_NOMIR="${cr:+1}"; wget -T 20 -U "Mozilla/5.0" -O "$o" "$u" 2>&1)"; rc=$?
 		if [ "$rc" = 0 ] && _zm_fetch_ok "$o"; then ZM_FETCH_ERR=""; return 0; fi
 		rm -f "$o"
 		if [ "$rc" = 0 ]; then e="вместо файла пришла веб-страница"
-		else e="$(_zm_ghp_why wget "$rc" || printf '%s\n' "$e" | grep -v '^Downloading\|^Connecting\|^Writing\|^Download completed\|^$' | tail -n 1)"; fi
+		else e="$( { [ "$rc" != 1 ] && _zm_ghp_why wget "$rc"; } || printf '%s\n' "$e" | grep -v '^Downloading\|^Connecting\|^Writing\|^Download completed\|^$' | tail -n 1)"; fi
 		ZM_FETCH_ERR="${ZM_FETCH_ERR:+$ZM_FETCH_ERR; }wget: ${e:-не скачалось}"
 	fi
 	[ -n "$ZM_FETCH_ERR" ] || ZM_FETCH_ERR="на роутере нет ни curl, ни wget"
@@ -431,7 +518,19 @@ _zm_get() {
 	echo "   !! $nm — не скачался: $ZM_FETCH_ERR"
 	return 1
 }
-gh_mirrors() { _zm_ghp_load; [ "$ZM_GHP_MODE" = auto ] && echo $ZM_GHP_LIST; return 0; }
+gh_mirrors() { _zm_ghp_load; [ "$ZM_GHP_MODE" = auto ] && echo $(_zm_ghp_order); return 0; }
+gh_net() {
+	_zm_ghp_load
+	[ "$ZM_GHP_MODE" = auto ] || { echo up; return 0; }
+	case " $ZM_GHP_HOSTS codeload.github.com objects.githubusercontent.com release-assets.githubusercontent.com " in *" $1 "*) ;; *) echo up; return 0 ;; esac
+	if [ "$2" = down ]; then _zm_ghp_mark "$1" down; echo down; else _zm_ghp_st "$1"; fi
+}
+gh_get() {
+	_zm_gh_host "$1" && [ -n "$2" ] || return 1
+	_zm_fetch "$1" "$2" "${3:-120}" && return 0
+	echo "$ZM_FETCH_ERR" >&2
+	return 1
+}
 MIHOMO_DIR="/etc/mihomo"
 MIHOMO_BIN="/usr/bin/mihomo"
 MIHOMO_CONF="/etc/mihomo/config.yaml"
@@ -958,6 +1057,7 @@ do_zpg_restore() { _zmL system && do_zpg_restore "$@"; }
 zm_pages() { _zmL zapret && zm_pages "$@"; }
 zm_cleanup() { _zmL system && zm_cleanup "$@"; }
 gh_proxy() { _zmL system && gh_proxy "$@"; }
+webui() { _zmL system && webui "$@"; }
 zm_autoclean() { _zmL system && zm_autoclean "$@"; }
 system_uninstall_panel() { _zmL system && system_uninstall_panel "$@"; }
 _pg_trace() { _zmL system && _pg_trace "$@"; }
@@ -1474,6 +1574,13 @@ _zm_lan_devs() {
 	fi
 	[ -n "$out" ] || out="br-lan"
 	echo $out
+}
+ZMW_STATE="$ZM_STATE_DIR/webui"
+_zmw_port() {
+	local p
+	p="$(uci -q get uhttpd.zmweb.listen_http 2>/dev/null | tr ' ' '\n' | sed -n '1s/.*://p')"
+	case "$p" in ''|*[!0-9]*) return 1 ;; esac
+	echo "$p"
 }
 _zm_lan_ip() {
 	local n ip d
@@ -2264,6 +2371,8 @@ _nochange_guard() {
 }
 
 _zm_dl_sane() { [ -s "$1" ] && ! head -c 1024 "$1" | grep -qiE '<(!doctype|html|head|body)'; }
+_zm_zip_ok() { command -v unzip >/dev/null 2>&1 || return 0; unzip -tq "$1" >/dev/null 2>&1; }
+_zm_tgz_ok() { tar -tzf "$1" >/dev/null 2>&1; }
 
 _nochange_restore() {
 	local keep="$ZM_STATE_DIR/nochange.$1" f dst
@@ -5132,10 +5241,10 @@ health() {
 	fi
 	printf '{"dots":{"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"adblock":%s,"steer":%s,"forkop":%s,"awg":%s,"term":%s,"ts":%s},' \
 		"$d_zr" "$d_zr2" "$d_bt" "$d_tg" "$d_mx" "$d_doh" "$hs" "$d_ab" "$d_sr" "${d_fk:-0}" "${d_awg:-0}" "$d_term" "$(_tsc_dot)"
-	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_fail":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"steer_flow_warn":%s,"ipv6_warn":%s,"gh_warn":%s,"reboot_hint":"%s","nav_hidden":"%s","pages_off":"%s","tsc":%s,"htop":%s,"fk_info":"%s","tg_info":"%s","oom":%s}\n' \
+	printf '"zapret":%s,"zapret2":%s,"bytetube":%s,"tg":%s,"mixomo":%s,"doh":%s,"hosts":%s,"steer":%s,"steer_off":%s,"steer_fail":%s,"steer_exit":"%s","awg":%s,"forkop":%s,"flow_warn":%s,"steer_flow_warn":%s,"ipv6_warn":%s,"gh_warn":%s,"reboot_hint":"%s","nav_hidden":"%s","pages_off":"%s","tsc":%s,"htop":%s,"fk_info":"%s","tg_info":"%s","oom":%s,"zmw":%s}\n' \
 		"$zr" "$zr2" "$bt" "$tg" "$mx" "$doh" "$hs" "$sr" \
 		"$([ -f /etc/zm-steer/stopped ] && echo true || echo false)" "$sf" "$sx" "$awgj" "$fkh" "$fw" "$fws" "$v6" "$(_zm_ghp_warn && echo true || echo false)" "$(esc "$(_zm_reboot_hint_get)")" "$(esc "$(ui_nav_get)")" "$(esc "$(_zpg_offlist)")" "$tss" "$([ -x /usr/bin/htop ] && echo true || echo false)" \
-		"$(esc "$fki")" "$([ "$tg" != 0 ] && esc "$(_tg_dash_info)")" "$(_zm_oom_json)"
+		"$(esc "$fki")" "$([ "$tg" != 0 ] && esc "$(_tg_dash_info)")" "$(_zm_oom_json)" "$(_zmw_port || echo 0)"
 }
 
 VERSIONS_CACHE="$ZM_STATE_DIR/versions.json"
@@ -8153,7 +8262,10 @@ case "$cmd" in
 	zm_cleanup)                                    zm_cleanup "$1" ;;
 	zm_autoclean)                                  zm_autoclean "$1" ;;
 	gh_proxy)                                      gh_proxy "$1" "$2" ;;
+	webui)                                         webui "$1" "$2" ;;
 	gh_mirrors)                                    gh_mirrors ;;
+	gh_net)                                        gh_net "$1" "$2" ;;
+	gh_get)                                        gh_get "$1" "$2" "$3" ;;
 	zm_refs_heal)                                  zm_refs_heal "$1" ;;
 	sysinfo_run)                                   sysinfo_run ;;
 	sysinfo_get)                                   sysinfo_get ;;
@@ -9460,7 +9572,7 @@ do_tgws_install() {
 	tmp="$JOBS_DIR/tgws_install.$RAZ"
 	echo "==> Роутер: $arch, формат пакетов: $PKG"
 	echo "==> Скачиваем $file"
-	local attempt=1 max_attempts=5
+	local attempt=1 max_attempts=3
 	while [ "$attempt" -le "$max_attempts" ]; do
 		rm -f "$tmp"
 		_zm_fetch "$TGWS_BASE_URL/$file" "$tmp" 180 || echo "!! Попытка $attempt из $max_attempts: не скачалось — $ZM_FETCH_ERR"
@@ -10177,23 +10289,123 @@ _zm_ac_cron() {
 	return 0
 }
 
-gh_proxy() {
-	local mo f=0 sep=""
+_zmw_saved() {
+	local p
+	p="$(sed -n 's/^port=\([0-9][0-9]*\)$/\1/p' "$ZMW_STATE" 2>/dev/null | head -n 1)"
+	[ -n "$p" ] && [ "$p" -ge 1 ] 2>/dev/null && [ "$p" -le 65535 ] && echo "$p"
+}
+_zmw_save() {
+	mkdir -p "$ZM_STATE_DIR"
+	printf 'on=%s\nport=%s\n' "$1" "$2" > "$ZMW_STATE.$$" && mv -f "$ZMW_STATE.$$" "$ZMW_STATE"
+}
+_zmw_used() {
+	local h
+	h="$(printf '%04X' "$1")"
+	uci -q show uhttpd 2>/dev/null | grep -v '^uhttpd\.zmweb\.' | grep -E "\.listen_https?=" | tr ' ' '\n' | sed "s/'//g" | grep -q ":$1\$" && { echo "его уже слушает веб-сервер LuCI"; return 0; }
+	cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk -v h=":$h" '$4 == "0A" && substr($2, length($2) - 4) == h { f = 1 } END { exit !f }' && { echo "его уже занимает другая программа на роутере"; return 0; }
+	return 1
+}
+webui() {
+	local cur want np e l a sv ch=1
+	cur="$(_zmw_port)"
 	case "$1" in
 		get|'') ;;
+		set)
+			[ -f /etc/config/uhttpd ] || { echo '{"error":"на роутере нет веб-сервера uhttpd"}'; return 1; }
+			want="${2%%|*}"; np=""
+			case "$2" in *"|"*) np="${2#*|}" ;; esac
+			case "$want" in on|off) ;; *) echo '{"error":"неизвестное действие"}'; return 1 ;; esac
+			case "$np" in '') ;; *[!0-9]*) echo '{"error":"порт — это число от 1 до 65535"}'; return 1 ;; esac
+			[ -n "$np" ] && np="$(echo "$np" | sed 's/^0*//')" && { [ -n "$np" ] && [ "${#np}" -le 5 ] && [ "$np" -ge 1 ] && [ "$np" -le 65535 ] || { echo '{"error":"порт — это число от 1 до 65535"}'; return 1; }; }
+			if [ -n "$np" ] && [ "$np" != "$cur" ] && e="$(_zmw_used "$np")"; then
+				printf '{"error":"Порт %s не подходит: %s. Выберите другой, например 7788 или 8088"}\n' "$np" "$(esc "$e")"
+				return 1
+			fi
+			if [ "$want" = off ]; then
+				sv="${np:-${cur:-$(_zmw_saved)}}"
+				if uci -q get uhttpd.zmweb >/dev/null; then
+					uci -q delete uhttpd.zmweb
+					uci -q commit uhttpd
+				else ch=""; fi
+				_zmw_save 0 "${sv:-7788}"
+				if [ -f /www/zm-webui.html ]; then mv -f /www/zm-webui.html "$ZM_STATE_DIR/webui.html" 2>/dev/null; fi
+			else
+				[ -n "$np" ] || np="${cur:-$(_zmw_saved)}"
+				[ -n "$np" ] || np=7788
+				if [ "$np" != "$cur" ] && e="$(_zmw_used "$np")"; then
+					printf '{"error":"Порт %s не подходит: %s. Выберите другой, например 7788 или 8088"}\n' "$np" "$(esc "$e")"
+					return 1
+				fi
+				[ -e /usr/lib/uhttpd_ubus.so ] || { echo '{"error":"нет модуля uhttpd-mod-ubus — без него Web UI не откроется. Переустановите панель командой zmw"}'; return 1; }
+				if [ ! -f /www/zm-webui.html ]; then
+					[ -s "$ZM_STATE_DIR/webui.html" ] && [ -f /www/zm/app.js ] || { echo '{"error":"файлов Web UI нет на роутере — переустановите панель командой zmw"}'; return 1; }
+					cp -f "$ZM_STATE_DIR/webui.html" /www/zm-webui.html && chmod 0644 /www/zm-webui.html || { echo '{"error":"не удалось вернуть файлы Web UI в /www"}'; return 1; }
+				fi
+				rm -f "$ZM_STATE_DIR/webui.html"
+				if [ "$np" = "$cur" ]; then ch=""
+				elif [ -n "$cur" ]; then
+					l="$(uci -q get uhttpd.zmweb.listen_http)"
+					uci -q delete uhttpd.zmweb.listen_http
+					for a in $l; do uci add_list uhttpd.zmweb.listen_http="${a%:*}:$np"; done
+				else
+					uci -q delete uhttpd.zmweb
+					uci set uhttpd.zmweb=uhttpd
+					uci add_list uhttpd.zmweb.listen_http="0.0.0.0:$np"
+					uci add_list uhttpd.zmweb.listen_http="[::]:$np"
+					uci set uhttpd.zmweb.home='/www'
+					uci set uhttpd.zmweb.index_page='zm-webui.html'
+					uci set uhttpd.zmweb.ubus_prefix='/ubus'
+					uci set uhttpd.zmweb.no_dirlists='1'
+					uci set uhttpd.zmweb.rfc1918_filter='1'
+					uci set uhttpd.zmweb.max_requests='12'
+					uci set uhttpd.zmweb.max_connections='100'
+					uci set uhttpd.zmweb.script_timeout='120'
+					uci set uhttpd.zmweb.network_timeout='30'
+					uci set uhttpd.zmweb.http_keepalive='20'
+					uci set uhttpd.zmweb.tcp_keepalive='1'
+				fi
+				[ -n "$ch" ] && uci commit uhttpd
+				_zmw_save 1 "$np"
+			fi
+			[ -n "$ch" ] && ( ( sleep 1; /etc/init.d/uhttpd reload ) </dev/null >/dev/null 2>&1 & )
+			cur="$(_zmw_port)" ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+	sv="$(_zmw_saved)"
+	printf '{"ok":true,"avail":%s,"on":%s,"port":%s,"saved":%s,"ubus":%s}\n' \
+		"$([ -f /etc/config/uhttpd ] && echo true || echo false)" "$([ -n "$cur" ] && echo true || echo false)" \
+		"${cur:-0}" "${sv:-${cur:-7788}}" "$([ -e /usr/lib/uhttpd_ubus.so ] && echo true || echo false)"
+}
+
+gh_proxy() {
+	local mo f=0 sep="" h s t
+	case "$1" in
+		get|'') ;;
+		check) for h in $ZM_GHP_HOSTS; do _zm_ghp_st "$h" force >/dev/null; done ;;
 		set)
 			mo="${2%%|*}"
 			case "$mo" in off|auto) ;; *) echo '{"error":"неизвестный режим"}'; return 1 ;; esac
 			mkdir -p "$ZM_STATE_DIR"
 			if [ "$mo" = auto ]; then echo 'mode=auto' > "$ZM_GHP_FILE"; else rm -f "$ZM_GHP_FILE"; fi
-			rm -f "$ZM_GHP_FAIL"
+			rm -f "$ZM_GHP_FAIL" "$ZM_GHP_GOOD"
+			for h in $ZM_GHP_HOSTS; do rm -f "$ZM_GHP_NET.$h"; done
 			ZM_GHP_MODE="" ;;
 		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
 	esac
 	_zm_ghp_load
 	[ -s "$ZM_GHP_FAIL" ] && read -r f < "$ZM_GHP_FAIL"
 	case "$f" in ''|*[!0-9]*) f=0 ;; esac
-	printf '{"ok":true,"mode":"%s","list":"%s","fail_at":%s,"now":%s,"log":[' "$ZM_GHP_MODE" "$ZM_GHP_LIST" "$f" "$(date +%s)"
+	printf '{"ok":true,"mode":"%s","list":"%s","fail_at":%s,"now":%s,"net":[' "$ZM_GHP_MODE" "$(_zm_ghp_order | sed 's/^ //')" "$f" "$(date +%s)"
+	for h in $ZM_GHP_HOSTS; do
+		s=""; t=0
+		[ -f "$ZM_GHP_NET.$h" ] && read -r s t < "$ZM_GHP_NET.$h"
+		case "$s" in up|down) ;; *) s="" ;; esac
+		case "$t" in ''|*[!0-9]*) t=0 ;; esac
+		printf '%s{"h":"%s","s":"%s","t":%s}' "$sep" "$h" "$s" "$t"; sep=","
+	done
+	sep=""
+	printf '],"log":['
+
 	[ -s "$ZM_GHP_LOG" ] && tail -n 15 "$ZM_GHP_LOG" | while IFS='|' read -r t m; do
 		case "$t" in ''|*[!0-9]*) continue ;; esac
 		printf '%s{"t":%s,"m":"%s"}' "$sep" "$t" "$(esc "$m")"; sep=","
@@ -11975,7 +12187,7 @@ _fk_ui_dir() {
 }
 
 _fk_zash_ensure() {
-	local quiet="$1" d stage tmp="/tmp/zm-zash" i ok=0 fail="$ZM_STATE_DIR/fk.zash.fail" now last
+	local quiet="$1" d stage tmp="/tmp/zm-zash" ok=0 fail="$ZM_STATE_DIR/fk.zash.fail" now last ZM_GHP_CHECK=_zm_zip_ok
 	[ "$(uci -q get netshift.settings.enable_yacd)" = 1 ] || return 0
 	d="$(_fk_ui_dir)" || return 0
 	[ -f "$d/$FK_ZASH_MARK" ] && { rm -f "$fail"; return 0; }
@@ -11987,13 +12199,11 @@ _fk_zash_ensure() {
 		_fk_say "Ставим панель Zashboard вместо YACD"
 	fi
 	rm -rf "$tmp" "$tmp.zip"; mkdir -p "$tmp"
-	for i in 1 2 3; do
-		_zm_fetch "${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip" "$tmp.zip" 90 && { ok=1; break; }
-		[ -n "$quiet" ] || _fk_say "· попытка $i из 3: $ZM_FETCH_ERR"
-		sleep 1
-	done
+	command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1
+	if _zm_fetch "${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip" "$tmp.zip" 90; then ok=1
+	else [ -n "$quiet" ] || _fk_say "· не скачалось: $ZM_FETCH_ERR"; fi
+	ZM_GHP_CHECK=""
 	if [ "$ok" = 1 ]; then
-		command -v unzip >/dev/null 2>&1 || $INSTALL unzip >/dev/null 2>&1
 		unzip -oq "$tmp.zip" -d "$tmp" >/dev/null 2>&1 || ok=0
 	fi
 	stage="$tmp/dist"
@@ -12560,18 +12770,19 @@ _fk_b4_watch() {
 _fk_ghdl_patch() {
 	local f=/usr/lib/netshift/helpers.sh
 	[ -f "$f" ] || return 0
-	grep -q '^# zm-ghdl-begin 2$' "$f" && return 0
+	grep -q '^# zm-ghdl-begin 3$' "$f" && return 0
 	if grep -q '^# zm-ghdl-begin' "$f"; then
 		sed -i '/^# zm-ghdl-begin/,/^# zm-ghdl-end$/d' "$f"
+		rm -f /tmp/netshift.zm-ghslow
 	else
 		[ "$(grep -c '^download_to_file() {$' "$f")" = 1 ] && grep -q '^redact_url_for_log() {$' "$f" || return 0
 		sed -i 's/^download_to_file() {$/zm_download_to_file_raw() {/' "$f"
 	fi
 	grep -q '^zm_download_to_file_raw() {$' "$f" || return 0
 	cat >> "$f" << 'ZM_FK_GHDL_EOF'
-# zm-ghdl-begin 2
+# zm-ghdl-begin 3
 zm_download_to_file_gh() {
-	local zm_url="$1" zm_fp="$2" zm_m zm_slow=/tmp/netshift.zm-ghslow zm_skip=""
+	local zm_url="$1" zm_fp="$2" zm_m zm_h zm_n=0
 	case "$zm_url" in
 		https://github.com/*|https://raw.githubusercontent.com/*|https://objects.githubusercontent.com/*|https://release-assets.githubusercontent.com/*|https://codeload.github.com/*) ;;
 		*) zm_download_to_file_raw "$@"; return ;;
@@ -12579,19 +12790,21 @@ zm_download_to_file_gh() {
 	[ -n "$3" ] && { zm_download_to_file_raw "$@"; return; }
 	[ -n "${ZM_GHDL_MS+x}" ] || ZM_GHDL_MS="$(/opt/zapret-manager-luci/backend.sh gh_mirrors 2>/dev/null)"
 	[ -n "$ZM_GHDL_MS" ] || { zm_download_to_file_raw "$@"; return; }
-	if [ -n "$(find "$zm_slow" -mmin -30 2>/dev/null)" ]; then zm_skip=1
-	else
-		zm_download_to_file_raw "$@" && return 0
-		: > "$zm_slow"
+	zm_h="${zm_url#https://}"; zm_h="${zm_h%%/*}"
+	if [ "$(/opt/zapret-manager-luci/backend.sh gh_net "$zm_h" 2>/dev/null)" != down ]; then
+		zm_n=1
+		if zm_download_to_file_raw "$zm_url" "$zm_fp" "" 1 1 15 && [ -s "$zm_fp" ] && ! head -c 512 "$zm_fp" | grep -qiE '<(!doctype|html)'; then return 0; fi
+		/opt/zapret-manager-luci/backend.sh gh_net "$zm_h" down >/dev/null 2>&1
 	fi
 	for zm_m in $ZM_GHDL_MS; do
+		[ "$zm_n" -lt 3 ] || break
+		zm_n=$((zm_n + 1))
 		log "Downloading via GitHub mirror $zm_m: $(redact_url_for_log "$zm_url")" "warn"
 		if zm_download_to_file_raw "https://$zm_m/$zm_url" "$zm_fp" "" 1 1 15 && [ -s "$zm_fp" ] && ! head -c 512 "$zm_fp" | grep -qiE '<(!doctype|html)'; then
 			log "Downloaded via GitHub mirror $zm_m" "info"
 			return 0
 		fi
 	done
-	if [ -n "$zm_skip" ] && zm_download_to_file_raw "$zm_url" "$zm_fp" "" 1 1 10; then rm -f "$zm_slow"; return 0; fi
 	return 1
 }
 # Zapret Manager: saved copies of the lists (RAM, /tmp/zm-fk-dl). While the panel applies a
@@ -12643,6 +12856,37 @@ download_to_file() {
 }
 # zm-ghdl-end
 ZM_FK_GHDL_EOF
+	return 0
+}
+
+_fk_updl_patch() {
+	local f=/usr/lib/netshift/updater.sh
+	[ -f "$f" ] || return 0
+	grep -q '^# zm-updl-begin 1$' "$f" && return 0
+	if grep -q '^# zm-updl-begin' "$f"; then
+		sed -i '/^# zm-updl-begin/,/^# zm-updl-end$/d' "$f"
+	else
+		[ "$(grep -c '^updates_download_to_file() {$' "$f")" = 1 ] || return 0
+		sed -i 's/^updates_download_to_file() {$/zm_updates_download_to_file_raw() {/' "$f"
+	fi
+	grep -q '^zm_updates_download_to_file_raw() {$' "$f" || return 0
+	cat >> "$f" << 'ZM_FK_UPDL_EOF'
+# zm-updl-begin 1
+updates_download_to_file() {
+	case "$1" in
+		https://github.com/*|https://raw.githubusercontent.com/*) ;;
+		*) zm_updates_download_to_file_raw "$@"; return ;;
+	esac
+	if [ "$3" = nomirror ] || [ ! -x /opt/zapret-manager-luci/backend.sh ] || [ -n "$(updates_components_proxy_address 2> /dev/null)" ]; then
+		zm_updates_download_to_file_raw "$@"
+		return
+	fi
+	/opt/zapret-manager-luci/backend.sh gh_get "$1" "$2" 240 > /dev/null 2>&1 && [ -s "$2" ] && return 0
+	rm -f "$2" 2> /dev/null
+	command -v updates_download_via_mirrors > /dev/null 2>&1 && updates_download_via_mirrors "$1" "$2"
+}
+# zm-updl-end
+ZM_FK_UPDL_EOF
 	return 0
 }
 
@@ -14047,6 +14291,7 @@ do_fk_install() {
 	_fk_desync_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
+	_fk_updl_patch
 	_fk_subck_patch
 	_fk_hdr_patch
 	_fk_dnslan_patch noreload
@@ -14395,6 +14640,7 @@ do_fk_lists() {
 	_fk_desync_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
+	_fk_updl_patch
 	_fk_subck_patch
 	_fk_hdr_patch
 	_fk_dnslan_patch noreload
@@ -14565,6 +14811,7 @@ do_fk_subs() {
 	_fk_desync_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
+	_fk_updl_patch
 	_fk_subck_patch
 	_fk_hdr_patch
 	_fk_dnslan_patch noreload
@@ -14668,6 +14915,7 @@ _fk_sbext_run() {
 	local act=install_extended tg="/tmp/netshift-sbext.*/sing-box-extended.tar.gz" td="/tmp/netshift-sbext.*" nm=sing-box-extended
 	[ "$2" = lite ] && { act=install_extended_lite; tg="/tmp/netshift-sblite.*/sing-box-extended-lite.tar.gz"; td="/tmp/netshift-sblite.*"; nm=sing-box-extended-lite; }
 	ZM_SBX_RESTORE=""
+	_fk_updl_patch
 	logread 2>/dev/null | grep 'Updater: ' > "$seen"
 	/usr/bin/netshift component_action sing_box "$act" > "$out" 2>/dev/null &
 	p=$!
@@ -16299,12 +16547,12 @@ term_status() {
 	_term_installed && inst=true
 	_term_running && run=true
 	_term_enabled && en=true
-	printf '{"installed":%s,"running":%s,"enabled":%s,"version":"%s","port":%s,"lan_ip":"%s","mode":"%s","iface":"%s","ts":%s,"ts_ip":"%s","wan_closed":%s,"job":%s}\n' \
+	printf '{"installed":%s,"running":%s,"enabled":%s,"version":"%s","port":%s,"lan_ip":"%s","mode":"%s","iface":"%s","ts":%s,"ts_ip":"%s","wan_closed":%s,"job":%s,"zmw":%s}\n' \
 		"$inst" "$run" "$en" "$(esc "$(_term_version)")" "$(_term_port)" "$(esc "$(_zm_lan_ip)")" \
 		"$(_term_mode)" "$(esc "$(_term_iface)")" "$(_tsc_installed && echo true || echo false)" \
 		"$(esc "$(_tsc_running && _zm_tmo 5 tailscale ip -4 2>/dev/null | head -n1)")" \
 		"$(_tsc_wan_closed && echo true || echo false)" \
-		"$(_job_alive term && echo true || echo false)"
+		"$(_job_alive term && echo true || echo false)" "$(_zmw_port || echo 0)"
 }
 
 do_term_install() {
@@ -17437,29 +17685,21 @@ _do_install_zapret_core() {
 		for p in $(pgrep -f "/opt/zapre[t]/" 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
 	fi
 
+	command -v unzip >/dev/null 2>&1 || { echo "==> Устанавливаем unzip"; $INSTALL unzip >&2; }
 	echo "==> Скачиваем $url"
-	local attempt=1 max_attempts=5
-	while [ "$attempt" -le "$max_attempts" ]; do
-		rm -f zapret.zip
-		if ! _zm_fetch "$url" zapret.zip 300; then
-			echo "!! Попытка $attempt из $max_attempts: архив не скачался — $ZM_FETCH_ERR"
-			case "$ZM_FETCH_ERR" in *"(HTTP 404)"*|*"(HTTP 410)"*) attempt=$max_attempts ;; esac
-		fi
-		command -v unzip >/dev/null 2>&1 || { echo "==> Устанавливаем unzip"; $INSTALL unzip >&2; }
-		if [ -s zapret.zip ] && unzip -tq zapret.zip >/dev/null 2>&1; then
-			echo "   ✓ Архив скачан и проверен: $(_zm_size_txt "$(wc -c < zapret.zip | tr -d ' ')")"
-			break
-		fi
-		if [ -s zapret.zip ]; then
-			if command -v unzip >/dev/null 2>&1; then echo "!! Попытка $attempt из $max_attempts: архив скачался не целиком ($(wc -c < zapret.zip) байт)"
-			else echo "!! Попытка $attempt из $max_attempts: архив скачан, но unzip не установился — проверьте список пакетов"; fi
-		fi
-		attempt=$((attempt + 1))
-	done
-	if [ "$attempt" -gt "$max_attempts" ]; then
-		echo "ОШИБКА: не удалось скачать целый архив за $max_attempts попыток — проверьте соединение с GitHub"
+	local ZM_GHP_CHECK=_zm_zip_ok
+	rm -f zapret.zip
+	if ! _zm_fetch "$url" zapret.zip 300; then
+		echo "ОШИБКА: архив не скачался — $ZM_FETCH_ERR. Проверьте соединение с GitHub$(_zm_ghp_load; [ "$ZM_GHP_MODE" = auto ] || echo ' или включите «Авто» в «Система» → «Доступ к GitHub»')"
 		return 1
 	fi
+	ZM_GHP_CHECK=""
+	if ! unzip -tq zapret.zip >/dev/null 2>&1; then
+		if command -v unzip >/dev/null 2>&1; then echo "ОШИБКА: архив скачался не целиком ($(wc -c < zapret.zip) байт)"
+		else echo "ОШИБКА: архив скачан, но unzip не установился — проверьте список пакетов"; fi
+		return 1
+	fi
+	echo "   ✓ Архив скачан и проверен: $(_zm_size_txt "$(wc -c < zapret.zip | tr -d ' ')")"
 	unzip -o zapret.zip >/dev/null 2>&1
 
 	echo "==> Устанавливаем пакеты"
@@ -17943,30 +18183,21 @@ do_add_fake_flow() {
 
 do_flowseal_download() {
 	_ensure_deps
-	local out zip tmp attempt=1 max_attempts=5 dst
+	local out zip tmp dst ZM_GHP_CHECK=_zm_zip_ok
 	dst="$(_flowseal_file)"; out="$dst.new"; zip="$JOBS_DIR/flowseal.zip"; tmp="$JOBS_DIR/flowseal_src"
 	echo "==> Скачиваем список стратегий Flowseal"
 	rm -rf "$tmp" "$zip"; : > "$out"
 	command -v unzip >/dev/null 2>&1 || $INSTALL unzip >&2
 
-	while [ "$attempt" -le "$max_attempts" ]; do
-		rm -f "$zip"
-		if ! _zm_fetch "$FLOWSEAL_ZIP" "$zip" 180; then
-			echo "!! Попытка $attempt из $max_attempts: архив Flowseal не скачался — $ZM_FETCH_ERR"
-			case "$ZM_FETCH_ERR" in *"(HTTP 404)"*|*"(HTTP 410)"*) attempt=$max_attempts ;; esac
-		fi
-		if [ -s "$zip" ] && unzip -tq "$zip" >/dev/null 2>&1; then
-			echo "   ✓ Архив скачан и проверен: $(_zm_size_txt "$(wc -c < "$zip" | tr -d ' ')")"
-			break
-		fi
-		attempt=$((attempt + 1))
-	done
-	if [ "$attempt" -gt "$max_attempts" ]; then
-		echo "ОШИБКА: не удалось скачать целый архив за $max_attempts попыток — проверьте соединение с GitHub"
+	rm -f "$zip"
+	if ! _zm_fetch "$FLOWSEAL_ZIP" "$zip" 180 || ! unzip -tq "$zip" >/dev/null 2>&1; then
+		echo "ОШИБКА: архив Flowseal не скачался — ${ZM_FETCH_ERR:-архив пришёл повреждённым}. Проверьте соединение с GitHub"
 		rm -f "$out" "$zip"
 		[ -s "$dst" ] && echo "   · Остался прежний список Flowseal — его стратегии можно выбирать"
 		return 1
 	fi
+	ZM_GHP_CHECK=""
+	echo "   ✓ Архив скачан и проверен: $(_zm_size_txt "$(wc -c < "$zip" | tr -d ' ')")"
 
 	mkdir -p "$tmp"; unzip -oq "$zip" -d "$tmp" || { echo "ОШИБКА распаковки"; rm -rf "$out" "$zip" "$tmp"; return 1; }
 	local base="$tmp/zapret-discord-youtube-main"
@@ -21908,15 +22139,11 @@ do_mixomo_ui_install() {
 	case "$which" in
 		zashboard)
 			echo "==> Скачиваем Zashboard"
-			local tmp="/tmp/zashboard.zip" ok=0 i
-			for i in 1 2 3; do
-				_zm_fetch "${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip" "$tmp" 90 && { ok=1; break; }
-				echo "   · попытка $i из 3: $ZM_FETCH_ERR"
-				sleep 1
-			done
-			[ "$ok" = "1" ] || { echo "ОШИБКА: не удалось скачать Zashboard"; return 1; }
-			echo "   ✓ Скачано: $(_zm_size_txt "$ZM_FETCH_SIZE")"
+			local tmp="/tmp/zashboard.zip" ZM_GHP_CHECK=_zm_zip_ok
 			command -v unzip >/dev/null 2>&1 || $INSTALL unzip >&2
+			_zm_fetch "${GH_MAIN}/Zephyruso/zashboard/releases/latest/download/dist-cdn-fonts.zip" "$tmp" 90 || { echo "ОШИБКА: не удалось скачать Zashboard — $ZM_FETCH_ERR"; return 1; }
+			ZM_GHP_CHECK=""
+			echo "   ✓ Скачано: $(_zm_size_txt "$ZM_FETCH_SIZE")"
 			rm -rf /tmp/zashboard
 			unzip -oq "$tmp" -d /tmp/zashboard || { echo "ОШИБКА: не удалось распаковать архив"; rm -rf "$tmp" /tmp/zashboard; return 1; }
 			[ -d /tmp/zashboard/dist ] || { echo "ОШИБКА: в архиве нет файлов панели — прежняя панель не тронута"; rm -rf "$tmp" /tmp/zashboard; return 1; }
@@ -21928,13 +22155,9 @@ do_mixomo_ui_install() {
 			;;
 		metacubexd)
 			echo "==> Скачиваем MetaCubeXD"
-			local tmp="/tmp/metacubexd.tgz" ok=0 i
-			for i in 1 2 3; do
-				_zm_fetch "${GH_MAIN}/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz" "$tmp" 90 && { ok=1; break; }
-				echo "   · попытка $i из 3: $ZM_FETCH_ERR"
-				sleep 1
-			done
-			[ "$ok" = "1" ] || { echo "ОШИБКА: не удалось скачать MetaCubeXD"; return 1; }
+			local tmp="/tmp/metacubexd.tgz" ZM_GHP_CHECK=_zm_tgz_ok
+			_zm_fetch "${GH_MAIN}/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz" "$tmp" 90 || { echo "ОШИБКА: не удалось скачать MetaCubeXD — $ZM_FETCH_ERR"; return 1; }
+			ZM_GHP_CHECK=""
 			echo "   ✓ Скачано: $(_zm_size_txt "$ZM_FETCH_SIZE")"
 			rm -rf /tmp/metacubexd; mkdir -p /tmp/metacubexd
 			tar -xzf "$tmp" -C /tmp/metacubexd || { echo "ОШИБКА: не удалось распаковать архив"; rm -rf "$tmp" /tmp/metacubexd; return 1; }
@@ -38481,6 +38704,7 @@ list_methods() {
 	json_add_object "zm_cleanup";                  json_close_object
 	json_add_object "zm_autoclean";                json_add_string "mode" "string"; json_close_object
 	json_add_object "gh_proxy";                    json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
+	json_add_object "webui";                       json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "sysinfo_run";                 json_close_object
 	json_add_object "sysinfo_get";                 json_close_object
 	json_add_object "mirror_status";               json_close_object
@@ -38670,6 +38894,7 @@ call_method() {
 		zm_cleanup)                    "$BACKEND" zm_cleanup ;;
 		zm_autoclean)                  json_get_var mode mode; "$BACKEND" zm_autoclean "$mode" ;;
 		gh_proxy)                      json_get_var action action; json_get_var value value; "$BACKEND" gh_proxy "$action" "$value" ;;
+		webui)                         json_get_var action action; json_get_var value value; "$BACKEND" webui "$action" "$value" ;;
 		sysinfo_run)                   "$BACKEND" sysinfo_run ;;
 		sysinfo_get)                   "$BACKEND" sysinfo_get ;;
 		mirror_status)                 "$BACKEND" mirror_status ;;
@@ -38927,6 +39152,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"zm_cleanup",
 					"zm_autoclean",
 					"gh_proxy",
+					"webui",
 					"purge_run",
 					"backup_action",
 					"backup_up",
@@ -39236,6 +39462,7 @@ var callSystemUninstallPanel = zmDeclare({ object: 'zapret-manager', method: 'sy
 var callZmCleanup = zmDeclare({ object: 'zapret-manager', method: 'zm_cleanup', expect: {} });
 var callZmAutoclean = zmDeclare({ object: 'zapret-manager', method: 'zm_autoclean', params: ['mode'], expect: {} });
 var callGhProxy = zmDeclare({ object: 'zapret-manager', method: 'gh_proxy', params: ['action', 'value'], expect: {} });
+var callWebui = zmDeclare({ object: 'zapret-manager', method: 'webui', params: ['action', 'value'], expect: {} });
 var callPurgeScan = zmDeclare({ object: 'zapret-manager', method: 'purge_scan', expect: {} });
 var callPurgeRun = zmDeclare({ object: 'zapret-manager', method: 'purge_run', params: ['value'], expect: {} });
 var callBackupList = zmDeclare({ object: 'zapret-manager', method: 'backup_list', expect: {} });
@@ -41736,6 +41963,7 @@ return baseclass.extend({
 	zmCleanup: callZmCleanup,
 	zmAutoclean: callZmAutoclean,
 	ghProxy: callGhProxy,
+	webui: callWebui,
 	purgeScan: callPurgeScan,
 	purgeRun: callPurgeRun,
 	backupList: callBackupList,
@@ -42195,7 +42423,7 @@ return view.extend({
 			E('div', { 'class': 'zm-header-links' }, [
 				E('a', { 'href': 'http://stresskvn.lol/', 'target': '_blank', 'rel': 'noreferrer' }, 'StressKVN — обход белых списков!'),
 				E('a', { 'href': 'https://t.me/stressozz_manager', 'target': '_blank', 'rel': 'noreferrer' }, 'Сообщество Telegram'),
-				E('a', { 'href': 'http://' + window.location.hostname + ':7788/', 'target': '_blank', 'rel': 'noreferrer', 'class': 'zm-webui-link' }, 'Web UI ↗')
+				healthData && +healthData.zmw > 0 ? E('a', { 'href': 'http://' + window.location.hostname + ':' + healthData.zmw + '/', 'target': '_blank', 'rel': 'noreferrer', 'class': 'zm-webui-link' }, 'Web UI ↗') : E([])
 			])
 		]));
 		wrap.appendChild(overviewEl);
@@ -44036,9 +44264,9 @@ return view.extend({
 			accCard.appendChild(zm.swRow(on, 'Открывать через Tailscale', hint, function() {
 				quick(on ? 'ts_off' : 'ts_on', on ? 'Терминал теперь только для домашней сети' : 'Терминал открывается и через Tailscale');
 			}, busy || (!on && !data.wan_closed)));
-			var addrs = [];
-			if (data.lan_ip) addrs.push(E('b', {}, 'http://' + data.lan_ip + ':7788'));
-			if (data.ts_ip) addrs.push(E('b', {}, 'http://' + data.ts_ip + ':7788'));
+			var addrs = [], wp = +data.zmw || 0;
+			if (wp && data.lan_ip) addrs.push(E('b', {}, 'http://' + data.lan_ip + ':' + wp));
+			if (wp && data.ts_ip) addrs.push(E('b', {}, 'http://' + data.ts_ip + ':' + wp));
 			if (on && addrs.length) accCard.appendChild(E('p', { 'class': 'zm-hint' }, [ 'Вне дома откройте панель: ', addrs[0], addrs[1] ? E('span', {}, [ ' или ', addrs[1] ]) : '' ]));
 		}
 
@@ -56173,7 +56401,7 @@ return view.extend({
 		put('watch', watchCard);
 
 
-		var ghCard = E('div', { 'class': 'zm-card' }), ghD = null, ghBusy = false;
+		var ghCard = E('div', { 'class': 'zm-card' }), ghD = null, ghBusy = false, ghChk = false;
 		function ghWhen(ts) {
 			var d = new Date(ts * 1000), p2 = function(n) { return (n < 10 ? '0' : '') + n; };
 			var now = new Date(((ghD && ghD.now) || Math.floor(Date.now() / 1000)) * 1000);
@@ -56187,14 +56415,23 @@ return view.extend({
 				ghBusy = false;
 				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderGh(); return; }
 				ghD = r;
-				zm.toast(mode === 'auto' ? 'GitHub: напрямую, а если не ответит — через зеркала' : 'GitHub: только напрямую', 'info');
+				zm.toast(mode === 'auto' ? 'GitHub: напрямую, а если не открывается — сразу через зеркала' : 'GitHub: только напрямую', 'info');
 				renderGh();
 			}).catch(function() { ghBusy = false; zm.toast('Роутер не ответил', 'error'); renderGh(); });
+		}
+		function ghCheck() {
+			if (ghBusy || ghChk) return;
+			ghChk = true; renderGh();
+			zm.ghProxy('check', '').then(function(r) {
+				ghChk = false;
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); renderGh(); return; }
+				ghD = r; renderGh();
+			}).catch(function() { ghChk = false; zm.toast('Роутер не ответил', 'error'); renderGh(); });
 		}
 		function renderGh() {
 			ghCard.innerHTML = '';
 			ghCard.appendChild(E('h3', {}, 'Доступ к GitHub'));
-			ghCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Панель качает с GitHub списки, стратегии, программы и свои обновления. Если GitHub у провайдера не открывается, загрузки можно повторять через зеркала.'));
+			ghCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Панель качает с GitHub списки, стратегии, программы и свои обновления. Если GitHub у провайдера не открывается, загрузки идут через зеркала.'));
 			if (!ghD) { ghCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем…')); return; }
 			var mode = ghD.mode === 'auto' ? 'auto' : 'off';
 			ghCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Как качать'),
@@ -56208,7 +56445,18 @@ return view.extend({
 			var list = String(ghD.list || '').split(' ').filter(Boolean).join(' → ');
 			ghCard.appendChild(E('p', { 'class': 'zm-hint' }, mode === 'off'
 				? 'Все загрузки идут на GitHub напрямую, как раньше.' + (ghD.fail_at > 0 ? ' GitHub не отвечал в ' + ghWhen(ghD.fail_at) + ' — попробуйте «Авто».' : '')
-				: 'Каждая загрузка сначала идёт напрямую. Если GitHub не ответил, она повторяется через зеркала по очереди (' + list + '), пока одно не отдаст файл. Следующая загрузка снова начинается напрямую. Что происходит, видно в журнале операции и ниже.'));
+				: 'Перед загрузкой панель проверяет, открываются ли github.com и raw.githubusercontent.com. Если адрес не открывается — файл сразу качается через зеркало, без ожидания. На каждый файл не больше 3 попыток: напрямую и через зеркала (' + list + '). Недоступный адрес проверяется снова через 10 минут. Что происходит, видно в журнале операции и ниже.'));
+			var net = ghD.net || [];
+			if (net.length) {
+				var nb = E('div', { 'class': 'zm-row', 'style': 'flex-wrap:wrap;gap:8px' }, [ E('span', { 'class': 'zm-label' }, 'Сейчас') ]);
+				net.forEach(function(x) {
+					var cls = x.s === 'up' ? 'zm-ok' : x.s === 'down' ? 'zm-bad' : 'zm-off';
+					var tx = x.h + (x.s === 'up' ? ' — открывается' : x.s === 'down' ? ' — не открывается' : ' — ещё не проверяли');
+					nb.appendChild(E('span', { 'class': 'zm-badge ' + cls, 'title': x.t > 0 ? 'Проверено в ' + ghWhen(x.t) : '' }, [ E('span', { 'class': 'zm-dot' }), tx ]));
+				});
+				nb.appendChild(E('button', { 'class': 'cbi-button', 'disabled': ghChk || ghBusy ? '' : null, 'click': ghCheck }, ghChk ? 'Проверяем…' : 'Проверить сейчас'));
+				ghCard.appendChild(nb);
+			}
 			var lg = ghD.log || [];
 			if (lg.length) {
 				var box = E('pre', { 'class': 'zm-log zm-show', 'style': 'max-height:220px' });
@@ -56216,11 +56464,74 @@ return view.extend({
 				ghCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Последние обращения к зеркалам') ]));
 				ghCard.appendChild(box);
 			} else if (mode === 'auto') ghCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Зеркала ещё не понадобились — GitHub отвечает напрямую.'));
-			if (mode === 'auto') ghCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Зеркала — чужие серверы: они видят, что качает роутер, и могут подменить файл. Панель обращается к ним, только когда GitHub не ответил сам.'));
+			if (mode === 'auto') ghCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Зеркала — чужие серверы: они видят, что качает роутер, и могут подменить файл. Панель обращается к ним, только когда GitHub не открывается.'));
 		}
 		if (on('ghmirror')) zm.ghProxy('get', '').then(function(r) { ghD = r && !r.error ? r : { mode: 'off' }; renderGh(); }).catch(function() { ghD = { mode: 'off' }; renderGh(); });
 		renderGh();
 		put('ghmirror', ghCard);
+
+		var zwCard = E('div', { 'class': 'zm-card' }), zwD = null, zwBusy = false, zwErr = '';
+		var zwPort = E('input', { 'class': 'cbi-input-text', 'type': 'text', 'inputmode': 'numeric', 'maxlength': '5', 'aria-label': 'Порт Web UI', 'style': 'width:96px;min-width:0' });
+		zwPort.addEventListener('input', function() { zwPort.value = zwPort.value.replace(/[^0-9]/g, '').slice(0, 5); renderZwBtn(); });
+		zwPort.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); zwSave(); } });
+		var zwBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { zwSave(); } }, 'Сменить порт');
+		function zwOk(v) { var n = +v; return /^[0-9]{1,5}$/.test(v) && n >= 1 && n <= 65535; }
+		function renderZwBtn() {
+			var v = zwPort.value, cur = zwD ? String(zwD.on ? zwD.port : zwD.saved) : '';
+			zwBtn.disabled = zwBusy || !zwD || !zwD.avail || !zwOk(v) || v.replace(/^0+/, '') === cur;
+			zwBtn.textContent = zwBusy ? 'Применяем…' : (zwD && zwD.on ? 'Сменить порт' : 'Запомнить порт');
+		}
+		function zwCall(val, msg) {
+			if (zwBusy) return;
+			zwBusy = true; zwErr = ''; renderZw();
+			zm.webui('set', val).then(function(r) {
+				zwBusy = false;
+				if (!r || r.error) { zwErr = (r && r.error) || 'Роутер не ответил'; zm.toast(zwErr, 'error'); renderZw(); return; }
+				zwD = r; zwPort.value = String(r.on ? r.port : r.saved);
+				zm.toast(msg(r), 'info');
+				renderZw();
+			}).catch(function() { zwBusy = false; zwErr = 'Роутер не ответил'; zm.toast(zwErr, 'error'); renderZw(); });
+		}
+		function zwSave() {
+			if (!zwD || zwBtn.disabled) return;
+			var v = zwPort.value.replace(/^0+/, '');
+			if (zwD.on) zwCall('on|' + v, function(r) { return 'Web UI теперь на порту ' + r.port + '. Откройте его заново по новому адресу'; });
+			else zwCall('off|' + v, function() { return 'Порт ' + v + ' запомнен — Web UI включится на нём'; });
+		}
+		function zwToggle() {
+			if (!zwD || zwBusy || !zwD.avail) return;
+			if (zwD.on) {
+				zm.dialog({ title: 'Выключить Web UI?', danger: true, okText: 'Выключить', intro: 'Страница http://' + window.location.hostname + ':' + zwD.port + ' перестанет открываться, порт ' + zwD.port + ' закроется. Панель в LuCI продолжит работать, Web UI можно снова включить здесь.' }).then(function(ok) {
+					if (ok) zwCall('off', function() { return 'Web UI выключен — порт закрыт'; });
+				});
+				return;
+			}
+			var v = zwOk(zwPort.value) ? zwPort.value.replace(/^0+/, '') : String(zwD.saved || 7788);
+			zwCall('on|' + v, function(r) { return 'Web UI включён на порту ' + r.port; });
+		}
+		function renderZw() {
+			zwCard.innerHTML = '';
+			zwCard.appendChild(E('h3', {}, [ 'Web UI ', !zwD ? E([]) : zwD.on ? E('span', { 'class': 'zm-badge zm-ok' }, [ E('span', { 'class': 'zm-dot' }), 'включён · порт ' + zwD.port ]) : E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'выключен' ]) ]));
+			zwCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Web UI — та же панель, но отдельной страницей без LuCI, удобно с телефона. Если вы ею не пользуетесь, выключите — её порт закроется. Включать, выключать и менять порт можно только здесь, в LuCI.'));
+			if (!zwD) { zwCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем…')); return; }
+			if (!zwD.avail) { zwCard.appendChild(E('p', { 'class': 'zm-hint' }, 'На роутере нет веб-сервера uhttpd — Web UI работать не может.')); return; }
+			zwCard.appendChild(zm.swRow(!!zwD.on, zwD.on ? 'Web UI включён' : 'Web UI выключен', zwD.on ? 'Открывается по адресу http://' + window.location.hostname + ':' + zwD.port : 'Включится на порту ' + (zwOk(zwPort.value) ? zwPort.value.replace(/^0+/, '') : zwD.saved), zwToggle, zwBusy));
+			zwCard.appendChild(E('div', { 'class': 'zm-row' }, [ E('span', { 'class': 'zm-label' }, 'Порт'), zwPort, zwBtn,
+				zwD.on ? E('a', { 'href': 'http://' + window.location.hostname + ':' + zwD.port + '/', 'target': '_blank', 'rel': 'noreferrer' }, 'Открыть Web UI ↗') : E([]) ]));
+			zwCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Порт — число от 1 до 65535, по умолчанию 7788. Занятый порт панель не примет: например 80 и 443 у LuCI, 53 у DNS, 22 у SSH.'));
+			if (!zwD.ubus && !zwD.on) zwCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Нет модуля uhttpd-mod-ubus — без него Web UI не откроется. Переустановите панель командой zmw.'));
+			if (zwErr) zwCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'color:#cf222e' }, zwErr));
+			renderZwBtn();
+		}
+		if (!document.body.classList.contains('zmw-body') && on('webui')) {
+			zm.webui('get', '').then(function(r) {
+				zwD = r && !r.error ? r : { avail: false };
+				zwPort.value = String(zwD.on ? zwD.port : (zwD.saved || 7788));
+				renderZw();
+			}).catch(function() { zwD = { avail: false }; renderZw(); });
+			renderZw();
+			put('webui', zwCard);
+		}
 
 		var bkCard = E('div', { 'class': 'zm-card zm-bk' }), bkD = null, bkBusy = '', bkErr = '';
 		var bkLog = E('pre', { 'class': 'zm-log' });
@@ -71060,20 +71371,35 @@ if [ -s /opt/zapret-manager-luci/state/ui.look ]; then
 fi
 
 _zmi_ok "Файлы Web UI записаны"
-_zmi_say "Включаем Web UI"
 ZMW_OK=1
-if [ ! -f /etc/config/uhttpd ]; then
+ZMW_P=7788
+if [ -s /opt/zapret-manager-luci/state/webui ]; then
+	_zm_p="$(sed -n 's/^port=\([0-9][0-9]*\)$/\1/p' /opt/zapret-manager-luci/state/webui | head -n 1)"
+	[ -n "$_zm_p" ] && [ "${#_zm_p}" -le 5 ] && [ "$_zm_p" -ge 1 ] 2>/dev/null && [ "$_zm_p" -le 65535 ] && ZMW_P="$_zm_p"
+	grep -qx 'on=0' /opt/zapret-manager-luci/state/webui && ZMW_OK=2
+fi
+if [ "$ZMW_OK" = 2 ]; then
+	_zmi_say "Web UI выключен в «Система» — оставляем выключенным"
+	mv -f /www/zm-webui.html /opt/zapret-manager-luci/state/webui.html 2>/dev/null || true
+	if uci -q get uhttpd.zmweb >/dev/null; then uci -q delete uhttpd.zmweb; uci commit uhttpd; fi
+else
+	_zmi_say "Включаем Web UI"
+	rm -f /opt/zapret-manager-luci/state/webui.html
+fi
+if [ "$ZMW_OK" = 2 ]; then
+	:
+elif [ ! -f /etc/config/uhttpd ]; then
 	ZMW_OK=0
 elif [ ! -e /usr/lib/uhttpd_ubus.so ]; then
 	_zmi_pkg uhttpd-mod-ubus "Web UI без него не откроется, панель в LuCI работает." || true
 	[ -e /usr/lib/uhttpd_ubus.so ] || ZMW_OK=0
 fi
-if [ "$ZMW_OK" = 0 ]; then
+if [ "$ZMW_OK" != 1 ]; then
 	:
 elif ! uci -q get uhttpd.zmweb >/dev/null; then
 	uci set uhttpd.zmweb=uhttpd
-	uci add_list uhttpd.zmweb.listen_http='0.0.0.0:7788'
-	uci add_list uhttpd.zmweb.listen_http='[::]:7788'
+	uci add_list uhttpd.zmweb.listen_http="0.0.0.0:$ZMW_P"
+	uci add_list uhttpd.zmweb.listen_http="[::]:$ZMW_P"
 	uci set uhttpd.zmweb.home='/www'
 	uci set uhttpd.zmweb.index_page='zm-webui.html'
 	uci set uhttpd.zmweb.ubus_prefix='/ubus'
@@ -71186,17 +71512,14 @@ u="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/${_zm_c#* }"
 ZM_GET_EOF
 	cat >> "/usr/bin/${_zm_c%% *}" <<'ZM_GET_EOF'
 t="/tmp/zm-get.$$.sh"
-get() { rm -f "$t"; if command -v curl >/dev/null 2>&1; then curl -fsSL --connect-timeout 10 --max-time 120 -o "$t" "$1"; else wget -q -O "$t" "$1"; fi && [ -s "$t" ] && ! head -c 512 "$t" | grep -qiE '<(!doctype|html)'; }
-if get "$u"; then :; else
-	ok=""; ms="$(/opt/zapret-manager-luci/backend.sh gh_mirrors 2>/dev/null)"
-	[ -n "$ms" ] && echo "GitHub не ответил напрямую — пробуем зеркала"
-	for m in $ms; do
-		echo "  · $m…"
-		get "https://$m/$u" && { echo "  ✓ Скачано через $m"; ok=1; break; }
-		echo "  · $m не отдал файл"
-	done
-	[ -n "$ok" ] || { rm -f "$t"; echo "Не удалось скачать $u${ms:+ — ни напрямую, ни через зеркала}"; exit 1; }
-fi
+b=/opt/zapret-manager-luci/backend.sh
+get() { rm -f "$t"; if command -v curl >/dev/null 2>&1; then curl -fsSL --connect-timeout 5 --max-time 60 -o "$t" "$1"; else wget -q -T 30 -O "$t" "$1"; fi && [ -s "$t" ] && ! head -c 512 "$t" | grep -qiE '<(!doctype|html)'; }
+if [ -x "$b" ]; then
+	: > "$t.log"
+	e="$(ZM_JOB_LOG="$t.log" "$b" gh_get "$u" "$t" 120 2>&1 >/dev/null)"; r=$?
+	cat "$t.log" 2>/dev/null; rm -f "$t.log"
+	[ "$r" = 0 ] || { rm -f "$t"; [ -n "$e" ] && echo "$e"; echo "Не удалось скачать $u"; exit 1; }
+elif ! get "$u"; then rm -f "$t"; echo "Не удалось скачать $u"; exit 1; fi
 sh "$t"; r=$?; rm -f "$t"; exit $r
 ZM_GET_EOF
 	chmod +x "/usr/bin/${_zm_c%% *}"
@@ -71248,6 +71571,7 @@ if [ -x /etc/init.d/rpcd ] || [ -x /etc/init.d/uhttpd ]; then
 	fi
 fi
 if [ "$ZMW_OK" = 1 ]; then _zmi_ok "Web UI включён на порту ${ZMW_PORT:-7788}"
+elif [ "$ZMW_OK" = 2 ]; then _zmi_ok "Web UI выключен — включить его и сменить порт можно в LuCI: Zapret Manager → Система → Web UI"
 else _zmi_warn "Web UI не включён: на роутере нет веб-сервера uhttpd или не установился uhttpd-mod-ubus"; fi
 echo -e "\n${GREEN}Готово: Zapret Manager для LuCI и Web $ZM_NEW_VER установлен${NC}\n"
 echo -e "${CYAN}LuCI:   ${NC}Службы → Zapret Manager"
