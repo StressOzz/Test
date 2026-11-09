@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.119
+# Version: 5.111
 ZM_VERSION_EOF
 set -e
 
@@ -1065,13 +1065,6 @@ zm_pages() { _zmL zapret && zm_pages "$@"; }
 zm_cleanup() { _zmL system && zm_cleanup "$@"; }
 gh_proxy() { _zmL system && gh_proxy "$@"; }
 webui() { _zmL system && webui "$@"; }
-traffic() { _zmL traffic && traffic "$@"; }
-traffic_daemon() { _zmL traffic && traffic_daemon "$@"; }
-traffic_save() { _zmL traffic && traffic_save "$@"; }
-_tr_dns_feed() { _zmL traffic && _tr_dns_feed "$@"; }
-_ab_tr_plug() { _zmL adblock && _ab_tr_plug "$@"; }
-_ab_tr_unplug() { _zmL adblock && _ab_tr_unplug "$@"; }
-_ab_tr_applied() { _zmL adblock && _ab_tr_applied "$@"; }
 zm_autoclean() { _zmL system && zm_autoclean "$@"; }
 system_uninstall_panel() { _zmL system && system_uninstall_panel "$@"; }
 _pg_trace() { _zmL system && _pg_trace "$@"; }
@@ -3006,6 +2999,7 @@ _hosts_src() {
 }
 HOSTS_AUTO="$ZM_STATE_DIR/hosts.auto"
 HOSTS_BASE="$ZM_STATE_DIR/hosts.base.gz"
+HOSTS_ON="$ZM_STATE_DIR/hosts.on"
 HOSTS_AUTO_TAG="# zm-hosts-auto"
 _hosts_auto_get() { [ -s "$HOSTS_AUTO" ] && sed -n "s/^$1=//p" "$HOSTS_AUTO" | head -n 1; }
 hosts_status() {
@@ -3469,7 +3463,7 @@ ZPG_V="/www/luci-static/resources/view/zapret-manager"
 ZPG_OFF="$ZM_STATE_DIR/pages.off"
 ZPG_SIZE="$ZM_STATE_DIR/pages.size"
 ZPG_MENU="/usr/share/luci/menu.d/luci-app-zapret-manager.json"
-ZPG_IDS="strategy zapret2 steer forkozz bytetube tgproxy mixomo hosts adblock doh traffic awg tailscale terminal monitor openwrt"
+ZPG_IDS="strategy zapret2 steer forkozz bytetube tgproxy mixomo hosts adblock doh awg tailscale terminal monitor openwrt"
 ZPG_LIST='strategy|Zapret|Обход блокировок|Стратегии, тесты, YouTube, Discord, игры и списки
 zapret2|Zapret2|Обход блокировок|Установка и управление Zapret2
 steer|Steer|Обход блокировок|Выбранные сервисы через WARP или VPN
@@ -3480,7 +3474,6 @@ mixomo|Mixomo|Обход блокировок|Mihomo, MagiTrickle и WARP
 hosts|Hosts|Сеть|Домены в hosts и списки GeoHide
 adblock|Блокировка рекламы|Сеть|Реклама, трекеры и фишинг для всей сети
 doh|DNS over HTTPS|Сеть|Шифрованный DNS для всей сети
-traffic|Трафик устройств|Сеть|Объём по устройствам, сайты и как идёт трафик
 awg|AmneziaWG|Сеть|Туннели AmneziaWG и WARP
 tailscale|Удалённый доступ|Сеть|Роутер и домашняя сеть из любой сети
 terminal|Терминал|Сеть|Командная строка роутера в браузере
@@ -6058,6 +6051,7 @@ BEGIN {
 			k = (o ~ /^zm_if/) ? "туннель" (IF[s] != "" ? " " IF[s] : "") : "VPN"
 			lab = (LB[s] != "" ? LB[s] " · " : "") k
 		} else if (o ~ /^zm_warp/) lab = "WARP"
+		else if (o ~ /^zmwarp[0-9]*$/) lab = (o == "zmwarp" ? "WARP" : "WARP " substr(o, 7))
 		else if (o == "zm_direct") lab = "Мимо Steer"
 		if (lab != "") {
 			sub("^устройство " T " в зоне, NAT есть$", "туннель подключён, NAT есть", rest)
@@ -6214,7 +6208,7 @@ do_steer_devs() {
 	_st_phase rules
 	rm -f "$ST_STOP_FLAG"
 	if [ -n "$ST_SEC" ]; then _rb_say "Секция «$(_st_sec_name "$ST_SEC")», устройства: весь трафик через секцию — $(_st_devs_n all), правила секции только для — $(_st_devs_n only)"
-	else _rb_say "Устройства: весь трафик через туннель — $(_st_devs_n all), мимо Steer — $(_st_devs_n byp)"; fi
+	else _rb_say "Устройства: весь трафик через туннель — $(_st_devs_n all), сервисы только для — $(_st_devs_n only), мимо Steer — $(_st_devs_n byp)"; fi
 	if _st_owns "steer-spec" && _st_work; then
 		if _st_use_vpn; then _st_spec_quick; else _st_spec_quick_warp; fi
 		rc=$?
@@ -8232,15 +8226,6 @@ ZM_MULTI_EOF
 
 OW_LEASES="${ZM_OW_LEASES:-/tmp/dhcp.leases}"
 OW_NAMES="$ZM_STATE_DIR/ow.names"
-TR_CONF="$ZM_STATE_DIR/traffic.conf"
-TR_DIR="/tmp/zm-traffic"
-TR_SAVE="$ZM_STATE_DIR/traffic"
-TR_INIT="/etc/init.d/zm-traffic"
-TR_SYSCTL="/etc/sysctl.d/90-zm-traffic.conf"
-TR_DNS_CONF="zm-traffic-dns.conf"
-_tr_get() { local v; v="$(_kv_last "$TR_CONF" "$1")"; echo "${v:-$2}"; }
-_tr_on() { [ "$(_tr_get on 0)" = 1 ]; }
-_tr_dns_on() { _tr_on && [ "$(_tr_get sites 1)" = 1 ]; }
 _zm_dname() { [ -n "$1" ] && [ -s "$OW_NAMES" ] && awk -F'\t' -v m="$(printf '%s' "$1" | tr 'A-F' 'a-f')" 'tolower($1) == m && $2 != "" { print $2; f = 1; exit } END { exit !f }' "$OW_NAMES"; }
 OW_V6_BAK="$ZM_STATE_DIR/ipv6.off"
 OW_RB_TAG="# zm-sched-reboot"
@@ -8323,9 +8308,6 @@ case "$cmd" in
 	zm_autoclean)                                  zm_autoclean "$1" ;;
 	gh_proxy)                                      gh_proxy "$1" "$2" ;;
 	webui)                                         webui "$1" "$2" ;;
-	traffic)                                       traffic "$1" "$2" ;;
-	traffic_daemon)                                traffic_daemon ;;
-	traffic_save)                                  traffic_save ;;
 	gh_mirrors)                                    gh_mirrors ;;
 	gh_net)                                        gh_net "$1" "$2" ;;
 	gh_get)                                        gh_get "$1" "$2" "$3" ;;
@@ -10137,7 +10119,6 @@ _zpg_used() {
 		mixomo) _mx_installed || [ -x /etc/init.d/magitrickle ] ;;
 		adblock) _ab_on ;;
 		doh) [ -x /etc/init.d/https-dns-proxy ] ;;
-		traffic) _tr_on ;;
 		awg) command -v awg >/dev/null 2>&1 ;;
 		tailscale) _tsc_installed ;;
 		terminal) _term_installed ;;
@@ -10520,16 +10501,7 @@ fi
 for zm_d in $(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u) /tmp/dnsmasq.d /tmp/dnsmasq.*.d; do
 	if [ -f "$zm_d/zm-adblock.conf" ]; then rm -f "$zm_d/zm-adblock.conf"; zm_dns=1; fi
 	if [ -f "$zm_d/zm-adblock-stats.conf" ]; then rm -f "$zm_d/zm-adblock-stats.conf"; zm_dns=1; fi
-	if [ -f "$zm_d/zm-traffic-dns.conf" ]; then rm -f "$zm_d/zm-traffic-dns.conf"; zm_dns=1; fi
 done
-if [ -x /etc/init.d/zm-traffic ]; then /etc/init.d/zm-traffic stop >/dev/null 2>&1; /etc/init.d/zm-traffic disable >/dev/null 2>&1; fi
-pkill -f 'backend[.]sh traffic_daemon' >/dev/null 2>&1
-rm -f /etc/init.d/zm-traffic /etc/rc.d/*zm-traffic
-rm -rf /tmp/zm-traffic
-if [ -f /etc/sysctl.d/90-zm-traffic.conf ]; then
-	grep -q 'было 0' /etc/sysctl.d/90-zm-traffic.conf && echo 0 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null
-	rm -f /etc/sysctl.d/90-zm-traffic.conf
-fi
 nft delete table inet zm_adblock_free >/dev/null 2>&1
 [ -s /var/run/zm-adblock-free.pid ] && kill "$(cat /var/run/zm-adblock-free.pid)" 2>/dev/null
 rm -f /var/run/zm-adblock-free.pid /var/etc/zm-adblock-free.conf /var/etc/zm-adblock-free.conf.macs
@@ -10664,7 +10636,7 @@ _pg_trace() {
 		doh) echo "pkg:luci-i18n-https-dns-proxy-ru pkg:luci-app-https-dns-proxy pkg:https-dns-proxy /usr/sbin/https-dns-proxy /etc/uci-defaults/*https-dns-proxy* $(_zm_luci_files https-dns-proxy) /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy /etc/rc.d/*https-dns-proxy /etc/config/https-dns-proxy-opkg /etc/config/https-dns-proxy.apk-new /etc/config/https-dns-proxy.zm-prev $DOH_FORCE_MODE_FILE $DOH_BOOT_FILE $DOH_FO_FILE $DOH_OWN_FILE $DOH_FO_STATE $DOH_FO_EVENTS /tmp/zm-doh-failover.lock cron:zm-dohwatch" ;;
 		dnsnet) echo "$DN_FILE $DN_OWN" ;;
 		hosts) echo "$HOSTS_FILE.zm-bak $HOSTS_FILE.bak" ;;
-		panel) echo "/opt/zapret-manager-luci /www/zm /www/zm-webui.html /usr/libexec/rpcd/zapret-manager /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /usr/share/luci/menu.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /www/luci-static/resources/bytetube /www/luci-static/resources/view/bytetube /usr/share/zm-redbtn /usr/bin/zmw /usr/bin/zms /lib/upgrade/keep.d/zapret-manager uci:uhttpd.zmweb cronrx:/opt/zapret-manager-luci/backend.sh /etc/init.d/zm-traffic /etc/rc.d/*zm-traffic /tmp/zm-traffic /etc/sysctl.d/90-zm-traffic.conf dnsconf:zm-traffic-dns.conf" ;;
+		panel) echo "/opt/zapret-manager-luci /www/zm /www/zm-webui.html /usr/libexec/rpcd/zapret-manager /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /usr/share/luci/menu.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /www/luci-static/resources/bytetube /www/luci-static/resources/view/bytetube /usr/share/zm-redbtn /usr/bin/zmw /usr/bin/zms /lib/upgrade/keep.d/zapret-manager uci:uhttpd.zmweb cronrx:/opt/zapret-manager-luci/backend.sh" ;;
 	esac
 }
 
@@ -10770,6 +10742,7 @@ _pg_remove() {
 				_pg_hosts_lines | _hosts_drop_lines
 				echo "   ✓ Строки блоков панели убраны из hosts, свои записи остались"
 			fi
+			rm -f "$ZM_STATE_DIR/hosts.on" "$ZM_STATE_DIR/hosts.base.gz"
 			;;
 	esac
 }
@@ -15895,6 +15868,20 @@ _ow_wchans() {
 
 _ow_wup() { ubus -t 5 call network.wireless status 2>/dev/null | jsonfilter -e "@.$1.up" 2>/dev/null; }
 
+_ow_wsae() { [ -x /usr/sbin/hostapd ] && /usr/sbin/hostapd -vsae >/dev/null 2>&1; }
+
+_ow_wpmf() {
+	local i="$1" e="$2" w
+	w="$(uci -q get "wireless.$i.ieee80211w")"
+	[ -n "$w" ] || return 0
+	case "$e" in
+		sae) [ "$w" = 2 ] && return 0 ;;
+		sae-mixed) [ "$w" = 1 ] && return 0 ;;
+		*) [ "$w" = 2 ] || return 0 ;;
+	esac
+	uci -q delete "wireless.$i.ieee80211w"
+}
+
 _ow_wfail() { ubus -t 5 call network.wireless status 2>/dev/null | jsonfilter -e "@.$1.retry_setup_failed" 2>/dev/null; }
 
 _ow_txreg() {
@@ -15966,8 +15953,8 @@ _ow_wifi_json() {
 		_ow_int "$1" && rb="$(printf '{"at":%s,"radios":"%s"}' "$1" "$(shift; echo "$*")")"
 	fi
 	[ -s "$OW_WGUARD" ] && kill -0 "$(cat "$OW_WGUARD" 2>/dev/null)" 2>/dev/null && g=true
-	printf '"wifi":{"present":%s,"country":"%s","guard":%s,"rollback":%s,"radios":[' "$([ -n "$(_ow_wdevs)" ] && command -v wifi >/dev/null 2>&1 && echo true || echo false)" \
-		"$(esc "$(uci -q get "wireless.$(_ow_wdevs | head -n1).country")")" "$g" "$rb"
+	printf '"wifi":{"present":%s,"country":"%s","guard":%s,"rollback":%s,"sae":%s,"radios":[' "$([ -n "$(_ow_wdevs)" ] && command -v wifi >/dev/null 2>&1 && echo true || echo false)" \
+		"$(esc "$(uci -q get "wireless.$(_ow_wdevs | head -n1).country")")" "$g" "$rb" "$(_ow_wsae && echo true || echo false)"
 	for r in $(_ow_wdevs); do
 		i="$(_ow_wap "$r")" || i=""
 		band="$(_ow_wband "$r")"
@@ -16018,7 +16005,7 @@ _ow_wifi_json() {
 _ow_jf() { printf '%s' "$1" | jsonfilter -e "$2" 2>/dev/null; }
 
 _ow_wifi_set() {
-	local d="$1" c n k r i ssid key ch txp on enc chans w changed
+	local d="$1" c n k r i ssid key ch txp on enc chans w changed want
 	command -v jsonfilter >/dev/null 2>&1 || { echo '{"error":"на роутере нет jsonfilter"}'; return 1; }
 	[ -n "$(_ow_wdevs)" ] || { echo '{"error":"на роутере нет Wi-Fi"}'; return 1; }
 	c="$(_ow_jf "$d" '@.country')"
@@ -16034,12 +16021,24 @@ _ow_wifi_set() {
 		on="$(_ow_jf "$d" "@.radios[$k].on")"
 		ssid="$(_ow_jf "$d" "@.radios[$k].ssid")"; key="$(_ow_jf "$d" "@.radios[$k].key")"
 		ch="$(_ow_jf "$d" "@.radios[$k].channel")"; txp="$(_ow_jf "$d" "@.radios[$k].txp")"
+		want="$(_ow_jf "$d" "@.radios[$k].enc")"
+		case "$want" in
+			''|psk2|psk-mixed|none) ;;
+			sae|sae-mixed) [ "$on" = true ] && ! _ow_wsae && { printf '{"error":"%s"}\n' "$(esc "WPA3 для $(_ow_rlab "$r") недоступен: wpad на роутере собран без WPA3 — выберите WPA2")"; return 1; } ;;
+			*) echo '{"error":"неизвестный тип защиты — обновите страницу"}'; return 1 ;;
+		esac
 		if [ "$on" = true ]; then
 			w="$(printf '%s' "$ssid" | wc -c | tr -d ' ')"
 			[ "$w" -ge 1 ] && [ "$w" -le 32 ] || { printf '{"error":"%s"}\n' "$(esc "Имя сети $(_ow_rlab "$r") — от 1 до 32 символов")"; return 1; }
 			w="$(printf '%s' "$key" | wc -c | tr -d ' ')"
 			enc="$([ -n "$i" ] && uci -q get "wireless.$i.encryption")"
-			case "$enc" in psk*|sae*) ;; ''|none) [ "$w" = 0 ] && w=skip ;; *) w=skip ;; esac
+			[ -n "$want" ] && enc="$want"
+			case "$enc" in
+				psk*|sae*) ;;
+				''|none) { [ -n "$want" ] || [ "$w" = 0 ]; } && w=skip ;;
+				*) w=skip ;;
+			esac
+			case "$enc" in sae*) [ "$w" = 64 ] && { printf '{"error":"%s"}\n' "$(esc "Пароль $(_ow_rlab "$r"): для WPA3 — от 8 до 63 символов")"; return 1; } ;; esac
 			if [ "$w" = skip ]; then :
 			elif [ "$w" = 64 ]; then
 				case "$key" in *[!0-9A-Fa-f]*) printf '{"error":"%s"}\n' "$(esc "Пароль $(_ow_rlab "$r"): 64 символа можно только шестнадцатеричными цифрами")"; return 1 ;; esac
@@ -16090,9 +16089,18 @@ _ow_wifi_set() {
 		if [ "$on" = true ] && [ -n "$i" ] && [ -n "$ssid" ]; then
 			[ "$(uci -q get "wireless.$i.ssid")" = "$ssid" ] || uci -q set "wireless.$i.ssid=$ssid"
 			enc="$(uci -q get "wireless.$i.encryption")"
+			want="$(_ow_jf "$d" "@.radios[$k].enc")"
+			if [ -n "$want" ]; then
+				if [ "$want" != "$enc" ] && [ "$want" != "${enc%%+*}" ]; then
+					uci -q set "wireless.$i.encryption=$want"
+					_ow_wpmf "$i" "$want"
+					enc="$want"
+				fi
+				[ "$want" = none ] && enc=none
+			fi
 			case "$enc" in
-				''|none) [ -n "$key" ] && { uci -q set "wireless.$i.encryption=psk2"; uci -q set "wireless.$i.key=$key"; } ;;
-				psk*|sae*) [ "$(uci -q get "wireless.$i.key")" = "$key" ] || uci -q set "wireless.$i.key=$key" ;;
+				''|none) [ -z "$want" ] && [ -n "$key" ] && { uci -q set "wireless.$i.encryption=psk2"; uci -q set "wireless.$i.key=$key"; } ;;
+				psk*|sae*) [ -n "$key" ] && [ "$(uci -q get "wireless.$i.key")" != "$key" ] && uci -q set "wireless.$i.key=$key" ;;
 			esac
 		fi
 		k=$((k + 1))
@@ -18601,6 +18609,96 @@ _hosts_add_lines() {
 	rm -f "$list" "$add"
 }
 
+_hosts_blocks_dump() { local b; for b in ${1:-$HOSTS_BLOCKS}; do echo "@@ZMB $b"; _hosts_block "$b"; done; }
+
+_hosts_on_detect() {
+	local b="$JOBS_DIR/hosts.det.$$"
+	mkdir -p "$JOBS_DIR"
+	: > "$b"
+	[ "$(_hosts_base_src)" = "$(_hosts_src)" ] && gunzip -c "$HOSTS_BASE" 2>/dev/null | _hosts_norm > "$b"
+	_hosts_blocks_dump | awk -v hf="$HOSTS_FILE" -v B="$b" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+		function flush() { if (id != "" && dt > 0 && dt == df && (hd == hf2 || own > 0)) print id }
+		BEGIN { while ((getline l < hf) > 0) have[n(l)] = 1; close(hf); while ((getline l < B) > 0) base[l] = 1; close(B) }
+		/^@@ZMB / { flush(); id = substr($0, 7); dt = df = hd = hf2 = own = 0; split("", seen); next }
+		{ k = n($0); if (k == "" || (k in seen)) next; seen[k] = 1
+		  if (k ~ /^#/) { hd++; if (k in have) hf2++; next }
+		  dt++; if (k in have) { df++; if (!(k in base)) own++ } }
+		END { flush() }'
+	rm -f "$b"
+}
+
+_hosts_on_init() {
+	[ -f "$HOSTS_ON" ] && return 0
+	mkdir -p "$ZM_STATE_DIR"
+	_hosts_on_detect > "$HOSTS_ON.t" && mv -f "$HOSTS_ON.t" "$HOSTS_ON"
+}
+
+_hosts_on_set() {
+	_hosts_on_init
+	{ grep -vx "$1" "$HOSTS_ON" 2>/dev/null; [ "$2" = on ] && echo "$1"; } > "$HOSTS_ON.t"
+	mv -f "$HOSTS_ON.t" "$HOSTS_ON"
+}
+
+_hosts_on_sync() {
+	local keep="" b
+	[ -f "$HOSTS_ON" ] || return 0
+	for b in $(cat "$HOSTS_ON"); do
+		_hosts_block "$b" | awk -v hf="$HOSTS_FILE" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+			BEGIN { while ((getline l < hf) > 0) have[n(l)] = 1; close(hf) }
+			{ k = n($0); if (k == "" || k ~ /^#/) next; t++; if (k in have) f++ }
+			END { exit !(t > 0 && f == t) }' && keep="$keep $b"
+	done
+	for b in $(hosts_status | grep -o '"id":"[^"]*","enabled":true' | sed 's/"id":"\([^"]*\)".*/\1/'); do
+		case " $keep " in *" $b "*) ;; *) keep="$keep $b" ;; esac
+	done
+	printf '%s\n' $keep | grep . > "$HOSTS_ON.t"; mv -f "$HOSTS_ON.t" "$HOSTS_ON"
+}
+
+_hosts_hostnames() { awk '{ sub(/\r$/, ""); sub(/#.*/, ""); for (i = 2; i <= NF; i++) print tolower($i) }' "$@" | sort -u; }
+
+_hosts_unclaim() {
+	local f="$1" h="$2" t="$1.unc"
+	_hosts_blocks_dump | _hosts_norm > "$t.blk"
+	awk -v H="$h" -v K="$t.blk" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+		BEGIN { while ((getline l < H) > 0) if (l != "") hn[l] = 1; close(H); while ((getline l < K) > 0) blk[l] = 1; close(K) }
+		{ line = $0; c = line; sub(/\r$/, "", c)
+		  if (c ~ /^[ \t]*#/ || c !~ /[^ \t]/ || (n(c) in blk)) { print line; next }
+		  cm = ""; if (match(c, /#/)) { cm = " " substr(c, RSTART); c = substr(c, 1, RSTART - 1) }
+		  sub(/^[ \t]+/, "", c); sub(/[ \t]+$/, "", c)
+		  m = split(c, a, /[ \t]+/); if (m < 2) { print line; next }
+		  out = a[1]; k = 0; d = 0
+		  for (i = 2; i <= m; i++) if (tolower(a[i]) in hn) d++; else { out = out " " a[i]; k++ }
+		  if (!d) print line; else if (k) print out cm }' "$f" > "$t" && mv -f "$t" "$f"
+	rm -f "$t" "$t.blk"
+}
+
+_hosts_overlay() {
+	local f="$1" ids b blk="$JOBS_DIR/hosts.ovl.$$"
+	_hosts_on_init
+	ids="$(cat "$HOSTS_ON" 2>/dev/null)"
+	[ -n "$ids" ] || return 0
+	mkdir -p "$JOBS_DIR"
+	for b in $ids; do _hosts_block "$b"; done > "$blk" 2>/dev/null
+	[ -s "$blk" ] || { rm -f "$blk"; return 0; }
+	_hosts_hostnames "$blk" > "$blk.h"
+	_hosts_unclaim "$f" "$blk.h"
+	awk -v hf="$f" 'function n(s) { gsub(/\r/, "", s); gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); return s }
+		BEGIN { while ((getline l < hf) > 0) have[n(l)] = 1; close(hf) }
+		{ k = n($0); if (k == "" || (k in have)) next; have[k] = 1; print }' "$blk" > "$blk.add"
+	if [ -s "$blk.add" ]; then
+		[ -s "$f" ] && [ -n "$(tail -c 1 "$f" 2>/dev/null)" ] && echo >> "$f"
+		cat "$blk.add" >> "$f"
+	fi
+	rm -f "$blk" "$blk.h" "$blk.add"
+}
+
+_hosts_base_src() {
+	[ -s "$HOSTS_BASE" ] || return 0
+	gunzip -c "$HOSTS_BASE" 2>/dev/null | head -n 40 > "$JOBS_DIR/hosts.bsrc.$$" 2>/dev/null
+	_hosts_src "$JOBS_DIR/hosts.bsrc.$$"
+	rm -f "$JOBS_DIR/hosts.bsrc.$$"
+}
+
 _hosts_auto_put() {
 	mkdir -p "$ZM_STATE_DIR"
 	printf 'src=%s\nlast=%s\nerr=%s\n' "$1" "${2:-$(_hosts_auto_get last)}" "$3" > "$HOSTS_AUTO.t" && mv -f "$HOSTS_AUTO.t" "$HOSTS_AUTO"
@@ -18620,9 +18718,16 @@ _hosts_norm() { awk '{ gsub(/\r/, ""); gsub(/[ \t]+/, " "); sub(/^ /, ""); sub(/
 _hosts_base_put() { mkdir -p "$ZM_STATE_DIR"; gzip -c "$1" > "$HOSTS_BASE.t" 2>/dev/null && mv -f "$HOSTS_BASE.t" "$HOSTS_BASE" || rm -f "$HOSTS_BASE.t"; }
 
 _hosts_extras() {
-	local b="$JOBS_DIR/hosts.base.$$"
+	local b="$JOBS_DIR/hosts.base.$$" i
 	mkdir -p "$JOBS_DIR"
-	gunzip -c "$HOSTS_BASE" 2>/dev/null | _hosts_norm > "$b"
+	gunzip -c "$HOSTS_BASE" > "$b.raw" 2>/dev/null
+	cp -f "$b.raw" "$b.unc"
+	if [ -s "$HOSTS_ON" ]; then
+		for i in $(cat "$HOSTS_ON"); do _hosts_block "$i"; done 2>/dev/null | _hosts_hostnames > "$b.h"
+		[ -s "$b.h" ] && _hosts_unclaim "$b.unc" "$b.h"
+	fi
+	{ cat "$b.raw" "$b.unc"; _hosts_blocks_dump; } | _hosts_norm > "$b"
+	rm -f "$b.raw" "$b.unc" "$b.h"
 	awk -v B="$b" 'BEGIN { while ((getline l < B) > 0) s[l] = 1; close(B) }
 		{ sub(/\r$/, ""); k = $0; gsub(/[ \t]+/, " ", k); sub(/^ /, "", k); sub(/ $/, "", k) }
 		k != "" && k !~ /^#/ && !(k in s) && !d[k]++ { print }' "$HOSTS_FILE"
@@ -18649,7 +18754,7 @@ hosts_auto() {
 			_hosts_auto_cron on
 			logger -t zapret-manager "Hosts: список $(_hosts_src_name "$src") будет обновляться раз в сутки" ;;
 		off)
-			rm -f "$HOSTS_AUTO" "$HOSTS_BASE"
+			rm -f "$HOSTS_AUTO"
 			_hosts_auto_cron off ;;
 		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
 	esac
@@ -18670,6 +18775,7 @@ hosts_auto_tick() {
 		logger -t zapret-manager "Hosts: список $(_hosts_src_name "$src") в /etc/hosts заменён вручную — ежедневное обновление выключено"
 		return 0
 	fi
+	_hosts_on_init
 	[ -s "$HOSTS_BASE" ] && _hosts_extras > "$ex"
 	r="$(ZM_HOSTS_NOAPPLY="$tmp" hosts_replace_geohide "$src" 2>/dev/null)"
 	case "$r" in
@@ -18681,6 +18787,7 @@ hosts_auto_tick() {
 			return 1 ;;
 	esac
 	_hosts_base_put "$tmp"
+	_hosts_overlay "$tmp"
 	if [ -s "$ex" ]; then
 		[ -n "$(tail -c 1 "$tmp" 2>/dev/null)" ] && echo >> "$tmp"
 		cat "$ex" >> "$tmp"
@@ -18690,7 +18797,7 @@ hosts_auto_tick() {
 	elif cat "$tmp" > "$HOSTS_FILE" 2>/dev/null; then
 		rm -f "$tmp"
 		_hosts_dns_reload
-		logger -t zapret-manager "Hosts: список $(_hosts_src_name "$src") обновлён$([ -s "$ex" ] && echo ", ваши записи поверх него сохранены")"
+		logger -t zapret-manager "Hosts: список $(_hosts_src_name "$src") обновлён$([ -s "$HOSTS_ON" ] && echo ", отмеченные сервисы ($(echo $(cat "$HOSTS_ON") | sed 's/ /, /g')) добавлены поверх")$([ -s "$ex" ] && echo ", ваши записи сохранены")"
 	else
 		rm -f "$tmp" "$ex"; rmdir "$lk"
 		_hosts_auto_put "$src" "" "не удалось записать /etc/hosts — мало места на роутере"
@@ -18712,14 +18819,34 @@ _hosts_dns_reload() {
 }
 
 hosts_toggle() {
-	local block="$1" content enabled
+	local block="$1" content enabled src h="$JOBS_DIR/hosts.tgl.$$"
 	content="$(_hosts_block "$block")" || { echo '{"error":"неизвестный блок"}'; return 1; }
+	_hosts_on_init
 	enabled="$(_hosts_block_status "$block")"
+	src="$(_hosts_src)"
+	mkdir -p "$JOBS_DIR"
+	printf '%s\n' "$content" | _hosts_hostnames > "$h"
 	if [ "$enabled" = "true" ]; then
 		printf '%s\n' "$content" | _hosts_drop_lines
+		_hosts_on_set "$block" off
+		if [ -n "$src" ] && [ "$(_hosts_base_src)" = "$src" ]; then
+			gunzip -c "$HOSTS_BASE" 2>/dev/null | awk -v H="$h" 'BEGIN { while ((getline l < H) > 0) if (l != "") hn[l] = 1; close(H) }
+				{ c = $0; sub(/\r$/, "", c); if (c ~ /^[ \t]*#/) next; sub(/#.*/, "", c); sub(/^[ \t]+/, "", c)
+				  m = split(c, a, /[ \t]+/); for (i = 2; i <= m; i++) if (tolower(a[i]) in hn) { print; next } }' > "$h.back"
+			if [ -s "$h.back" ]; then
+				cp -f "$h.back" "$h.part"
+				_hosts_unclaim "$h.part" "$h"
+				[ -s "$h.part" ] && _hosts_drop_lines < "$h.part"
+				_hosts_add_lines < "$h.back"
+			fi
+			rm -f "$h.back" "$h.part"
+		fi
 	else
+		_hosts_on_set "$block" on
+		[ -n "$src" ] && _hosts_unclaim "$HOSTS_FILE" "$h"
 		printf '%s\n' "$content" | _hosts_add_lines
 	fi
+	rm -f "$h"
 	_hosts_dns_reload
 	printf '{"ok":true,"block":"%s","enabled":%s}\n' "$(esc "$block")" "$([ "$enabled" = "true" ] && echo false || echo true)"
 }
@@ -18749,21 +18876,22 @@ hosts_replace_geohide() {
 		printf '{"ok":true,"region":"%s"}\n' "$region"
 		return 0
 	fi
+	_hosts_on_init
+	_hosts_base_put "$tmp"
+	_hosts_overlay "$tmp"
 	if ! mv "$tmp" "$HOSTS_FILE" 2>/dev/null; then
 		rm -f "$tmp"
 		echo '{"error":"не удалось записать /etc/hosts — проверьте свободное место на роутере"}'
 		return 1
 	fi
 	_hosts_dns_reload
-	if [ -s "$HOSTS_AUTO" ]; then
-		_hosts_base_put "$HOSTS_FILE"
-		_hosts_auto_put "$region" "$(date +%s)" ""
-	fi
-	printf '{"ok":true,"region":"%s"}\n' "$region"
+	[ -s "$HOSTS_AUTO" ] && _hosts_auto_put "$region" "$(date +%s)" ""
+	printf '{"ok":true,"region":"%s","kept":%s}\n' "$region" "$(grep -c . "$HOSTS_ON" 2>/dev/null || echo 0)"
 }
 
 hosts_reset() {
-	[ -f "$HOSTS_AUTO" ] && { rm -f "$HOSTS_AUTO" "$HOSTS_BASE"; _hosts_auto_cron off; }
+	[ -f "$HOSTS_AUTO" ] && { rm -f "$HOSTS_AUTO"; _hosts_auto_cron off; }
+	rm -f "$HOSTS_BASE"; mkdir -p "$ZM_STATE_DIR"; : > "$HOSTS_ON"
 	printf '%s\n' "127.0.0.1	localhost" "" "::1	localhost ip6-localhost ip6-loopback" "ff02::1 ip6-allnodes" "ff02::2 ip6-allrouters" > "$HOSTS_FILE"
 	_hosts_dns_reload
 	printf '{"ok":true}\n'
@@ -18788,6 +18916,7 @@ hosts_file_set() {
 	cp "$HOSTS_FILE" "$HOSTS_FILE.zm-bak" 2>/dev/null
 	printf '%s' "$content" > "$HOSTS_FILE"
 	[ -n "$(tail -c 1 "$HOSTS_FILE" 2>/dev/null)" ] && echo >> "$HOSTS_FILE"
+	_hosts_on_sync
 	_hosts_dns_reload
 	printf '{"ok":true}\n'
 }
@@ -25458,8 +25587,29 @@ stl_engine_remove() {
 
 stl_spec_restore() { if [ -s "$STL_KEEP" ]; then mv -f "$STL_KEEP" "$STL_SPEC"; else rm -f "$STL_SPEC"; fi; }
 
+_stl_untaken() {
+	local o="" x IFS=,
+	for x in $1; do case "$taken" in *"|$x@"*) ;; *) o="$o${o:+,}$x" ;; esac; done
+	printf '%s' "$o"
+}
+
 _stl_rule() {
 	[ -n "$lid" ] && [ -n "$srs$dom$pfx" ] && [ -n "$out" ] || return 0
+	local x w IFS0="$IFS"
+	if [ -n "$taken" ]; then
+		x="$(printf '%s' "$srs,$dom,$pfx" | tr ',' '\n' | grep -m1 .)"
+		srs="$(_stl_untaken "$srs")"; dom="$(_stl_untaken "$dom")"; pfx="$(_stl_untaken "$pfx")"
+		if [ -z "$srs$dom$pfx" ]; then
+			w="${taken#*|$x@}"; w="${w%%|*}"
+			[ -z "$STL_DUP_SAID" ] && [ -n "$svn" ] && [ -n "$w" ] && echo "   · «$svn» в секции «$(_st_sec_name "${sec:-main}")» не действует — этот сервис уже идёт через секцию «$(_st_sec_name "$w")», она выше по порядку" >&2
+			return 0
+		fi
+	fi
+	if [ -z "$sfm$sfa" ]; then
+		IFS=,
+		for x in $srs $dom $pfx; do [ -n "$x" ] && taken="${taken:-|}$x@${sec:-main}|"; done
+		IFS="$IFS0"
+	fi
 	body=""
 	[ -n "$srs" ] && body="\"srs\":[$srs]"
 	[ -n "$dom" ] && body="$body${body:+,}\"domains_file\":[$dom]"
@@ -25570,7 +25720,7 @@ _stl_overs() {
 _stl_spec() {
 	local tab k a b c d m lists="" rules="" outs="" lan="" lid="" lab="" srs="" dom="" pfx=""
 	local clients="" drules="" cid dout byp="" xd="" xp="" xc="" xr="" x="" dnsj="" dnsn="" dnt=""
-	local body wp=latency main="" mout="" out="" sec="" sfm="" sfa="" so="" t u dvs="" STL_CID="" mf="$1" mif="" cu="" crules=""
+	local body wp=latency main="" mout="" out="" sec="" sfm="" sfa="" so="" t u dvs="" STL_CID="" mf="$1" mif="" cu="" crules="" taken="" svn=""
 	tab="$(printf '\t')"
 	mkdir -p "$STL_TMP"
 	while IFS="$tab" read -r k a b c; do
@@ -25616,7 +25766,7 @@ _stl_spec() {
 				outs="$t${outs:+,}$outs" ;;
 			vpn) [ "$main" = vpn ] && { t="$(_stl_vpn_outs "$mf" "$a")"; [ -n "$t" ] && outs="$t${outs:+,}$outs"; } ;;
 			sec)
-				_stl_rule; lid=""; srs=""; dom=""; pfx=""; cu=""
+				_stl_rule; lid=""; srs=""; dom=""; pfx=""; cu=""; svn=""
 				sec="$a"; out=""; dnt="${a#s}"; sfm=""; sfa=""
 				if [ "$a" = main ]; then out="$mout"; sec=""; else
 					for t in $so; do [ "${t%%:*}" = "$a" ] && out="${t#*:}"; done
@@ -25629,7 +25779,7 @@ _stl_spec() {
 					case "$x" in *:*) sfm="$sfm${sfm:+,}\"$STL_CID\"" ;; *) sfa="$sfa${sfa:+,}\"$STL_CID\"" ;; esac
 				done < "$mf"
 				x="" ;;
-			svc) _stl_rule; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
+			svc) _stl_rule; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; svn="$b"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
 			srs) srs="$srs${srs:+,}$(_stl_js "$a")" ;;
 			dom) dom="$dom${dom:+,}$(_stl_js "$a")" ;;
 			pfx) pfx="$pfx${pfx:+,}$(_stl_js "$a")" ;;
@@ -25690,6 +25840,7 @@ _stl_spec() {
 		else dnsj="\"dns\":{\"cache\":2048,\"cache_ttl\":{\"min\":$t}},"; fi
 	fi
 	printf '{"version":2,%s"lan":{"devices":[%s]},%s"lists":{%s},"outputs":{%s},"rules":[%s]}\n' "$dnsj" "${lan:-\"br-lan\"}" "$clients" "$lists" "$outs" "$rules"
+	STL_DUP_SAID=1
 }
 
 _stl_check() {
@@ -25718,6 +25869,7 @@ _stl_upd_hint() {
 stl_apply() {
 	local new="$STL_SPEC.zm.$$" prev="$STL_TMP/spec.prev" err w=0 i=0 ck=0 fx="" again=""
 	local ZM_STL_NOV6T="" ZM_STL_NOCTTL="" ZM_STL_NODNS=""
+	STL_DUP_SAID=""
 	mkdir -p "$STL_ETC" "$STL_TMP"
 	rm -f "$ST_DIR/nofam"
 	_stl_spec "$1" > "$new" || { rm -f "$new"; echo "ОШИБКА: в настройке нет ни одного списка"; return 1; }
@@ -25811,7 +25963,7 @@ _st_outs_text() {
 	BEGIN { while ((getline l < M) > 0) { split(l, a, "\t"); LB[a[1]] = a[2]; IF[a[1]] = a[4] } close(M) }
 	{
 		out = ""; t = $0
-		while (match(t, /выход (zm_vpn[2-9]?|zm_if[2-9]?|zmv[2-9]?_[A-Za-z0-9]+|zm_warp[0-9]*|zm_direct)/)) {
+		while (match(t, /выход (zm_vpn[2-9]?|zm_if[2-9]?|zmv[2-9]?_[A-Za-z0-9]+|zm_warp[0-9]*|zmwarp[0-9]*|zm_direct)/)) {
 			o = substr(t, RSTART, RLENGTH); sub(/^выход /, "", o); s = secof(o)
 			if (s != "") lab = (LB[s] != "" ? LB[s] " · " : "") ((o ~ /^zm_if/) ? "туннель" (IF[s] != "" ? " " IF[s] : "") : "VPN")
 			else lab = (o == "zm_direct") ? "Мимо Steer" : "WARP"
@@ -26037,10 +26189,14 @@ _st_dev_sec() {
 	[ -s "$ST_SEC_DIR/$1/devices" ] || return 0
 	awk -F'\t' -v s="$1" '($1 == "all" || $1 == "only") && $2 != "" && !x[$2]++ { printf "sdev\t%s\t%s\t%s\n", s, $1, $2 }' "$ST_SEC_DIR/$1/devices"
 }
+_st_dev_only_main() {
+	[ -s "$ST_DEVS" ] || return 0
+	awk -F'\t' '$1 == "only" && $2 != "" && !x[$2]++ { printf "sdev\tmain\tonly\t%s\n", $2 }' "$ST_DEVS"
+}
 _st_devs_fit() {
 	local have want s
 	have="$(awk -F'\t' '$1 == "dev" || $1 == "sdev"' "$ST_DIR/model.svc" 2>/dev/null | sort)"
-	want="$( { _st_dev_model all; for s in $(_st_secs); do _st_sec_live "$s" && _st_dev_sec "$s"; done; } | sort)"
+	want="$( { _st_dev_model all; _st_dev_only_main; for s in $(_st_secs); do _st_sec_live "$s" && _st_dev_sec "$s"; done; } | sort)"
 	[ "$have" = "$want" ]
 }
 
@@ -26075,7 +26231,7 @@ _st_devs_save() {
 		[ -n "$line" ] || continue
 		m="${line%%|*}"; line="${line#*|}"; k="${line%%|*}"; n="${line#*|}"; [ "$n" = "$line" ] && n=""
 		if [ -n "$ST_SEC" ]; then case "$m" in all|only) ;; *) continue ;; esac
-		else case "$m" in all|byp) ;; *) continue ;; esac; fi
+		else case "$m" in all|byp|only) ;; *) continue ;; esac; fi
 		k="$(_st_dev_key "$k")" || continue
 		n="$(printf '%s' "$n" | tr -d '\t"\\' | cut -c1-48)"
 		grep -q "	$k	" "$t" 2>/dev/null && continue
@@ -27425,6 +27581,7 @@ _st_model() {
 			rm -f "$ST_RUN"/used.*
 			for id; do _st_svc_lists "$id"; done
 			_st_dev_model all
+			_st_dev_only_main
 			continue
 		fi
 		_st_sec_live "$s" || continue
@@ -27648,8 +27805,10 @@ _st_secs_say() {
 		w="$(_st_sec_with "$s" _st_sel | tr '\n' ' ')"
 		n="$(_st_sec_with "$s" _st_devs_n all)"
 		[ -n "$(echo $w)" ] || [ "$n" -gt 0 ] || continue
+		w="$(_rb_svc_names "$w")"
+		k="$(_st_sec_with "$s" _st_devs_n only)"; [ "$k" -gt 0 ] && [ -n "$w" ] && w="$w (только для устройств: $k)"
+		[ "$n" -gt 0 ] && w="${w:+$w; }весь трафик устройств: $n"
 		k="$(_st_sec_kind "$s")"
-		w="$(_rb_svc_names "$w")"; [ "$n" -gt 0 ] && w="${w:+$w; }весь трафик устройств: $n"
 		if ! _st_sec_live "$s"; then
 			case "$k" in
 				vpn) _rb_warn "Секция «$(_st_sec_name "$s")»: у неё нет подписки VPN — её сервисы пока идут напрямую" ;;
@@ -27717,6 +27876,8 @@ _st_apply0() {
 	_st_secs_fw
 	local what dn
 	what="$(_rb_svc_names "$sel")"
+	dn="$(_st_devs_n only)"
+	[ "$dn" -gt 0 ] && [ -n "$what" ] && what="$what (только для устройств: $dn)"
 	dn="$(_st_devs_n all)"
 	[ "$dn" -gt 0 ] && what="${what:+$what; }весь трафик устройств: $dn"
 	if [ -n "$mw" ]; then
@@ -27745,22 +27906,68 @@ _st_heal_wait() {
 		sleep 3; i=$((i + 1))
 		stl_running || continue
 		stl_diag_lines > "$f"
-		[ -s "$f" ] && ! grep -q '^fail' "$f" && return 0
+		[ -s "$f" ] && [ -z "$(_st_heal_cause "$f")" ] && return 0
 	done
 	return 1
 }
 
 _st_heal_cause() { awk -F'\t' '$1 == "fail" { print $2 }' "$1" | while IFS= read -r w; do _st_diag_node "$w" || printf '%s\n' "$w"; done | sort; }
 
+_st_heal_core() { awk -F'\t' '$1 == "fail" && $2 !~ /^(выход|канал) / { f = 1 } END { exit !f }' "$1"; }
+
+_st_heal_wifs() {
+	awk -F'\t' '$1 == "fail" && $2 ~ /^выход zmwarp[0-9]*: (устройства zmwarp[0-9]* нет|устройство zmwarp[0-9]* выключено)/ { o = $2; sub(/^выход /, "", o); sub(/:.*$/, "", o); if (!s[o]++) print o }' "$1"
+}
+
+_st_heal_tun() {
+	local i n=0 w=0 need=0 up=""
+	for i in $1; do
+		[ "$(uci -q get "network.$i")" = interface ] || continue
+		[ "$(uci -q get "network.$i.auto")" = 0 ] && { uci -q delete "network.$i.auto"; need=1; }
+		[ "$(uci -q get "network.$i.disabled")" = 1 ] && { uci -q delete "network.$i.disabled"; need=1; }
+		up="$up $i"
+	done
+	[ -n "$up" ] || return 1
+	[ "$need" = 1 ] && uci -q commit network
+	for i in $up; do ubus call "network.interface.$i" up >/dev/null 2>&1; done
+	while [ "$w" -lt 20 ]; do
+		n=0
+		for i in $up; do [ -d "/sys/class/net/$i" ] || n=1; done
+		[ "$n" = 0 ] && return 0
+		sleep 1; w=$((w + 1))
+	done
+	return 1
+}
+
 _st_heal() {
-	local f="$1" ver c="$ST_RUN/heal.cause.now"
+	local f="$1" ver c="$ST_RUN/heal.cause.now" wifs feats
 	mkdir -p "$ST_RUN" "$ST_DIR"
 	_st_heal_cause "$f" > "$c"
 	if [ -s "$ST_HEAL_CAUSE" ] && cmp -s "$c" "$ST_HEAL_CAUSE" && [ -z "$(find "$ST_HEAL_CAUSE" -mmin +360 2>/dev/null)" ]; then
 		ST_HEAL_DID="эту же поломку панель уже пыталась исправить в $(date -r "$ST_HEAL_CAUSE" +%H:%M 2>/dev/null) — не помогло"
-		echo "   ! Эту же поломку ядра уже пробовали исправить в $(date -r "$ST_HEAL_CAUSE" +%H:%M 2>/dev/null) — не помогло, второй раз по кругу не чиним"
+		echo "   ! Эту же поломку уже пробовали исправить в $(date -r "$ST_HEAL_CAUSE" +%H:%M 2>/dev/null) — не помогло, второй раз по кругу не чиним"
 		rm -f "$c"
 		return 1
+	fi
+	wifs="$(_st_heal_wifs "$f")"
+	if [ -n "$wifs" ]; then
+		ST_HEAL_DID="туннель WARP не поднялся"
+		_rb_say "Чиним сами: поднимаем туннель WARP ($(echo $wifs | sed 's/zmwarp\([0-9]\)/WARP \1/g; s/zmwarp/WARP 1/g; s/ /, /g'))"
+		if _st_heal_tun "$wifs"; then
+			echo "   ✓ Туннель поднят"
+			if _st_heal_wait "$f"; then
+				echo "   ✓ Всё работает"
+				rm -f "$c" "$ST_HEAL_CAUSE"
+				return 0
+			fi
+		else
+			echo "   ! Туннель не поднялся — проверьте WARP на вкладке «Подключение»"
+		fi
+	fi
+	feats="$(_st_feats_all)"
+	if stl_v2 && [ -n "$(echo $feats)" ] && ! _st_feats_ok $feats; then
+		_rb_say "Чиним сами: у ядра steer не хватает модулей — доставляем их"
+		STL_MODS_ONLY=1 _st_install_steer $feats >/dev/null 2>&1 && echo "   ✓ Модули ядра на месте"
 	fi
 	ST_HEAL_DID="перезапуск ядра не помог"
 	_rb_say "Чиним сами: перезапускаем ядро steer"
@@ -27770,6 +27977,11 @@ _st_heal() {
 		return 0
 	fi
 	mv -f "$c" "$ST_HEAL_CAUSE"
+	if stl_running && stl_v2 && [ -s "$f" ] && ! _st_heal_core "$f"; then
+		ST_HEAL_DID="само ядро steer работает — не поднимается выход (туннель или клиент VPN), переустановка ядра тут не поможет"
+		echo "   · Само ядро steer работает — не поднимается выход секции (туннель или клиент VPN). Переустановка ядра тут не поможет: проверьте подключение этой секции"
+		return 1
+	fi
 	if [ -f "$ST_HEAL_STAMP" ] && [ -z "$(find "$ST_HEAL_STAMP" -mmin +30 2>/dev/null)" ]; then
 		echo "   ! Перезапуск не помог, а ядро уже переустанавливали меньше получаса назад — второй раз не трогаем"
 		stl_diag_lines > "$f"
@@ -27778,7 +27990,7 @@ _st_heal() {
 	mkdir -p "$ST_DIR"; touch "$ST_HEAL_STAMP"
 	ST_HEAL_DID="не помогли ни перезапуск, ни переустановка ядра"
 	ver="$(stl_version)"; _stl_ver_ok "$ver" || ver="$(stl_latest)"
-	_rb_say "Перезапуск не помог — переустанавливаем ядро steer $ver"
+	_rb_say "Ядро steer не отвечает и после перезапуска — переустанавливаем ядро steer $ver"
 	if ! STL_REINSTALL=1 stl_engine_install "$ver" $(_st_use_vpn && _st_sub_feats); then
 		echo "   ✗ Переустановить ядро не удалось — проверьте интернет и нажмите «Применить» ещё раз"
 		stl_running || stl_restart >/dev/null 2>&1
@@ -27867,15 +28079,14 @@ _st_selfcheck0() {
 		_st_work && echo "[ OK ] Ядро steer ведёт выбранные сервисы в туннель"
 	fi
 	stl_diag_lines > "$f"
-	while IFS="$(printf '\t')" read -r v what why; do
-		[ "$v" = fail ] && ! _st_diag_node "$what" && core=1
-	done < "$f"
+	_st_diag_human < "$f" | awk -F"$(printf '\037')" '$1 == "fail" { print $7 }' > "$f.c"
+	while IFS= read -r what; do _st_diag_node "$what" || core=1; done < "$f.c"
 	local nodeonly=""
 	[ -z "$core" ] && [ -z "$moved" ] && _st_diag_human < "$f" | awk -F"$(printf '\037')" '$1 == "fail" { f = 1 } END { exit !f }' && nodeonly=1
 	if [ -n "$core" ] && [ -z "$ST_HEALING" ] && _st_work && [ ! -f "$ST_OFF" ]; then
-		while IFS="$(printf '\t')" read -r v what why; do
-			[ "$v" = fail ] && ! _st_diag_node "$what" && echo "!! $(_st_diag_what "$what")"
-		done < "$f"
+		while IFS= read -r what; do
+			_st_diag_node "$what" || echo "!! $(_st_diag_what "$what")"
+		done < "$f.c"
 		ST_HEALING=1
 		if _st_heal "$f"; then healed=1; fi
 		ST_HEALING=""
@@ -27899,7 +28110,7 @@ _st_selfcheck0() {
 				[ -n "$tip" ] && echo "   · $tip" ;;
 		esac
 	done < "$f.h"
-	rm -f "$f" "$f.h"
+	rm -f "$f" "$f.h" "$f.c"
 	[ -n "$nodeonly" ] && echo "   · Само ядро steer исправно — не отвечает узел или сервер туннеля; перезапуск и переустановка ядра тут не помогут"
 	[ -n "$healed" ] && [ "$bad" = 0 ] && echo "   · Поломку ядра панель исправила сама"
 	if [ "$bad" != 0 ]; then _rb_warn "Проверка нашла поломку — подробности выше"
@@ -33876,7 +34087,7 @@ _ab_kw_in() {
 	shift
 	for f in "$@"; do
 		[ -f "$f" ] || continue
-		case "$f" in */"$AB_STATS_CONF"|*/"$TR_DNS_CONF") continue ;; esac
+		case "$f" in */"$AB_STATS_CONF") continue ;; esac
 		grep -qs "^[[:space:]]*$kw\([[:space:]]*=\|[[:space:]]*\$\)" "$f" && return 0
 	done
 	return 1
@@ -33935,25 +34146,7 @@ _ab_stats_plug() {
 _ab_stats_unplug() {
 	local d
 	for d in $(_ab_alldirs); do [ -d "$d" ] && rm -f "${d:?}/$AB_STATS_CONF"; done
-	_tr_dns_on || _ab_lf_restore
-}
-
-_ab_tr_plug() {
-	local d
-	_ab_lf_take
-	for d in $(_ab_dirs); do mkdir -p "$d" && _ab_stats_text "$d" | sed '1s/.*/# Zapret Manager: домены для учёта трафика/' > "${d:?}/$TR_DNS_CONF"; done
-}
-
-_ab_tr_unplug() {
-	local d
-	for d in $(_ab_alldirs); do [ -d "$d" ] && rm -f "${d:?}/$TR_DNS_CONF"; done
-	_ab_stats_on || _ab_lf_restore
-}
-
-_ab_tr_applied() {
-	local d n=0
-	for d in $(_ab_dirs); do [ -s "$d/$TR_DNS_CONF" ] || return 1; n=1; done
-	[ "$n" = 1 ]
+	_ab_lf_restore
 }
 
 _ab_stats_guard() {
@@ -33970,8 +34163,7 @@ _ab_stats_guard() {
 
 _ab_stats_wipe() {
 	rm -rf "$AB_STATS_DIR"
-	_tr_dns_on || rm -f "$AB_STATS_LOG"
-	rm -f "$AB_STATS_ALL" "$AB_STATS_ALL.zm" "$AB_STATS_ALL.c" "$AB_STATS_ALL.new"
+	rm -f "$AB_STATS_LOG" "$AB_STATS_ALL" "$AB_STATS_ALL.zm" "$AB_STATS_ALL.c" "$AB_STATS_ALL.new"
 	return 0
 }
 
@@ -34006,9 +34198,8 @@ _ab_jtrim() {
 }
 
 adblock_stats_tick() {
-	local lk="$AB_STATS_DIR/.lock" tmp hf hour lan t=0 jc now sod st=""
-	_ab_stats_on && st=1
-	[ -n "$st" ] || _tr_dns_on || return 0
+	local lk="$AB_STATS_DIR/.lock" tmp hf hour lan t=0 jc now sod
+	_ab_stats_on || return 0
 	mkdir -p "$AB_STATS_DIR"
 	while ! mkdir "$lk" 2>/dev/null; do
 		[ -n "$(find "$lk" -maxdepth 0 -mmin +2 2>/dev/null)" ] && { rmdir "$lk" 2>/dev/null; continue; }
@@ -34018,78 +34209,74 @@ adblock_stats_tick() {
 	tmp="$AB_STATS_DIR/chunk.$$"
 	if [ -s "$AB_STATS_LOG" ]; then
 		cat "$AB_STATS_LOG" > "$tmp" 2>/dev/null && : > "$AB_STATS_LOG"
-		_tr_dns_on && _tr_dns_feed "$tmp"
-		if [ -z "$st" ]; then awk '!/dnsmasq\[[0-9]+\]: [0-9]+ / && NF' "$tmp" > "$tmp.other" 2>/dev/null
-		else
-			hour=$(( $(date +%s) / 3600 )); hf="$AB_STATS_DIR/h.$hour"
-			lan="$(sed -n 's#^local=/\([^/]*\)/$#\1#p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u | tr '\n' ' ')"
-			jc="$(_ab_jcap)"; now="$(date +%s)"; sod="$(date +%H:%M:%S | awk -F: '{ print $1 * 3600 + $2 * 60 + $3 }')"
-			awk -v lan="$lan" -v hf="$hf" -v other="$tmp.other" -v jn="$([ "$jc" -gt 0 ] && echo 1 || echo 0)" -v jf="$tmp.j" -v now="$now" -v mid="$((now - ${sod:-0}))" -v st="$(_ab_steer_dns && echo 1)" '
-				function lts(p,   h, mi, s, t) {
-					if (!match(p, /[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) return now
-					h = substr(p, RSTART, 2) + 0; mi = substr(p, RSTART + 3, 2) + 0; s = substr(p, RSTART + 6, 2) + 0
-					t = mid + h * 3600 + mi * 60 + s
-					if (t > now + 300) t -= 86400
-					return t
+		hour=$(( $(date +%s) / 3600 )); hf="$AB_STATS_DIR/h.$hour"
+		lan="$(sed -n 's#^local=/\([^/]*\)/$#\1#p' /var/etc/dnsmasq.conf.* 2>/dev/null | sort -u | tr '\n' ' ')"
+		jc="$(_ab_jcap)"; now="$(date +%s)"; sod="$(date +%H:%M:%S | awk -F: '{ print $1 * 3600 + $2 * 60 + $3 }')"
+		awk -v lan="$lan" -v hf="$hf" -v other="$tmp.other" -v jn="$([ "$jc" -gt 0 ] && echo 1 || echo 0)" -v jf="$tmp.j" -v now="$now" -v mid="$((now - ${sod:-0}))" -v st="$(_ab_steer_dns && echo 1)" '
+			function lts(p,   h, mi, s, t) {
+				if (!match(p, /[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) return now
+				h = substr(p, RSTART, 2) + 0; mi = substr(p, RSTART + 3, 2) + 0; s = substr(p, RSTART + 6, 2) + 0
+				t = mid + h * 3600 + mi * 60 + s
+				if (t > now + 300) t -= 86400
+				return t
+			}
+			BEGIN {
+				nl = split(lan, L, " ")
+				while ((getline l < hf) > 0) {
+					split(l, a, " ")
+					if (a[1] == "T") T += a[2]; else if (a[1] == "B") B += a[2]
+					else if (a[1] == "C") C[a[2]] += a[3]; else if (a[1] == "X") X[a[2]] += a[3]; else if (a[1] == "D") D[a[2]] += a[3]
 				}
-				BEGIN {
-					nl = split(lan, L, " ")
-					while ((getline l < hf) > 0) {
-						split(l, a, " ")
-						if (a[1] == "T") T += a[2]; else if (a[1] == "B") B += a[2]
-						else if (a[1] == "C") C[a[2]] += a[3]; else if (a[1] == "X") X[a[2]] += a[3]; else if (a[1] == "D") D[a[2]] += a[3]
-					}
-					close(hf)
-				}
-				function local_name(n,   i) {
-					if (index(n, ".") == 0) return 1
-					for (i = 1; i <= nl; i++) if (n == L[i] || substr(n, length(n) - length(L[i])) == "." L[i]) return 1
-					return 0
-				}
-				match($0, /dnsmasq\[[0-9]+\]: [0-9]+ /) {
-					sid = substr($0, RSTART, RLENGTH); sub(/^.*: /, "", sid); sub(/ +$/, "", sid)
-					pre = substr($0, 1, RSTART - 1)
-					m = split(substr($0, RSTART + RLENGTH), f, " ")
-					i = 1; cl = ""
-					if (f[1] ~ /\/[0-9]+$/) { cl = f[1]; sub(/\/[0-9]+$/, "", cl); i = 2 }
-					jcl = st && (cl == "127.0.0.1" || cl == "::1") ? "s" : cl
-					if (f[i] ~ /^query\[/) {
-						T++; if (cl != "") C[cl]++
-						if (jn && cl != "") { n = tolower(f[i + 1]); if (n != "" && !local_name(n) && n !~ /\.arpa$/) { Q[sid] = n; QC[sid] = jcl; QT[sid] = lts(pre) } }
-						next
-					}
-					if (f[i] == "config" && f[i + 2] == "is" && f[i + 3] ~ /^(NXDOMAIN|NODATA)/) {
-						n = tolower(f[i + 1])
-						if (local_name(n)) next
-						B++; D[n]++; if (cl != "") X[cl]++
-						if (jn && cl != "") { BL[sid] = 1; k = jcl "\t" n; JB[k]++; t = lts(pre); if (t > JBT[k]) JBT[k] = t }
-					}
+				close(hf)
+			}
+			function local_name(n,   i) {
+				if (index(n, ".") == 0) return 1
+				for (i = 1; i <= nl; i++) if (n == L[i] || substr(n, length(n) - length(L[i])) == "." L[i]) return 1
+				return 0
+			}
+			match($0, /dnsmasq\[[0-9]+\]: [0-9]+ /) {
+				sid = substr($0, RSTART, RLENGTH); sub(/^.*: /, "", sid); sub(/ +$/, "", sid)
+				pre = substr($0, 1, RSTART - 1)
+				m = split(substr($0, RSTART + RLENGTH), f, " ")
+				i = 1; cl = ""
+				if (f[1] ~ /\/[0-9]+$/) { cl = f[1]; sub(/\/[0-9]+$/, "", cl); i = 2 }
+				jcl = st && (cl == "127.0.0.1" || cl == "::1") ? "s" : cl
+				if (f[i] ~ /^query\[/) {
+					T++; if (cl != "") C[cl]++
+					if (jn && cl != "") { n = tolower(f[i + 1]); if (n != "" && !local_name(n) && n !~ /\.arpa$/) { Q[sid] = n; QC[sid] = jcl; QT[sid] = lts(pre) } }
 					next
 				}
-				NF { print > other }
-				END {
-					print "T " T + 0; print "B " B + 0
-					for (k in C) print "C " k " " C[k]
-					for (k in X) print "X " k " " X[k]
-					for (k in D) print "D " k " " D[k]
-					if (jn) {
-						for (s in Q) if (!(s in BL)) { k = QC[s] "\t" Q[s]; JA[k]++; if (QT[s] > JAT[k]) JAT[k] = QT[s] }
-						for (k in JB) printf "B\t%d\t%s\t%d\n", JBT[k], k, JB[k] > jf
-						for (k in JA) printf "A\t%d\t%s\t%d\n", JAT[k], k, JA[k] > jf
-						close(jf)
-					}
-				}' "$tmp" > "$hf.new" 2>/dev/null
-			if [ -s "$tmp.j" ] && [ "$jc" -gt 0 ]; then
-				awk -F'\t' -v b="$AB_STATS_DIR/jb" -v a="$AB_STATS_DIR/ja" 'BEGIN { OFS = "\t" } { o = $1 == "B" ? b : a; print $2, $3, $4, $5 >> o }' "$tmp.j" 2>/dev/null
-				_ab_jtrim "$AB_STATS_DIR/jb" "$jc"
-				_ab_jtrim "$AB_STATS_DIR/ja" "$jc"
-			fi
-			rm -f "$tmp.j"
-			if [ -s "$hf.new" ]; then
-				{ grep -v '^D ' "$hf.new"; grep '^D ' "$hf.new" | sort -k3,3nr | head -n 500; } > "$hf.tmp" && mv -f "$hf.tmp" "$hf"
-			fi
-			rm -f "$hf.new" "$hf.tmp"
+				if (f[i] == "config" && f[i + 2] == "is" && f[i + 3] ~ /^(NXDOMAIN|NODATA)/) {
+					n = tolower(f[i + 1])
+					if (local_name(n)) next
+					B++; D[n]++; if (cl != "") X[cl]++
+					if (jn && cl != "") { BL[sid] = 1; k = jcl "\t" n; JB[k]++; t = lts(pre); if (t > JBT[k]) JBT[k] = t }
+				}
+				next
+			}
+			NF { print > other }
+			END {
+				print "T " T + 0; print "B " B + 0
+				for (k in C) print "C " k " " C[k]
+				for (k in X) print "X " k " " X[k]
+				for (k in D) print "D " k " " D[k]
+				if (jn) {
+					for (s in Q) if (!(s in BL)) { k = QC[s] "\t" Q[s]; JA[k]++; if (QT[s] > JAT[k]) JAT[k] = QT[s] }
+					for (k in JB) printf "B\t%d\t%s\t%d\n", JBT[k], k, JB[k] > jf
+					for (k in JA) printf "A\t%d\t%s\t%d\n", JAT[k], k, JA[k] > jf
+					close(jf)
+				}
+			}' "$tmp" > "$hf.new" 2>/dev/null
+		if [ -s "$tmp.j" ] && [ "$jc" -gt 0 ]; then
+			awk -F'\t' -v b="$AB_STATS_DIR/jb" -v a="$AB_STATS_DIR/ja" 'BEGIN { OFS = "\t" } { o = $1 == "B" ? b : a; print $2, $3, $4, $5 >> o }' "$tmp.j" 2>/dev/null
+			_ab_jtrim "$AB_STATS_DIR/jb" "$jc"
+			_ab_jtrim "$AB_STATS_DIR/ja" "$jc"
 		fi
+		rm -f "$tmp.j"
+		if [ -s "$hf.new" ]; then
+			{ grep -v '^D ' "$hf.new"; grep '^D ' "$hf.new" | sort -k3,3nr | head -n 500; } > "$hf.tmp" && mv -f "$hf.tmp" "$hf"
+		fi
+		rm -f "$hf.new" "$hf.tmp"
 		if [ -s "$tmp.other" ]; then
 			head -n 300 "$tmp.other" | sed 's/^[A-Z][a-z][a-z] [ 0-9]*[0-9] [0-9:]* //' | while IFS= read -r t; do
 				case "$t" in *"]: "*) logger -t "${t%%\[*}" -- "${t#*]: }" ;; *) logger -t dnsmasq -- "$t" ;; esac
@@ -34098,7 +34285,6 @@ adblock_stats_tick() {
 		fi
 		rm -f "$tmp" "$tmp.other"
 	fi
-	[ -n "$st" ] || { rmdir "$lk" 2>/dev/null; return 0; }
 	_ab_stats_fold
 	hour=$(( $(date +%s) / 3600 - 25 ))
 	for hf in "$AB_STATS_DIR"/h.*; do
@@ -34727,759 +34913,6 @@ _ab_watch() {
 	job_start adblock do_ab_apply >/dev/null
 }
 ZM_INSTALLER_EOF
-cat > "$_zmi_st/mod/traffic.sh" << 'ZM_INSTALLER_EOF'
-TR_EVERY=20
-TR_CT=/proc/net/nf_conntrack
-TR_KEEP_SITES=150
-TR_AWK_LIB='
-function je(s,   o, i, c) { o = ""; for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); if (c == "\\" || c == "\"") o = o "\\" c; else if (c < " ") o = o " "; else o = o c } return o }
-function base(d,   n, a, t, s) {
-	if (d == "") return ""
-	n = split(d, a, ".")
-	if (n <= 2) return d
-	t = a[n]; s = a[n - 1]
-	if (length(t) == 2 && (s == "com" || s == "net" || s == "org" || s == "co" || s == "gov" || s == "edu" || s == "ac" || s == "msk" || s == "spb")) return a[n - 2] "." s "." t
-	return s "." t
-}
-function svcinit(   l, n, i, p) {
-	l = "googlevideo.com=YouTube youtube.com=YouTube ytimg.com=YouTube ggpht.com=YouTube youtu.be=YouTube youtube-nocookie.com=YouTube " \
-		"telegram.org=Telegram t.me=Telegram telegram.me=Telegram telesco.pe=Telegram tdesktop.com=Telegram cdn-telegram.org=Telegram " \
-		"whatsapp.net=WhatsApp whatsapp.com=WhatsApp instagram.com=Instagram cdninstagram.com=Instagram facebook.com=Facebook fbcdn.net=Facebook " \
-		"discord.com=Discord discordapp.com=Discord discordapp.net=Discord discord.gg=Discord discord.media=Discord " \
-		"netflix.com=Netflix nflxvideo.net=Netflix nflximg.net=Netflix twitch.tv=Twitch ttvnw.net=Twitch jtvnw.net=Twitch " \
-		"tiktok.com=TikTok tiktokcdn.com=TikTok tiktokv.com=TikTok byteoversea.com=TikTok ibytedtos.com=TikTok " \
-		"vk.com=VK vk.ru=VK userapi.com=VK vkuser.net=VK vk-cdn.net=VK vkvideo.ru=VK mycdn.me=VK ok.ru=Одноклассники " \
-		"yandex.ru=Яндекс yandex.net=Яндекс yastatic.net=Яндекс ya.ru=Яндекс kinopoisk.ru=Кинопоиск rutube.ru=Rutube " \
-		"steamcontent.com=Steam steampowered.com=Steam steamstatic.com=Steam steamserver.net=Steam steamcommunity.com=Steam " \
-		"playstation.net=PlayStation playstation.com=PlayStation sonyentertainmentnetwork.com=PlayStation xboxlive.com=Xbox " \
-		"windowsupdate.com=Microsoft microsoft.com=Microsoft live.com=Microsoft msftconnecttest.com=Microsoft office.com=Microsoft " \
-		"apple.com=Apple icloud.com=Apple mzstatic.com=Apple aaplimg.com=Apple apple-dns.net=Apple cdn-apple.com=Apple " \
-		"google.com=Google googleapis.com=Google gstatic.com=Google googleusercontent.com=Google gvt1.com=Google " \
-		"spotify.com=Spotify scdn.co=Spotify wbbasket.ru=Wildberries wildberries.ru=Wildberries ozon.ru=Ozon ozone.ru=Ozon " \
-		"chatgpt.com=ChatGPT openai.com=ChatGPT oaiusercontent.com=ChatGPT x.com=X twimg.com=X twitter.com=X " \
-		"epicgames.com=Epic"
-	n = split(l, p, " ")
-	for (i = 1; i <= n; i++) { split(p[i], kv, "="); SV[kv[1]] = kv[2] }
-}
-function svc(b) { return b == "" ? "" : (b in SV) ? SV[b] : b }
-function top(k,   i, s, bs, bv) {
-	for (i = 1; i <= k; i++) {
-		bs = ""; bv = -1
-		for (s in SB) if (!(s in USED) && SB[s] > bv) { bv = SB[s]; bs = s }
-		if (bs == "") return i - 1
-		USED[bs] = 1; TOP[i] = bs
-	}
-	return k
-}
-function site(s, keep,   br, bv, j, rr, dm, n, a) {
-	br = "d"; bv = -1
-	split("z f s d", rr, " ")
-	for (j = 1; j <= 4; j++) if (SR[s, rr[j]] > bv) { bv = SR[s, rr[j]]; br = rr[j] }
-	dm = SD[s]; n = split(dm, a, ", ")
-	if (n > keep) { dm = a[1]; for (j = 2; j <= keep; j++) dm = dm ", " a[j]; dm = dm " и ещё " (n - keep) }
-	return sprintf("{\"n\":\"%s\",\"dm\":\"%s\",\"b\":%.0f,\"r\":\"%s\",\"z\":%.0f,\"f\":%.0f,\"s\":%.0f,\"d\":%.0f}", je(s), (dm == s ? "" : je(dm)), SB[s], br, SR[s, "z"], SR[s, "f"], SR[s, "s"], SR[s, "d"])
-}
-'
-
-_tr_put() {
-	local k v tmp="$TR_CONF.zm.$$"
-	mkdir -p "$ZM_STATE_DIR"
-	[ -f "$TR_CONF" ] || : > "$TR_CONF"
-	cp -f "$TR_CONF" "$tmp"
-	while [ $# -ge 2 ]; do
-		k="$1"; v="$2"; shift 2
-		grep -v "^$k=" "$tmp" > "$tmp.2" 2>/dev/null; mv -f "$tmp.2" "$tmp"
-		echo "$k=$v" >> "$tmp"
-	done
-	mv -f "$tmp" "$TR_CONF"
-}
-
-_tr_days() { case "$(_tr_get days 30)" in 7) echo 7 ;; 90) echo 90 ;; *) echo 30 ;; esac; }
-_tr_store() { [ "$(_tr_get store ram)" = flash ] && echo flash || echo ram; }
-
-_tr_acct() { [ "$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)" = 1 ]; }
-
-_tr_running() { pgrep -f 'backend[.]sh traffic_daemon' >/dev/null 2>&1; }
-
-_tr_lock() {
-	local t=0
-	mkdir -p "$TR_DIR"
-	while ! mkdir "$TR_DIR/.lock" 2>/dev/null; do
-		[ -n "$(find "$TR_DIR/.lock" -maxdepth 0 -mmin +2 2>/dev/null)" ] && { rmdir "$TR_DIR/.lock" 2>/dev/null; continue; }
-		t=$((t + 1)); [ "$t" -gt 15 ] && return 1
-		sleep 1
-	done
-	return 0
-}
-_tr_unlock() { rmdir "$TR_DIR/.lock" 2>/dev/null; return 0; }
-
-_tr_landevs() {
-	local s n d w=""
-	if s="$(_zm_zone_sec "$(_zm_wan_zone)")"; then
-		for n in $(uci -q get "firewall.$s.network"); do
-			for d in "$(ifstatus "$n" 2>/dev/null | jsonfilter -e '@.l3_device' 2>/dev/null)" "$(ifstatus "$n" 2>/dev/null | jsonfilter -e '@.device' 2>/dev/null)" "$(uci -q get "network.$n.device")"; do
-				[ -n "$d" ] && w="$w $d"
-			done
-		done
-		for d in $(uci -q get "firewall.$s.device"); do w="$w $d"; done
-	fi
-	ip neigh show 2>/dev/null | awk -v w=" $w " '{ for (i = 1; i < NF; i++) if ($i == "dev") { d = $(i + 1); if (d != "lo" && index(w, " " d " ") == 0 && !(d in S)) { S[d] = 1; printf "%s ", d } } }'
-}
-
-_tr_nb() {
-	local d
-	ip -o addr show 2>/dev/null | awk '{ a = $4; sub(/\/.*/, "", a); if (a != "") print "R\t" a }'
-	for d in $ZM_TR_LANDEV; do
-		ip neigh show dev "$d" 2>/dev/null | awk '{ for (i = 2; i < NF; i++) if ($i == "lladdr") { m = tolower($(i + 1)); if (m != "00:00:00:00:00:00") print "M\t" $1 "\t" m; break } }'
-	done
-}
-
-_tr_names() {
-	{
-		awk '$2 ~ /^([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]$/ && $4 != "" && $4 != "*" { print "L\t" tolower($2) "\t" $4 "\t" $3 }' /tmp/dhcp.leases
-		uci -q -X show dhcp | awk -F= '{ split($1, p, "."); v = $2; gsub("\047", "", v) }
-			p[3] == "name" { nm[p[2]] = v } p[3] == "mac" { mc[p[2]] = tolower(v) }
-			END { for (k in nm) if (k in mc) { n = split(mc[k], a, " "); for (i = 1; i <= n; i++) print "S\t" a[i] "\t" nm[k] } }'
-		[ -s "$OW_NAMES" ] && awk -F'\t' '$2 != "" { print "U\t" tolower($1) "\t" $2 }' "$OW_NAMES"
-	} 2>/dev/null
-}
-
-_tr_excl() { [ -s "$ZM_STATE_DIR/traffic.excl" ] && cat "$ZM_STATE_DIR/traffic.excl"; return 0; }
-
-_tr_dns_feed() {
-	_tr_on || return 0
-	mkdir -p "$TR_DIR"
-	awk -v now="$(date +%s)" '
-		function ipish(v) { return v ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ || (v ~ /:/ && v ~ /^[0-9a-fA-F:.]+$/) }
-		match($0, /dnsmasq\[[0-9]+\]: [0-9]+ /) {
-			sid = substr($0, RSTART, RLENGTH); sub(/^.*: /, "", sid); sub(/ +$/, "", sid)
-			m = split(substr($0, RSTART + RLENGTH), f, " ")
-			i = 1
-			if (f[1] ~ /\/[0-9]+$/) i = 2
-			if (f[i] ~ /^query\[(A|AAAA|HTTPS)\]$/) { n = tolower(f[i + 1]); sub(/\.$/, "", n); if (index(n, ".") && n !~ /\.(arpa|lan|local|home|internal)$/) Q[sid] = n; next }
-			if ((f[i] == "reply" || f[i] == "cached") && f[i + 2] == "is" && ipish(f[i + 3])) {
-				n = (sid in Q) ? Q[sid] : tolower(f[i + 1]); sub(/\.$/, "", n)
-				if (index(n, ".")) print f[i + 3] "\t" n "\t" now
-			}
-		}' "$1" >> "$TR_DIR/dns" 2>/dev/null
-	return 0
-}
-
-_tr_dns_trim() {
-	local f="$TR_DIR/dns" n
-	[ -s "$f" ] || return 0
-	n="$(wc -l < "$f" 2>/dev/null)"
-	[ "${n:-0}" -gt 25000 ] || [ -n "$(find "$f" -mmin +60 2>/dev/null)" ] || return 0
-	awk -F'\t' -v old="$(( $(date +%s) - 86400 ))" '$3 >= old { D[$1] = $2 "\t" $3 } END { for (k in D) print k "\t" D[k] }' "$f" | sort -t "$(printf '\t')" -k3,3n | tail -n 20000 > "$f.t" && mv -f "$f.t" "$f"
-	rm -f "$f.t"
-}
-
-_tr_zr_body() {
-	[ -f "$CONF" ] || return 0
-	sed -n "/^[[:space:]]*option[[:space:]]\{1,\}NFQWS_OPT[[:space:]]/,/^[[:space:]]*'[[:space:]]*\$/p" "$CONF" | sed "1s/^[[:space:]]*option[[:space:]]*NFQWS_OPT[[:space:]]*'//; \$s/'[[:space:]]*\$//"
-}
-
-_tr_zr_build() {
-	local pt pu mf
-	pt="$(sed -n "s/^[[:space:]]*option[[:space:]]*NFQWS_PORTS_TCP[[:space:]]*'\([^']*\)'.*/\1/p" "$CONF" | head -n1)"
-	pu="$(sed -n "s/^[[:space:]]*option[[:space:]]*NFQWS_PORTS_UDP[[:space:]]*'\([^']*\)'.*/\1/p" "$CONF" | head -n1)"
-	mf="$(sed -n "s/^[[:space:]]*option[[:space:]]*MODE_FILTER[[:space:]]*'\([^']*\)'.*/\1/p" "$CONF" | head -n1)"
-	printf 'Q\ttcp\t%s\nQ\tudp\t%s\n' "$pt" "$pu"
-	_tr_zr_body | awk -v mf="$mf" '
-		function macro(auto) {
-			if (mf != "hostlist" && mf != "autohostlist") return
-			print "H\t" pi "\t/opt/zapret/ipset/zapret-hosts-user.txt"
-			print "H\t" pi "\t/opt/zapret/ipset/zapret-hosts.txt"
-			print "H\t" pi "\t/opt/zapret/ipset/zapret-hosts.txt.gz"
-			if (auto && mf == "autohostlist") print "H\t" pi "\t/opt/zapret/ipset/zapret-hosts-auto.txt"
-			print "X\t" pi "\t/opt/zapret/ipset/zapret-hosts-user-exclude.txt"
-			HL[pi] = 1
-		}
-		function doms(kind, v,   n, a, i) { n = split(v, a, ","); for (i = 1; i <= n; i++) if (a[i] != "") print kind "\t" pi "\t" tolower(a[i]); if (kind == "D") HL[pi] = 1 }
-		BEGIN { pi = 1 }
-		{
-			sub(/\r$/, "")
-			if ($0 ~ /^[ \t]*#/) next
-			for (i = 1; i <= NF; i++) {
-				t = $i
-				if (t == "--new") { pi++; continue }
-				e = index(t, "="); k = e ? substr(t, 1, e - 1) : t; v = e ? substr(t, e + 1) : ""
-				gsub(/"/, "", v)
-				if (k == "--filter-tcp") T[pi] = T[pi] (T[pi] == "" ? "" : ",") v
-				else if (k == "--filter-udp") U[pi] = U[pi] (U[pi] == "" ? "" : ",") v
-				else if (k == "--hostlist" || k == "--hostlist-auto") { print "H\t" pi "\t" v; HL[pi] = 1 }
-				else if (k == "--hostlist-exclude") print "X\t" pi "\t" v
-				else if (k == "--hostlist-domains") doms("D", v)
-				else if (k == "--hostlist-exclude-domains") doms("E", v)
-				else if (k == "--ipset" || k == "--ipset-ip") IP[pi] = 1
-				else if (k == "--dpi-desync") { if (v != "none" && v != "") DS[pi] = 1 }
-				else if (k == "--skip") SK[pi] = 1
-				else if (t == "<HOSTLIST>") macro(1)
-				else if (t == "<HOSTLIST_NOAUTO>") macro(0)
-			}
-		}
-		END { for (i = 1; i <= pi; i++) if (!SK[i]) printf "P\t%d\t%s\t%s\t%d\t%d\t%d\n", i, T[i], U[i], HL[i] + 0, IP[i] + 0, DS[i] + 0 }'
-}
-
-_tr_zr_sync() {
-	local sig="" f
-	if [ -f "$CONF" ] && pidof nfqws >/dev/null 2>&1; then
-		_tr_zr_build > "$TR_DIR/zr.new"
-		sig="$(date -r "$CONF" +%s 2>/dev/null)"
-		for f in $(awk -F'\t' '$1 == "H" || $1 == "X" { print $3 }' "$TR_DIR/zr.new" | sort -u); do sig="$sig $(date -r "$f" +%s 2>/dev/null || echo 0)"; done
-	else
-		: > "$TR_DIR/zr.new"
-	fi
-	if [ "$sig" != "$(cat "$TR_DIR/zr.sig" 2>/dev/null)" ] || [ ! -f "$TR_DIR/zr" ]; then
-		mv -f "$TR_DIR/zr.new" "$TR_DIR/zr"
-		printf '%s\n' "$sig" > "$TR_DIR/zr.sig"
-		: > "$TR_DIR/rc"
-	else
-		rm -f "$TR_DIR/zr.new"
-	fi
-}
-
-_tr_classify() {
-	local q="$1" d="$TR_DIR" f
-	[ -s "$q" ] || return 0
-	if [ ! -s "$d/zr" ]; then awk '{ print $0 "\td" }' "$q"; return 0; fi
-	awk -F'\t' '{ n = split($3, a, "."); s = a[n]; for (i = n - 1; i >= 1; i--) { s = a[i] "." s; print s } }' "$q" | sort -u > "$d/sfx"
-	: > "$d/hits"
-	if [ -s "$d/sfx" ]; then
-		for f in $(awk -F'\t' '$1 == "H" || $1 == "X" { print $3 }' "$d/zr" | sort -u); do
-			[ -s "$f" ] || continue
-			case "$f" in
-				*.gz) gzip -dc "$f" 2>/dev/null ;;
-				*) cat "$f" ;;
-			esac | awk -v S="$d/sfx" -v F="$f" '
-				BEGIN { while ((getline l < S) > 0) W[l] = 1 }
-				{
-					l = tolower($0); sub(/\r$/, "", l); sub(/^[ \t]+/, "", l); sub(/[ \t].*$/, "", l)
-					if (l == "" || substr(l, 1, 1) == "#") next
-					x = 0
-					if (substr(l, 1, 1) == "^") { x = 1; l = substr(l, 2) }
-					sub(/^\*\./, "", l); sub(/^\./, "", l)
-					if (l in W) print F "\t" l "\t" x
-				}' >> "$d/hits"
-		done
-	fi
-	awk -F'\t' -v Z="$d/zr" -v H="$d/hits" '
-		function inr(list, port,   n, a, i, b) {
-			if (list == "") return 0
-			n = split(list, a, ",")
-			for (i = 1; i <= n; i++) {
-				if (index(a[i], "-")) { split(a[i], b, "-"); if (port >= b[1] + 0 && port <= b[2] + 0) return 1 }
-				else if (a[i] != "" && port == a[i] + 0) return 1
-			}
-			return 0
-		}
-		function inl(p, dom, kind,   n, a, i, s, j) {
-			if (dom == "") return 0
-			n = split(dom, a, ".")
-			s = a[n]
-			for (i = n - 1; i >= 1; i--) {
-				s = a[i] "." s
-				if (((kind == "H" ? "D" : "E") SUBSEP p SUBSEP s) in IN) return 1
-				for (j = 1; j <= NF2[kind, p]; j++) {
-					if ((LF[kind, p, j] SUBSEP s SUBSEP 0) in HT) return 1
-					if (i == 1 && (LF[kind, p, j] SUBSEP s SUBSEP 1) in HT) return 1
-				}
-			}
-			return 0
-		}
-		BEGIN {
-			while ((getline l < Z) > 0) {
-				split(l, a, "\t")
-				if (a[1] == "Q") QP[a[2]] = a[3]
-				else if (a[1] == "P") { NP++; PI[NP] = a[2]; PT[a[2]] = a[3]; PU[a[2]] = a[4]; PH[a[2]] = a[5]; PS[a[2]] = a[6]; PD[a[2]] = a[7] }
-				else if (a[1] == "H" || a[1] == "X") { NF2[a[1], a[2]]++; LF[a[1], a[2], NF2[a[1], a[2]]] = a[3] }
-				else if (a[1] == "D" || a[1] == "E") IN[a[1], a[2], a[3]] = 1
-			}
-			while ((getline l < H) > 0) { split(l, a, "\t"); HT[a[1], a[2], a[3] + 0] = 1 }
-		}
-		{
-			pr = $1; port = $2 + 0; dom = $3; r = "d"
-			if (inr(QP[pr], port)) {
-				for (k = 1; k <= NP; k++) {
-					p = PI[k]
-					if (PT[p] != "" || PU[p] != "") { if (pr == "tcp" ? !inr(PT[p], port) : !inr(PU[p], port)) continue }
-					if (PH[p]) { if (!inl(p, dom, "H")) continue }
-					else if (PS[p]) continue
-					if (inl(p, dom, "X")) continue
-					if (PD[p]) r = "z"
-					break
-				}
-			}
-			print pr "\t" $2 "\t" dom "\t" r
-		}' "$q"
-	rm -f "$d/sfx" "$d/hits"
-}
-
-_tr_rollup() {
-	local d="$TR_DIR" today="$1" days f day
-	days="$(ls "$d/h" 2>/dev/null | cut -c1-8 | sort -u)"
-	for day in $days; do
-		[ "$day" = "$today" ] && continue
-		case "$day" in ????????) ;; *) continue ;; esac
-		cat "$d/h/$day"?? $([ -f "$d/d/$day" ] && echo "$d/d/$day") 2>/dev/null | awk -F'\t' -v OFS='\t' '{ k = $1 OFS $2 OFS $3; D[k] += $4; U[k] += $5 } END { for (k in D) printf "%s\t%.0f\t%.0f\n", k, D[k], U[k] }' |
-			sort -t "$(printf '\t')" -k1,1 -k4,4nr | awk -F'\t' -v OFS='\t' -v cap="$TR_KEEP_SITES" '
-				{ if ($1 != m) { m = $1; n = 0 } n++
-					if (n <= cap) print; else { k = $1 OFS "*" OFS $3; D[k] += $4; U[k] += $5 } }
-				END { for (k in D) printf "%s\t%.0f\t%.0f\n", k, D[k], U[k] }' > "$d/d/$day.t" && mv -f "$d/d/$day.t" "$d/d/$day"
-		rm -f "$d/h/$day"?? "$d/d/$day.t"
-		if [ "$(_tr_store)" = flash ]; then mkdir -p "$TR_SAVE/d" && cp -f "$d/d/$day" "$TR_SAVE/d/$day"; fi
-	done
-	day="$(date -d "@$(( $(date +%s) - $(_tr_days) * 86400 ))" +%Y%m%d 2>/dev/null)"
-	[ -n "$day" ] || return 0
-	for f in "$d/d/"* "$TR_SAVE/d/"*; do
-		[ -f "$f" ] || continue
-		case "${f##*/}" in ????????) [ "${f##*/}" -lt "$day" ] && rm -f "$f" ;; esac
-	done
-	return 0
-}
-
-_tr_tick() {
-	local d="$TR_DIR" now hr day dt last base=0 ex
-	mkdir -p "$d/h" "$d/d"
-	_tr_lock || return 0
-	now="$(date +%s)"; hr="$(date +%Y%m%d%H)"; day="${hr%??}"
-	last="$(sed -n 's/^last=//p' "$d/meta" 2>/dev/null)"
-	case "$last" in ''|*[!0-9]*) last=0 ;; esac
-	dt=$((now - last))
-	[ "$last" -gt 0 ] && [ "$dt" -le 3600 ] && [ -s "$d/prev" ] || base=1
-	[ "$dt" -ge 1 ] || dt=1
-	_tr_rollup "$day"
-	if ! cat "$TR_CT" > "$d/ct" 2>/dev/null; then _tr_unlock; return 0; fi
-	_tr_nb > "$d/nb"
-	_tr_excl > "$d/ex"
-	_tr_zr_sync
-	ex="$([ "$(_tr_get sites 1)" = 1 ] && echo 1 || echo 0)"
-	awk -v NB="$d/nb" -v EX="$d/ex" -v DN="$d/dns" -v PV="$d/prev" -v RC="$d/rc" -v bz="$base" -v dt="$dt" -v sites="$ex" \
-		-v OP="$d/prev.n" -v OG="$d/delta" -v OL="$d/live.n" -v ON="$d/now.n" -v OQ="$d/q" "$TR_AWK_LIB"'
-		function priv(a) {
-			if (a ~ /^(10|127)\./ || a ~ /^192\.168\./ || a ~ /^169\.254\./ || a ~ /^172\.(1[6-9]|2[0-9]|3[01])\./ || a ~ /^(22[4-9]|23[0-9]|255)\./ || a ~ /^0\./) return 1
-			if (index(a, ":")) { a = tolower(a); if (a ~ /^(fe80|ff|f[cd])/ || a == "::1") return 1 }
-			return 0
-		}
-		function fake(a) { return a ~ /^198\.1[89]\./ || tolower(a) ~ /^2001:0*2:(0*:|:)/ }
-		BEGIN {
-			FS = " "
-			while ((getline l < NB) > 0) { split(l, a, "\t"); if (a[1] == "R") R[a[2]] = 1; else if (a[1] == "M") M[a[2]] = a[3] }
-			while ((getline l < EX) > 0) X[tolower(l)] = 1
-			if (sites) while ((getline l < DN) > 0) { split(l, a, "\t"); DM[a[1]] = a[2] }
-			while ((getline l < PV) > 0) { split(l, a, "\t"); PU[a[1]] = a[2]; PD[a[1]] = a[3] }
-			while ((getline l < RC) > 0) { split(l, a, "\t"); RK[a[1] ":" a[2] ":" a[3]] = 1 }
-		}
-		$3 == "tcp" || $3 == "udp" {
-			p = $3; s = dd = sp = dp = ""; ub = -1; db = -1; mk = 0; c = 0
-			for (i = 4; i <= NF; i++) {
-				e = index($i, "="); if (!e) continue
-				k = substr($i, 1, e - 1); v = substr($i, e + 1)
-				if (k == "src") { c++; if (c == 1) s = v; continue }
-				if (k == "mark") { mk = v + 0; continue }
-				if (c == 1) { if (k == "dst") dd = v; else if (k == "sport") sp = v; else if (k == "dport") dp = v; else if (k == "bytes") ub = v + 0 }
-				else if (c == 2 && k == "bytes") db = v + 0
-			}
-			if (ub < 0 || db < 0 || !(s in M)) next
-			mac = M[s]
-			if ((mac in X) || (dd in R) || (dd in M) || priv(dd)) next
-			key = p " " s " " dd " " sp " " dp
-			printf "%s\t%.0f\t%.0f\n", key, ub, db > OP
-			if (key in PU) { du = ub - PU[key]; dn = db - PD[key]; if (du < 0 || dn < 0) { du = ub; dn = db } }
-			else if (bz) { du = 0; dn = 0 }
-			else { du = ub; dn = db }
-			CN[mac]++
-			if (!(mac in IPA) || index(IPA[mac], ":")) IPA[mac] = s
-			dom = sites && (dd in DM) ? DM[dd] : ""
-			mr = fake(dd) ? "f" : ((int(mk / 1048576) % 256) ? "s" : "")
-			rk = p ":" dp ":" dom
-			if (mr == "" && !(rk in RK)) { Q[p "\t" dp "\t" dom] = 1; RK[rk] = 1 }
-			if (du + dn <= 0) next
-			g = mac "\t" base(dom) "\t" rk "\t" mr
-			GD[g] += dn; GU[g] += du
-			RD[mac] += dn; RU[mac] += du
-			printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.0f\t%.0f\n", mac, p, dd, dp, dom, rk, mr, dn / dt, du / dt > OL
-		}
-		END {
-			for (g in GD) printf "%s\t%.0f\t%.0f\n", g, GD[g], GU[g] > OG
-			for (m in CN) printf "%s\t%s\t%.0f\t%.0f\t%d\n", m, IPA[m], (bz ? 0 : RD[m] / dt), (bz ? 0 : RU[m] / dt), CN[m] > ON
-			for (q in Q) print q > OQ
-		}' "$d/ct"
-	: >> "$d/prev.n"; : >> "$d/delta"; : >> "$d/live.n"; : >> "$d/now.n"; : >> "$d/q"
-	_tr_classify "$d/q" >> "$d/rc"
-	: > "$d/live"
-	awk -F'\t' -v OFS='\t' -v RC="$d/rc" -v HF="$d/h/$hr" -v OL="$d/live" '
-		BEGIN {
-			while ((getline l < RC) > 0) { split(l, a, "\t"); R[a[1] ":" a[2] ":" a[3]] = a[4] }
-			while ((getline l < HF) > 0) { split(l, a, "\t"); k = a[1] OFS a[2] OFS a[3]; D[k] += a[4]; U[k] += a[5] }
-		}
-		FILENAME ~ /delta$/ { r = $4 != "" ? $4 : ($3 in R) ? R[$3] : "d"; k = $1 OFS $2 OFS r; D[k] += $5; U[k] += $6; next }
-		{ r = $7 != "" ? $7 : ($6 in R) ? R[$6] : "d"; print $1, $2, $3, $4, $5, r, $8, $9 > OL }
-		END { for (k in D) printf "%s\t%.0f\t%.0f\n", k, D[k], U[k] > (HF ".t") }' "$d/delta" "$d/live.n"
-	[ -f "$d/h/$hr.t" ] && mv -f "$d/h/$hr.t" "$d/h/$hr"
-	mv -f "$d/prev.n" "$d/prev"
-	mv -f "$d/now.n" "$d/now"
-	: >> "$d/dev"
-	awk -F'\t' -v OFS='\t' -v now="$now" 'FILENAME ~ /now$/ { S[$1] = $2 OFS now; next } { if (!($1 in S)) S[$1] = $2 OFS $3 } END { for (m in S) print m, S[m] }' "$d/now" "$d/dev" 2>/dev/null > "$d/dev.t" && mv -f "$d/dev.t" "$d/dev"
-	rm -f "$d/ct" "$d/nb" "$d/ex" "$d/q" "$d/delta" "$d/live.n" "$d/dev.t"
-	{ echo "since=$(sed -n 's/^since=//p' "$d/meta" 2>/dev/null | grep -E '^[0-9]+$' || echo "$now")"; echo "last=$now"; echo "dt=$dt"; } > "$d/meta.t" && mv -f "$d/meta.t" "$d/meta"
-	_tr_unlock
-	return 0
-}
-
-traffic_save() {
-	[ "$(_tr_store)" = flash ] || return 0
-	[ -d "$TR_DIR" ] || return 0
-	_tr_lock || return 0
-	mkdir -p "$TR_SAVE/d" "$TR_SAVE/h"
-	rm -f "$TR_SAVE/h/"*
-	cp -f "$TR_DIR/d/"* "$TR_SAVE/d/" 2>/dev/null
-	cp -f "$TR_DIR/h/"* "$TR_SAVE/h/" 2>/dev/null
-	for f in meta dev; do [ -f "$TR_DIR/$f" ] && cp -f "$TR_DIR/$f" "$TR_SAVE/$f"; done
-	_tr_unlock
-	return 0
-}
-
-_tr_restore() {
-	[ "$(_tr_store)" = flash ] && [ -d "$TR_SAVE" ] && [ ! -f "$TR_DIR/meta" ] || return 0
-	mkdir -p "$TR_DIR/d" "$TR_DIR/h"
-	cp -f "$TR_SAVE/d/"* "$TR_DIR/d/" 2>/dev/null
-	cp -f "$TR_SAVE/h/"* "$TR_DIR/h/" 2>/dev/null
-	[ -f "$TR_SAVE/dev" ] && cp -f "$TR_SAVE/dev" "$TR_DIR/dev"
-	[ -f "$TR_SAVE/meta" ] && sed -n 's/^since=/since=/p' "$TR_SAVE/meta" > "$TR_DIR/meta"
-	return 0
-}
-
-traffic_daemon() {
-	local n=0
-	_tr_on || return 0
-	_zmL adblock >/dev/null 2>&1
-	ZM_TR_LANDEV="$(_tr_landevs)"
-	_tr_restore
-	_tr_dns_heal
-	while _tr_on; do
-		if [ "$(_tr_get sites 1)" = 1 ]; then adblock_stats_tick >/dev/null 2>&1; fi
-		_tr_tick
-		n=$((n + 1))
-		if [ $((n % 30)) = 0 ]; then
-			ZM_TR_LANDEV="$(_tr_landevs)"
-			_tr_dns_trim
-			_tr_dns_heal
-		fi
-		sleep "$TR_EVERY"
-	done
-	return 0
-}
-
-_tr_dns_heal() {
-	_tr_dns_on || return 0
-	_ab_stats_block >/dev/null 2>&1 && return 0
-	_ab_tr_applied && return 0
-	_ab_tr_plug
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	return 0
-}
-
-_tr_svc() {
-	if [ "$1" = on ]; then
-		cat > "$TR_INIT" << 'ZM_TR_INIT_EOF'
-#!/bin/sh /etc/rc.common
-START=99
-STOP=10
-USE_PROCD=1
-start_service() {
-	procd_open_instance
-	procd_set_param command /opt/zapret-manager-luci/backend.sh traffic_daemon
-	procd_set_param respawn 3600 10 0
-	procd_close_instance
-}
-stop_service() {
-	/opt/zapret-manager-luci/backend.sh traffic_save >/dev/null 2>&1
-}
-ZM_TR_INIT_EOF
-		chmod 0755 "$TR_INIT"
-		"$TR_INIT" enable >/dev/null 2>&1
-		"$TR_INIT" restart >/dev/null 2>&1
-	else
-		if [ -x "$TR_INIT" ]; then "$TR_INIT" stop >/dev/null 2>&1; "$TR_INIT" disable >/dev/null 2>&1; fi
-		rm -f "$TR_INIT" /etc/rc.d/*zm-traffic
-		pkill -f 'backend[.]sh traffic_daemon' >/dev/null 2>&1
-	fi
-	return 0
-}
-
-_tr_acct_on() {
-	_tr_acct && return 0
-	echo 1 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null || return 1
-	printf '%s\n' "# Zapret Manager: учёт трафика, было 0" "net.netfilter.nf_conntrack_acct=1" > "$TR_SYSCTL"
-	return 0
-}
-
-_tr_acct_off() {
-	[ -f "$TR_SYSCTL" ] || return 0
-	grep -q 'было 0' "$TR_SYSCTL" && echo 0 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null
-	rm -f "$TR_SYSCTL"
-	return 0
-}
-
-_tr_dns_set() {
-	_zmL adblock >/dev/null 2>&1
-	if [ "$1" = on ]; then
-		local t=0
-		_ab_tr_plug
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-		while [ "$t" -lt 12 ]; do _ab_dns_alive && return 0; sleep 2; t=$((t + 2)); done
-		_ab_tr_unplug
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-		_tr_put sites 0
-		logger -t zapret-manager "Трафик устройств: dnsmasq не запустился с журналом DNS — запись сайтов выключена, DNS работает как раньше"
-		return 1
-	elif _ab_tr_applied || [ -n "$(for d in $(_ab_alldirs); do [ -e "$d/$TR_DNS_CONF" ] && echo 1; done)" ]; then
-		_ab_tr_unplug
-		_ab_stats_on || rm -f "$AB_STATS_LOG"
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1
-	fi
-	return 0
-}
-
-_tr_wipe() { rm -rf "$TR_DIR" "$TR_SAVE"; }
-
-_tr_status_json() {
-	local since=0 e="" b
-	since="$(sed -n 's/^since=//p' "$TR_DIR/meta" 2>/dev/null)"; case "$since" in ''|*[!0-9]*) since=0 ;; esac
-	_zmL adblock >/dev/null 2>&1
-	b="$(_ab_stats_block 2>/dev/null)" && e="$b"
-	printf '"on":%s,"sites":%s,"days":%s,"store":"%s","acct":%s,"conntrack":%s,"offload":"%s","running":%s,"since":%s,"now":%s,"every":%s,"dns_block":"%s","excl":[' \
-		"$(_tr_on && echo true || echo false)" "$([ "$(_tr_get sites 1)" = 1 ] && echo true || echo false)" "$(_tr_days)" "$(_tr_store)" \
-		"$(_tr_acct && echo true || echo false)" "$([ -r "$TR_CT" ] && echo true || echo false)" "$(_fw4_offload_mode)" \
-		"$(_tr_running && echo true || echo false)" "$since" "$(date +%s)" "$TR_EVERY" "$(esc "$e")"
-	_tr_excl | awk -v NF2="$TR_DIR/names.$$" '
-		BEGIN { while ((getline l < NF2) > 0) { split(l, a, "\t"); if (a[1] == "U") U[a[2]] = a[3]; else if (a[1] == "S") S[a[2]] = a[3]; else if (a[1] == "L") L[a[2]] = a[3] } }
-		{ m = tolower($1); n = (m in U) ? U[m] : (m in S) ? S[m] : (m in L) ? L[m] : ""; gsub(/[\\"]/, "", n); printf "%s{\"m\":\"%s\",\"n\":\"%s\"}", (c++ ? "," : ""), m, n }' 2>/dev/null
-	printf ']'
-}
-
-_tr_files() {
-	local p="$1" today cut f
-	today="$(date +%Y%m%d)"
-	case "$p" in
-		today) ls "$TR_DIR/h/$today"?? 2>/dev/null ;;
-		week|month)
-			cut="$(date -d "@$(( $(date +%s) - $([ "$p" = week ] && echo 6 || echo 29) * 86400 ))" +%Y%m%d 2>/dev/null)"
-			for f in "$TR_DIR/d/"*; do
-				[ -f "$f" ] || continue
-				case "${f##*/}" in ????????) [ "${f##*/}" -ge "${cut:-0}" ] && echo "$f" ;; esac
-			done
-			ls "$TR_DIR/h/$today"?? 2>/dev/null ;;
-	esac
-}
-
-_tr_overview() {
-	local p="$1" files dt
-	_tr_names > "$TR_DIR/names.$$"
-	dt="$(sed -n 's/^dt=//p' "$TR_DIR/meta" 2>/dev/null)"; case "$dt" in ''|*[!0-9]*) dt="$TR_EVERY" ;; esac
-	files="$(_tr_files "$p")"
-	printf '{"ok":true,"period":"%s",' "$p"
-	_tr_status_json
-	printf ','
-	awk -F'\t' -v NM="$TR_DIR/names.$$" -v NW="$TR_DIR/now" -v DV="$TR_DIR/dev" -v LV="$TR_DIR/live" -v EX="$ZM_STATE_DIR/traffic.excl" -v mode="$p" -v dt="$dt" "$TR_AWK_LIB"'
-		function nm(m) { return (m in UN) ? UN[m] : (m in SN) ? SN[m] : (m in LN) ? LN[m] : "" }
-		BEGIN {
-			svcinit()
-			while ((getline l < NM) > 0) { split(l, a, "\t"); if (a[1] == "U") UN[a[2]] = a[3]; else if (a[1] == "S") SN[a[2]] = a[3]; else if (a[1] == "L") { LN[a[2]] = a[3]; if (!(a[2] in IP)) IP[a[2]] = a[4] } }
-			while ((getline l < EX) > 0) XX[tolower(l)] = 1
-			while ((getline l < DV) > 0) { split(l, a, "\t"); if (a[1] in XX) continue; KN[a[1]] = 1; if (a[2] != "") IP[a[1]] = a[2] }
-			while ((getline l < NW) > 0) { split(l, a, "\t"); if (a[1] in XX) continue; KN[a[1]] = 1; ONL[a[1]] = 1; IP[a[1]] = a[2]; RD[a[1]] = a[3]; RU[a[1]] = a[4]; CN[a[1]] = a[5]; TRD += a[3]; TRU += a[4] }
-			if (mode == "now") while ((getline l < LV) > 0) {
-				split(l, a, "\t"); if (a[1] in XX) continue
-				b = base(a[5]); v = (a[7] + a[8]) * dt
-				DD[a[1]] += a[7] * dt; DU[a[1]] += a[8] * dt; MR[a[1], a[6]] += v; RT[a[6]] += v
-				if (b == "") NOD += v; else { s = svc(b); SB[s] += v; SR[s, a[6]] += v; if (!((s, b) in SDS)) { SDS[s, b] = 1; SD[s] = SD[s] (SD[s] == "" ? "" : ", ") b } }
-				MS[a[1], (b == "" ? "" : svc(b))] += v; KN[a[1]] = 1
-			}
-		}
-		mode != "now" {
-			if ($1 in XX) next
-			KN[$1] = 1; DD[$1] += $4; DU[$1] += $5; v = $4 + $5
-			MR[$1, $3] += v; RT[$3] += v
-			if ($2 == "" || $2 == "*") NOD += ($2 == "" ? v : 0)
-			if ($2 == "*") OTH += v
-			if ($2 != "" && $2 != "*") { s = svc($2); SB[s] += v; SR[s, $3] += v; if (!((s, $2) in SDS)) { SDS[s, $2] = 1; SD[s] = SD[s] (SD[s] == "" ? "" : ", ") $2 } }
-			if ($2 != "") MS[$1, ($2 == "*" ? "" : svc($2))] += v
-		}
-		END {
-			for (m in KN) { TD += DD[m]; TU += DU[m]; nk++ }
-			for (m in ONL) no++
-			printf "\"total\":{\"d\":%.0f,\"u\":%.0f},\"rate\":{\"d\":%.0f,\"u\":%.0f},\"online\":%d,\"known\":%d,\"nodom\":%.0f,", TD, TU, TRD, TRU, no, nk, NOD
-			printf "\"routes\":{\"z\":%.0f,\"f\":%.0f,\"s\":%.0f,\"d\":%.0f},\"devices\":[", RT["z"], RT["f"], RT["s"], RT["d"]
-			c = 0
-			for (m in KN) {
-				if (DD[m] + DU[m] <= 0 && !(m in ONL)) continue
-				tb = 0; ts = ""
-				for (k in MS) { split(k, kk, SUBSEP); if (kk[1] == m && kk[2] != "" && MS[k] > tb) { tb = MS[k]; ts = kk[2] } }
-				printf "%s{\"m\":\"%s\",\"n\":\"%s\",\"ip\":\"%s\",\"d\":%.0f,\"u\":%.0f,\"rd\":%.0f,\"ru\":%.0f,\"c\":%d,\"on\":%s,\"top\":\"%s\",\"r\":{\"z\":%.0f,\"f\":%.0f,\"s\":%.0f,\"d\":%.0f}}", (c++ ? "," : ""), m, je(nm(m)), IP[m], DD[m], DU[m], RD[m], RU[m], CN[m], ((m in ONL) ? "true" : "false"), je(ts), MR[m, "z"], MR[m, "f"], MR[m, "s"], MR[m, "d"]
-			}
-			printf "],\"sites\":["
-			n = top(8)
-			for (i = 1; i <= n; i++) printf "%s%s", (i > 1 ? "," : ""), site(TOP[i], 2)
-			rest = 0; rn = 0
-			for (s in SB) if (!(s in USED)) { rest += SB[s]; rn++ }
-			printf "],\"rest\":{\"b\":%.0f,\"n\":%d},\"other\":%.0f}", rest + OTH, rn, OTH
-		}' $files /dev/null
-	rm -f "$TR_DIR/names.$$"
-}
-
-_tr_daylist() {
-	local n i now
-	case "$1" in week) n=6 ;; month) n=29 ;; *) return 0 ;; esac
-	now="$(date +%s)"; i="$n"
-	while [ "$i" -ge 0 ]; do date -d "@$((now - i * 86400))" +%Y%m%d 2>/dev/null; i=$((i - 1)); done | tr '\n' ' '
-}
-
-_tr_device() {
-	local p="$1" mac="$2" files dt today
-	_tr_names > "$TR_DIR/names.$$"
-	dt="$(sed -n 's/^dt=//p' "$TR_DIR/meta" 2>/dev/null)"; case "$dt" in ''|*[!0-9]*) dt="$TR_EVERY" ;; esac
-	today="$(date +%Y%m%d)"
-	files="$(_tr_files "$p")"
-	[ "$p" = now ] && files="$(ls "$TR_DIR/h/$today"?? 2>/dev/null)"
-	printf '{"ok":true,"period":"%s",' "$p"
-	_tr_status_json
-	printf ','
-	awk -F'\t' -v M="$mac" -v NM="$TR_DIR/names.$$" -v NW="$TR_DIR/now" -v DV="$TR_DIR/dev" -v LV="$TR_DIR/live" -v EX="$ZM_STATE_DIR/traffic.excl" -v mode="$p" -v dt="$dt" -v today="$today" -v days="$(_tr_daylist "$p")" "$TR_AWK_LIB"'
-		BEGIN {
-			svcinit()
-			while ((getline l < NM) > 0) { split(l, a, "\t"); if (a[2] != M) continue; if (a[1] == "U") un = a[3]; else if (a[1] == "S") sn = a[3]; else if (a[1] == "L") { ln = a[3]; if (ip == "") ip = a[4] } }
-			while ((getline l < EX) > 0) if (tolower(l) == M) ex = 1
-			while ((getline l < DV) > 0) { split(l, a, "\t"); if (a[1] == M) { if (a[2] != "") ip = a[2]; seen = a[3] } }
-			while ((getline l < NW) > 0) { split(l, a, "\t"); if (a[1] == M) { on = 1; ip = a[2]; rd = a[3]; ru = a[4]; cn = a[5] } }
-			nl = 0
-			while ((getline l < LV) > 0) {
-				split(l, a, "\t"); if (a[1] != M) continue
-				nl++; LH[nl] = a[5] != "" ? a[5] : a[3]; LP[nl] = a[2]; LT[nl] = a[4]; LR[nl] = a[6]; LS[nl] = a[7] + a[8]; LQ[nl] = a[5] == ""
-				if (mode == "now") { b = base(a[5]); v = (a[7] + a[8]) * dt; TD2 += a[7] * dt; TU2 += a[8] * dt
-					if (b == "") NOD += v; else { s = svc(b); SB[s] += v; SR[s, a[6]] += v; if (!((s, b) in SDS)) { SDS[s, b] = 1; SD[s] = SD[s] (SD[s] == "" ? "" : ", ") b } } }
-			}
-		}
-		$1 == M {
-			fn = FILENAME; sub(/.*\//, "", fn)
-			if (mode == "now" || mode == "today") { if (length(fn) == 10 && substr(fn, 1, 8) == today) { hh = substr(fn, 9, 2) + 0; HD[hh] += $4; HU[hh] += $5 } }
-			else { dk = substr(fn, 1, 8); YD[dk] += $4; YU[dk] += $5 }
-			if (mode == "now") next
-			TD2 += $4; TU2 += $5; v = $4 + $5
-			if ($2 == "") NOD += v
-			else if ($2 == "*") OTH += v
-			else { s = svc($2); SB[s] += v; SR[s, $3] += v; if (!((s, $2) in SDS)) { SDS[s, $2] = 1; SD[s] = SD[s] (SD[s] == "" ? "" : ", ") $2 } }
-		}
-		END {
-			nm = un != "" ? un : sn != "" ? sn : ln
-			printf "\"dev\":{\"m\":\"%s\",\"n\":\"%s\",\"ip\":\"%s\",\"on\":%s,\"excl\":%s,\"seen\":%d,\"d\":%.0f,\"u\":%.0f,\"rd\":%.0f,\"ru\":%.0f,\"c\":%d,\"nodom\":%.0f,\"other\":%.0f},", M, je(nm), ip, (on ? "true" : "false"), (ex ? "true" : "false"), seen, TD2, TU2, rd, ru, cn, NOD, OTH
-			printf "\"series\":{\"k\":\"%s\",\"pts\":[", (mode == "now" || mode == "today") ? "h" : "d"
-			if (mode == "now" || mode == "today") { for (h = 0; h < 24; h++) printf "%s[\"%02d\",%.0f,%.0f]", (h ? "," : ""), h, HD[h], HU[h] }
-			else { n = split(days, YK, " "); for (i = 1; i <= n; i++) printf "%s[\"%s\",%.0f,%.0f]", (i > 1 ? "," : ""), YK[i], YD[YK[i]], YU[YK[i]] }
-			printf "]},\"sites\":["
-			n = top(30)
-			for (i = 1; i <= n; i++) printf "%s%s", (i > 1 ? "," : ""), site(TOP[i], 3)
-			printf "],\"live\":["
-			for (i = 2; i <= nl; i++) { t = i; j = i - 1; h = LH[i]; pp = LP[i]; pt = LT[i]; rr2 = LR[i]; ss = LS[i]; qq = LQ[i]
-				while (j >= 1 && LS[j] < ss) { LH[j + 1] = LH[j]; LP[j + 1] = LP[j]; LT[j + 1] = LT[j]; LR[j + 1] = LR[j]; LS[j + 1] = LS[j]; LQ[j + 1] = LQ[j]; j-- }
-				LH[j + 1] = h; LP[j + 1] = pp; LT[j + 1] = pt; LR[j + 1] = rr2; LS[j + 1] = ss; LQ[j + 1] = qq }
-			for (i = 1; i <= nl && i <= 12; i++) printf "%s{\"h\":\"%s\",\"p\":\"%s\",\"t\":%d,\"r\":\"%s\",\"s\":%.0f,\"x\":%s}", (i > 1 ? "," : ""), je(LH[i]), LP[i], LT[i], LR[i], LS[i], (LQ[i] ? "true" : "false")
-			printf "]}"
-		}' $files /dev/null
-	rm -f "$TR_DIR/names.$$"
-}
-
-_tr_mac_ok() { printf '%s' "$1" | grep -Eq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; }
-
-traffic() {
-	local a="$1" v="$2" k x m n
-	case "$a" in
-		get|'') printf '{"ok":true,'; _tr_names > "$TR_DIR/names.$$" 2>/dev/null || { mkdir -p "$TR_DIR"; _tr_names > "$TR_DIR/names.$$"; }; _tr_status_json; rm -f "$TR_DIR/names.$$"; printf '}\n' ;;
-		data)
-			case "$v" in now|today|week|month) ;; *) v=today ;; esac
-			mkdir -p "$TR_DIR"
-			_tr_overview "$v"; echo ;;
-		dev)
-			m="$(printf '%s' "${v#*|}" | tr 'A-F' 'a-f')"; x="${v%%|*}"
-			case "$x" in now|today|week|month) ;; *) x=today ;; esac
-			_tr_mac_ok "$m" || { echo '{"error":"неверный MAC-адрес"}'; return 1; }
-			mkdir -p "$TR_DIR"
-			_tr_device "$x" "$m"; echo ;;
-		set)
-			k="${v%%=*}"; x="${v#*=}"
-			case "$k:$x" in
-				on:1)
-					[ -r "$TR_CT" ] || { echo '{"error":"в ядре роутера нет таблицы соединений /proc/net/nf_conntrack — учёт трафика здесь не заработает"}'; return 1; }
-					_tr_acct_on || { echo '{"error":"не удалось включить счётчики соединений (nf_conntrack_acct)"}'; return 1; }
-					_tr_put on 1
-					[ -n "$(_tr_get days)" ] || _tr_put days 30
-					[ -n "$(_tr_get store)" ] || _tr_put store ram
-					[ -n "$(_tr_get sites)" ] || _tr_put sites 1
-					_zmL adblock >/dev/null 2>&1
-					if [ "$(_tr_get sites 1)" = 1 ]; then
-						if _ab_stats_block >/dev/null 2>&1; then _tr_put sites 0; else _tr_dns_set on || true; fi
-					fi
-					_tr_svc on ;;
-				on:0)
-					_tr_put on 0
-					_tr_svc off
-					_tr_dns_set off
-					_tr_acct_off
-					_tr_wipe ;;
-				sites:1)
-					_tr_on || { _tr_put sites 1; traffic get; return; }
-					_zmL adblock >/dev/null 2>&1
-					if n="$(_ab_stats_block 2>/dev/null)"; then printf '{"error":"%s"}\n' "$(esc "Журнал dnsmasq уже направлен в другое место строкой log-facility в $n — сайты записывать не получится")"; return 1; fi
-					_tr_put sites 1
-					_tr_dns_set on || { echo '{"error":"dnsmasq не запустился с журналом DNS — запись сайтов выключена, DNS работает как раньше. Подробности — в системном журнале"}'; return 1; } ;;
-				sites:0)
-					_tr_put sites 0
-					_tr_on && _tr_dns_set off
-					rm -f "$TR_DIR/dns" ;;
-				days:7|days:30|days:90)
-					_tr_put days "$x"
-					_tr_on && { _tr_lock && { _tr_rollup "$(date +%Y%m%d)"; _tr_unlock; }; } ;;
-				store:ram)
-					_tr_put store ram
-					rm -rf "$TR_SAVE" ;;
-				store:flash)
-					_tr_put store flash
-					_tr_on && traffic_save ;;
-				*) echo '{"error":"неизвестная настройка"}'; return 1 ;;
-			esac
-			traffic get ;;
-		name)
-			m="$(printf '%s' "${v%%|*}" | tr 'A-F' 'a-f')"; n="${v#*|}"
-			_tr_mac_ok "$m" || { echo '{"error":"неверный MAC-адрес"}'; return 1; }
-			n="$(printf '%s' "$n" | tr -d '\000-\037\\"\177' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/[[:space:]][[:space:]]*/ /g')"
-			[ "$(printf '%s' "$n" | wc -c)" -le 96 ] || { echo '{"error":"имя слишком длинное — до 32 букв"}'; return 1; }
-			mkdir -p "$ZM_STATE_DIR"
-			{ [ -f "$OW_NAMES" ] && awk -F'\t' -v m="$m" 'tolower($1) != m' "$OW_NAMES"; [ -n "$n" ] && printf '%s\t%s\n' "$m" "$n"; } > "$OW_NAMES.zm"
-			if [ -s "$OW_NAMES.zm" ]; then mv -f "$OW_NAMES.zm" "$OW_NAMES"; else rm -f "$OW_NAMES.zm" "$OW_NAMES"; fi
-			printf '{"ok":true,"m":"%s","n":"%s"}\n' "$m" "$(esc "$n")" ;;
-		excl)
-			m="$(printf '%s' "${v%%|*}" | tr 'A-F' 'a-f')"; x="${v#*|}"
-			_tr_mac_ok "$m" || { echo '{"error":"неверный MAC-адрес"}'; return 1; }
-			mkdir -p "$ZM_STATE_DIR"
-			{ _tr_excl | grep -vix "$m"; [ "$x" = 1 ] && echo "$m"; } > "$ZM_STATE_DIR/traffic.excl.zm"
-			if [ -s "$ZM_STATE_DIR/traffic.excl.zm" ]; then mv -f "$ZM_STATE_DIR/traffic.excl.zm" "$ZM_STATE_DIR/traffic.excl"; else rm -f "$ZM_STATE_DIR/traffic.excl.zm" "$ZM_STATE_DIR/traffic.excl"; fi
-			traffic get ;;
-		wipe)
-			_tr_lock || { echo '{"error":"учёт сейчас занят — попробуйте ещё раз"}'; return 1; }
-			rm -rf "$TR_DIR/h" "$TR_DIR/d" "$TR_DIR/dev" "$TR_DIR/now" "$TR_DIR/live" "$TR_DIR/meta" "$TR_SAVE"
-			_tr_unlock
-			traffic get ;;
-		heal)
-			_tr_on || return 0
-			[ -x "$TR_INIT" ] || { _tr_acct_on; _tr_svc on; return 0; }
-			_tr_acct_on
-			"$TR_INIT" enable >/dev/null 2>&1
-			"$TR_INIT" restart >/dev/null 2>&1 ;;
-		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
-	esac
-}
-ZM_INSTALLER_EOF
 chmod 0755 "$_zmi_st/backend.sh"
 chmod 0644 "$_zmi_st"/mod/*.sh
 _zmi_swap() {
@@ -36026,11 +35459,21 @@ function devices() {
 		let p = split(l, "\t");
 		if (length(p) >= 2 && trim(p[1]) != "") lb[lc(trim(p[0]))] = trim(p[1]);
 	}
+	let fx = {};
+	try {
+		let c = uci.cursor();
+		c.load("dhcp");
+		c.foreach("dhcp", "host", (x) => {
+			let ip = s(x.ip), ms = type(x.mac) == "array" ? x.mac : split(s(x.mac), /[ \t]+/);
+			if (!match(ip, /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/)) return;
+			for (let m in ms) if (m != "") fx[lc(m)] = ip;
+		});
+	} catch (e) {}
 	for (let l in split(s(fs.readfile(LEASES)), "\n")) {
 		let f = split(trim(l), /[ \t]+/);
 		if (length(f) < 4 || !match(f[2], /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) || seen[f[2]]) continue;
 		seen[f[2]] = true;
-		push(r, { ip: f[2], mac: lc(f[1]), name: lb[lc(f[1])] ?? (f[3] == "*" ? "" : f[3]) });
+		push(r, { ip: f[2], mac: lc(f[1]), name: lb[lc(f[1])] ?? (f[3] == "*" ? "" : f[3]), fixed: fx[lc(f[1])] == f[2] });
 	}
 	return sort(r, (a, b) => {
 		let x = map(split(a.ip, "."), (v) => int(v)), y = map(split(b.ip, "."), (v) => int(v));
@@ -39559,7 +39002,6 @@ list_methods() {
 	json_add_object "zm_autoclean";                json_add_string "mode" "string"; json_close_object
 	json_add_object "gh_proxy";                    json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "webui";                       json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
-	json_add_object "traffic";                     json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "sysinfo_run";                 json_close_object
 	json_add_object "sysinfo_get";                 json_close_object
 	json_add_object "mirror_status";               json_close_object
@@ -39750,7 +39192,6 @@ call_method() {
 		zm_autoclean)                  json_get_var mode mode; "$BACKEND" zm_autoclean "$mode" ;;
 		gh_proxy)                      json_get_var action action; json_get_var value value; "$BACKEND" gh_proxy "$action" "$value" ;;
 		webui)                         json_get_var action action; json_get_var value value; "$BACKEND" webui "$action" "$value" ;;
-		traffic)                       json_get_var action action; json_get_var value value; "$BACKEND" traffic "$action" "$value" ;;
 		sysinfo_run)                   "$BACKEND" sysinfo_run ;;
 		sysinfo_get)                   "$BACKEND" sysinfo_get ;;
 		mirror_status)                 "$BACKEND" mirror_status ;;
@@ -40009,7 +39450,6 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"zm_autoclean",
 					"gh_proxy",
 					"webui",
-					"traffic",
 					"purge_run",
 					"backup_action",
 					"backup_up",
@@ -40159,11 +39599,6 @@ cat > '/usr/share/luci/menu.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF
 		"title": "ByeTube",
 		"order": 58,
 		"action": { "type": "view", "path": "zapret-manager/bytetube" }
-	},
-	"admin/services/zapret-manager/traffic": {
-		"title": "Трафик устройств",
-		"order": 51,
-		"action": { "type": "view", "path": "zapret-manager/traffic" }
 	},
 	"admin/services/zapret-manager/system": {
 		"title": "Система",
@@ -40325,7 +39760,6 @@ var callZmCleanup = zmDeclare({ object: 'zapret-manager', method: 'zm_cleanup', 
 var callZmAutoclean = zmDeclare({ object: 'zapret-manager', method: 'zm_autoclean', params: ['mode'], expect: {} });
 var callGhProxy = zmDeclare({ object: 'zapret-manager', method: 'gh_proxy', params: ['action', 'value'], expect: {} });
 var callWebui = zmDeclare({ object: 'zapret-manager', method: 'webui', params: ['action', 'value'], expect: {} });
-var callTraffic = zmDeclare({ object: 'zapret-manager', method: 'traffic', params: ['action', 'value'], expect: {} });
 var callPurgeScan = zmDeclare({ object: 'zapret-manager', method: 'purge_scan', expect: {} });
 var callPurgeRun = zmDeclare({ object: 'zapret-manager', method: 'purge_run', params: ['value'], expect: {} });
 var callBackupList = zmDeclare({ object: 'zapret-manager', method: 'backup_list', expect: {} });
@@ -42827,7 +42261,6 @@ return baseclass.extend({
 	zmAutoclean: callZmAutoclean,
 	ghProxy: callGhProxy,
 	webui: callWebui,
-	traffic: callTraffic,
 	purgeScan: callPurgeScan,
 	purgeRun: callPurgeRun,
 	backupList: callBackupList,
@@ -46181,8 +45614,9 @@ return view.extend({
 		function renderDevs() {
 			devCard.innerHTML = '';
 			devCard.style.display = data.blocker || !data.installed ? 'none' : '';
-			if (data.blocker || !data.installed) return;
+			if (data.blocker || !data.installed) { renderDevMap(); return; }
 			var main = isMain(), M2 = main ? 'byp' : 'only';
+			var MODE_TAG = { all: 'весь трафик', only: 'только для этих', byp: 'мимо Steer' };
 			var saved = devSaved(), cur = devPick || saved, changed = devSig(cur) !== devSig(saved), other = devElse();
 			var known = {}, rows = [];
 			(devList || []).forEach(function(d) {
@@ -46197,14 +45631,14 @@ return view.extend({
 				known[k] = true;
 				rows.push({ key: k, name: cur[k].name || '', ip: IP4_RE.test(k) ? k : '', mac: MAC_RE.test(k) ? k : '', manual: true });
 			});
-			var T1 = main ? '«Весь трафик через Steer»' : '«Весь трафик через секцию»', T2 = main ? '«Мимо Steer»' : '«Только для этих устройств»';
+			var MODE_T = { all: main ? '«Весь трафик через Steer»' : '«Весь трафик через секцию»', only: '«Только для этих устройств»', byp: '«Мимо Steer»' };
 			function setMode(r, mode) {
 				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 				var m = {};
 				Object.keys(cur).forEach(function(k) { m[k] = { mode: cur[k].mode, name: cur[k].name }; });
 				if (m[r.key] && m[r.key].mode === mode) delete m[r.key];
 				else {
-					if (m[r.key] && m[r.key].mode !== mode) zm.toast('Устройство перенесено: ' + (mode === 'all' ? T1 : T2), 'info');
+					if (m[r.key] && m[r.key].mode !== mode) zm.toast('Устройство перенесено: ' + MODE_T[mode], 'info');
 					m[r.key] = { mode: mode, name: r.name || r.ip || '' };
 				}
 				devPick = m;
@@ -46215,7 +45649,7 @@ return view.extend({
 				rows.forEach(function(r) {
 					var on = !!(cur[r.key] && cur[r.key].mode === mode), mine = cur[r.key] && cur[r.key].mode !== mode;
 					var tags = [ r.ip, r.mac && r.mac !== r.ip ? r.mac : '' ].filter(Boolean).join(' · ') + (r.manual ? ' · добавлено вручную' : '');
-					if (mine) tags += ' · ' + (mode === 'all' ? (main ? 'мимо Steer' : 'только для этих') : 'весь трафик');
+					if (mine) tags += ' · ' + MODE_TAG[cur[r.key].mode];
 					else if (!on && other[r.key]) tags += ' · ' + other[r.key];
 					g.appendChild(E('div', { 'class': 'zm-node' + (on ? ' zm-active' : ''), 'click': function() { setMode(r, mode); } }, [
 						E('div', { 'class': 'zm-node-name' }, [ String(r.name || r.ip || r.mac) ]),
@@ -46238,6 +45672,9 @@ return view.extend({
 				(hasSecs() ? ' Устройство с таким выбором в нескольких секциях пойдёт через первую из них.' : '')));
 			devCard.appendChild(grid('all'));
 			if (main) {
+				devCard.appendChild(E('h3', { 'style': 'margin-top:20px' }, [ 'Только для этих устройств ', cnt('only', 'zm-ok') ]));
+				devCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, (hasSecs() ? 'Сервисы секции ' + sname + ' идут' : 'Выбранные сервисы идут') + ' через ' + via + ' только с отмеченных устройств, остальные открывают их как обычно. Ничего не отмечено — ' + (hasSecs() ? 'сервисы секции идут через неё' : 'сервисы идут через Steer') + ' со всех устройств.'));
+				devCard.appendChild(grid('only'));
 				devCard.appendChild(E('h3', { 'style': 'margin-top:20px' }, [ 'Мимо Steer ', cnt('byp', 'zm-warn') ]));
 				devCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Эти устройства всегда ходят напрямую, даже к выбранным сервисам. Этот выбор важнее выбранных сервисов' + (hasSecs() ? ' и действует во всех секциях.' : '.')));
 			} else {
@@ -46259,7 +45696,8 @@ return view.extend({
 			devCard.appendChild(E('div', { 'class': 'zm-actions', 'style': 'margin-top:14px' }, [
 				inp,
 				E('button', { 'class': 'cbi-button', 'click': function() { add('all'); } }, 'Весь трафик'),
-				E('button', { 'class': 'cbi-button', 'click': function() { add(M2); } }, main ? 'Мимо Steer' : 'Только для них'),
+				E('button', { 'class': 'cbi-button', 'click': function() { add('only'); } }, 'Только для них'),
+				main ? E('button', { 'class': 'cbi-button', 'click': function() { add('byp'); } }, 'Мимо Steer') : E([]),
 				E('button', { 'class': 'cbi-button', 'disabled': devLoading ? '' : null, 'click': loadDevs }, devLoading ? 'Ищем…' : 'Обновить список')
 			]));
 			if (ex === 'none') devCard.appendChild(E('p', { 'class': 'zm-hint' }, main ? 'Туннель ещё не подключён — выбор сохранится и заработает, когда подключите WARP или VPN.' : 'У секции ещё нет подключения — выбор сохранится и заработает, когда настроите его на вкладке «Подключение».'));
@@ -46275,6 +45713,58 @@ return view.extend({
 			});
 			bar.set(changed, false);
 			devCard.appendChild(bar);
+			renderDevMap();
+		}
+
+		var devMapCard = E('div', { 'class': 'zm-card' });
+		function renderDevMap() {
+			devMapCard.innerHTML = '';
+			devMapCard.style.display = 'none';
+			if (data.blocker || !data.installed || !hasSecs()) return;
+			var names = {}, map = {}, order = [], ids = secIds();
+			(devList || []).forEach(function(d) {
+				var k = String(d.mac || '').toLowerCase();
+				if (!k) return;
+				names[k] = { name: d.name || '', ip: d.ip || '' };
+				if (d.ip) names[d.ip] = names[k];
+			});
+			ids.forEach(function(id) {
+				secDevs(id).forEach(function(d) {
+					if (!d || !d.key) return;
+					var k = String(d.key).toLowerCase();
+					if (!map[k]) { map[k] = { key: k, name: d.name || '', list: [] }; order.push(k); }
+					map[k].list.push({ sec: id, mode: d.mode });
+				});
+			});
+			if (!order.length) return;
+			devMapCard.style.display = '';
+			devMapCard.appendChild(E('h3', {}, [ 'Устройства по секциям ', badge('zm-ok', order.length + ' ' + plural(order.length, 'устройство', 'устройства', 'устройств')) ]));
+			devMapCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Куда ходит каждое отмеченное устройство. Секции работают по порядку — ' + ids.map(secName).join(' → ') + '. Нажмите на секцию, чтобы изменить выбор.'));
+			var g = E('div', { 'class': 'zm-devmap' });
+			order.forEach(function(k) {
+				var x = map[k], nm = names[k] || {}, byp = x.list.some(function(e) { return e.mode === 'byp'; }), allWin = null;
+				var title = x.name || nm.name || nm.ip || k;
+				var sub = [ nm.ip && nm.ip !== title ? nm.ip : '', /:/.test(k) && k !== title ? k : '' ].filter(Boolean).join(' · ');
+				var chips = x.list.map(function(e) {
+					var cls = 'zm-devmap-chip', txt, tip, dead = false;
+					if (e.mode === 'byp') { cls += ' zm-devmap-byp'; txt = 'мимо Steer'; tip = 'Всегда напрямую — важнее всех секций'; }
+					else {
+						if (byp) dead = 'устройство ходит мимо Steer';
+						else if (secOff(e.sec)) dead = 'секция выключена';
+						else if (e.mode === 'all') { if (allWin) dead = 'весь трафик уже идёт через «' + secName(allWin) + '» — она выше'; else allWin = e.sec; }
+						txt = '«' + secName(e.sec) + '» · ' + (e.mode === 'all' ? 'весь трафик' : 'только её сервисы');
+						cls += e.mode === 'all' ? ' zm-devmap-all' : ' zm-devmap-only';
+						tip = e.mode === 'all' ? 'Весь трафик устройства идёт через эту секцию' : 'Сервисы этой секции идут через неё только с этого устройства';
+					}
+					if (dead) { cls += ' zm-devmap-dead'; tip = 'Не действует: ' + dead; }
+					return E('button', { 'type': 'button', 'class': cls, 'title': tip, 'click': function() { if (e.sec !== secCur) secTo(e.sec); else zm.toast('Это текущая секция — выбор выше', 'info'); } }, txt);
+				});
+				g.appendChild(E('div', { 'class': 'zm-devmap-row' }, [
+					E('div', { 'class': 'zm-devmap-dev' }, [ E('b', {}, title), sub ? E('span', {}, sub) : E([]) ]),
+					E('div', { 'class': 'zm-devmap-chips' }, chips)
+				]));
+			});
+			devMapCard.appendChild(g);
 		}
 
 
@@ -46729,6 +46219,17 @@ return view.extend({
 			});
 			return m;
 		}
+		function svcAbove() {
+			var m = {};
+			if (!hasSecs()) return m;
+			var ids = secIds();
+			for (var i = 0; i < ids.length && ids[i] !== secCur; i++) {
+				var id = ids[i];
+				if (secOff(id) || secExit(id) === 'none' || secDevs(id).some(function(d) { return d.mode === 'only'; })) continue;
+				secSvc(id).forEach(function(x) { if (!m[x]) m[x] = id; });
+			}
+			return m;
+		}
 
 		var CATEGORY_IDS = [ 'geoblock', 'block', 'news', 'anime', 'porn', 'hodca', 'russia_inside', 'russia_outside', 'ukraine_inside' ];
 		var openGroups = {};
@@ -47136,7 +46637,7 @@ return view.extend({
 			listCard.innerHTML = '';
 			listCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			var cur = currentPick(), sel = pick || cur, changed = false, other = svcElse();
+			var cur = currentPick(), sel = pick || cur, changed = false, other = svcElse(), above = svcAbove();
 			var all = data.services || [];
 			var list = all.filter(function(s) { return s.id !== 'custom'; }).map(function(s) {
 				if (!/^c_itdoginfo_/.test(s.id) && !/^itdoginfo/i.test(s.group || '')) return s;
@@ -47145,7 +46646,7 @@ return view.extend({
 			list.forEach(function(s) { if (!!sel[s.id] !== !!cur[s.id]) changed = true; });
 			domCards = {};
 			function tile(s) {
-				var oth = other[s.id] ? (sel[s.id] ? 'ещё и в «' : 'в секции «') + secName(other[s.id]) + '»' : '';
+				var oth = sel[s.id] && above[s.id] ? 'идёт через «' + secName(above[s.id]) + '» — она выше' : other[s.id] ? (sel[s.id] ? 'ещё и в «' : 'в секции «') + secName(other[s.id]) + '»' : '';
 				var el = zm.svcCard({ name: s.name, key: s.id, sub: oth, on: !!sel[s.id], inc: !!sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
 					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 					pick = {};
@@ -48499,7 +48000,7 @@ return view.extend({
 			var srcName = r.src ? (r.src_name ? r.src_name + ' · ' + r.src : r.src) : '';
 			var ssn = r.src_sec_name ? '«' + r.src_sec_name + '»' : '';
 			if (r.src) lines.push([ 'Устройство', r.src_mode === 'all' ? [ E('b', {}, srcName), ssn ? ' — весь трафик через секцию ' + ssn : ' — весь трафик через Steer' ] : r.src_mode === 'byp' ? [ E('b', {}, srcName), ' — мимо Steer' ]
-				: r.src_mode === 'only' ? [ E('b', {}, srcName), ' — для него работает секция ' + ssn ] : [ srcName, ' — общие правила' ] ]);
+				: r.src_mode === 'only' ? [ E('b', {}, srcName), hasSecs() ? ' — для него работает секция ' + (ssn || '«' + secName('main') + '»') : ' — для него работают выбранные сервисы' ] : [ srcName, ' — общие правила' ] ]);
 			if (r.probe) lines.push([ 'Проверен', [ E('b', {}, r.probe), ' — у самого ' + r.target + ' нет адреса, а правило списка действует и на поддомены' ] ]);
 			if (r.addr) lines.push([ 'Адрес', r.fake ? [ r.addr, ' (подменный — домен есть в списках Steer)' ] : r.verdict === 'exclude' ? [ r.addr, ' (настоящий — домен в исключениях)' ] : [ r.addr, ' (настоящий — домена нет в списках Steer)' ] ]);
 			var wh = (r.where || []).map(function(x) { var y = {}; for (var k in x) y[k] = x[k]; return y; });
@@ -49065,6 +48566,7 @@ return view.extend({
 		[ listCard, customCard ].forEach(function(n) { panes.svc.appendChild(n); });
 		[ setCard, keepCard, autoCard ].forEach(function(n) { panes.set.appendChild(n); });
 		panes.dev.appendChild(devCard);
+		panes.dev.appendChild(devMapCard);
 		panes.byp.appendChild(exclCard);
 		var flowEl = E('div', {}), FLOW_TXT = { hw: 'аппаратный', sw: 'программный' };
 		function flowApply() {
@@ -49340,7 +48842,7 @@ return view.extend({
 						[ 'Адреса в списках устаревают', 'сегодня работает, завтра может перестать' ]
 					],
 					tip: { title: 'Сервис не открывается?', text: 'Снимите его галочку на этой странице или нажмите «Восстановить hosts».' },
-					note: replace ? 'Замена удалит весь текущий hosts — отмеченные сервисы и ваши записи.' : '',
+					note: replace ? 'Замена удалит ваши собственные записи в hosts. Отмеченные сервисы останутся поверх списка.' : '',
 					noteKind: 'bad',
 					check: 'Понимаю: с неработающим адресом в hosts сервис не откроется даже с VPN или DoH',
 					okText: info ? '' : replace ? 'Заменить hosts' : 'Применить'
@@ -49418,7 +48920,7 @@ return view.extend({
 			geoAutoEl.innerHTML = '';
 			var src = HOSTS_SRC[data.geohide] ? data.geohide : '', on = !!data.auto;
 			var sub = on
-				? 'Каждую ночь около 4:00 панель скачивает свежий ' + HOSTS_SRC[data.auto] + ' и обновляет hosts. Записи, добавленные поверх списка, сохраняются. ' + (data.auto_last > 0 ? 'Последнее обновление: ' + agoText(data.auto_last) + '.' : 'Первое обновление — этой ночью.')
+				? 'Каждую ночь около 4:00 панель скачивает свежий ' + HOSTS_SRC[data.auto] + ' и обновляет hosts. Отмеченные выше сервисы и ваши записи поверх списка сохраняются. ' + (data.auto_last > 0 ? 'Последнее обновление: ' + agoText(data.auto_last) + '.' : 'Первое обновление — этой ночью.')
 				: src ? 'Сейчас стоит ' + HOSTS_SRC[src] + ' — включите, чтобы адреса в нём не устаревали.' : 'Сначала выберите список выше.';
 			geoAutoEl.appendChild(zm.swRow(on, autoBusy ? 'Обновлять раз в сутки — применяем…' : 'Обновлять раз в сутки', sub, function() { setAuto(!on); }, autoBusy || (!on && !src)));
 			if (on && data.auto_err) geoAutoEl.appendChild(E('p', { 'class': 'zm-hint zm-ab-warn' }, 'Прошлое обновление не удалось: ' + data.auto_err + '. Остался прежний список — панель попробует снова следующей ночью.'));
@@ -49445,7 +48947,7 @@ return view.extend({
 
 		var geoCard = E('div', { 'class': 'zm-card' }, [
 			E('h3', {}, 'Заменить весь hosts'),
-			E('p', { 'class': 'zm-hint' }, 'Внимание: это ПОЛНОСТЬЮ заменит файл /etc/hosts на готовый список (GeoHide DNS или dns.malw.link) — все блоки выше и любые ваши собственные записи будут удалены.'),
+			E('p', { 'class': 'zm-hint' }, 'Заменит файл /etc/hosts на готовый список (GeoHide DNS или dns.malw.link). Сервисы, отмеченные выше, останутся — панель добавит их поверх списка, в том числе после ежедневного обновления. Ваши собственные записи будут удалены.'),
 			geoGrid,
 			geoAutoEl,
 			geoLogEl
@@ -49492,7 +48994,7 @@ return view.extend({
 			zm.hostsReplaceGeohide(region).then(function(res) {
 				busy = false;
 				if (res.error) { zm.renderLog(geoLogEl, '==> ОШИБКА: ' + res.error); zm.toast(res.error, 'error'); return; }
-				zm.renderLog(geoLogEl, '==> Готово — hosts заменён на ' + HOSTS_SRC[region] + '.');
+				zm.renderLog(geoLogEl, '==> Готово — hosts заменён на ' + HOSTS_SRC[region] + (res.kept > 0 ? ', отмеченные сервисы (' + res.kept + ') добавлены поверх.' : '.'));
 				zm.toast('hosts заменён на ' + HOSTS_SRC[region], 'info');
 				refreshAll();
 			}).catch(function() { busy = false; zm.renderLog(geoLogEl, '==> ОШИБКА: роутер не ответил — проверьте hosts и попробуйте ещё раз'); zm.toast('Роутер не ответил', 'error'); refreshAll(); });
@@ -51609,7 +51111,7 @@ return view.extend({
 				(fam === 'fs' ? zm.strategySetFlowseal('off') : zm.strategySetV('off')).then(function(r) {
 					busy = false;
 					if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); return; }
-					zm.toast(r.pending ? 'Основная стратегия будет выключена — нажмите «Применить»' : 'Основная стратегия выключена — YouTube, Discord и игры работают как прежде', 'info');
+					zm.toast(r.pending ? 'Основная стратегия будет выключена — нажмите «Применить»' : 'Основная стратегия выключена', 'info');
 					refreshAll();
 				}).catch(function() { busy = false; zm.toast('Роутер не ответил', 'error'); });
 			}
@@ -55523,6 +55025,22 @@ html.zm-theme-dark .zm-dock .zm-refresh-banner { background: #2f2a1c; color: #e3
 .zm-ow-seg3 .zm-seg-item { text-align: center; padding: 5px 6px; }
 .zm-seg-item.zm-ow-dis { opacity: .35; cursor: not-allowed; }
 .zm-ow-txnote { font-size: 12px; opacity: .65; line-height: 1.4; }
+.zm-ow-txnote.zm-ow-warnnote { opacity: 1; color: #b45309; }
+.zm-devmap { display: flex; flex-direction: column; gap: 8px; }
+.zm-devmap-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; border: 1px solid rgba(0,0,0,.08); border-radius: 12px; background: rgba(0,0,0,.02); }
+.zm-devmap-dev { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.zm-devmap-dev b { font-size: 14px; overflow-wrap: anywhere; }
+.zm-devmap-dev span { font-size: 12px; opacity: .65; overflow-wrap: anywhere; }
+.zm-devmap-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.zm-devmap-chip { appearance: none; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.3; padding: 4px 10px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; transition: filter .15s, opacity .15s; }
+.zm-devmap-chip:hover { filter: brightness(.95); }
+.zm-devmap-all { background: rgba(26,127,55,.12); color: #1a7f37; border-color: rgba(26,127,55,.25); }
+.zm-devmap-only { background: rgba(37,99,235,.10); color: #1d4ed8; border-color: rgba(37,99,235,.25); }
+.zm-devmap-byp { background: rgba(217,119,6,.12); color: #b45309; border-color: rgba(217,119,6,.25); }
+.zm-devmap-dead { opacity: .5; text-decoration: line-through; }
+.zm-fk-pin { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; margin: 10px 0 2px; padding: 10px 14px; border: 1px solid rgba(217,119,6,.3); border-radius: 12px; background: rgba(217,119,6,.06); }
+.zm-fk-pin .zm-hint { flex: 1 1 320px; }
+.zm-fk-pin .cbi-button { margin: 0; flex: 0 0 auto; }
 .zm-ow-acts { align-items: center; margin-top: 14px; }
 .zm-sx-grid.zm-ow-grid3 { display: flex; flex-wrap: wrap; align-items: stretch; }
 .zm-ow-grid3 > .zm-sx-tile { flex: 1 1 280px; }
@@ -55586,6 +55104,12 @@ html.zm-theme-dark .zm-ow-radio { border-color: rgba(255,255,255,.12); backgroun
 html.zm-theme-dark .zm-ow-table th { border-color: rgba(255,255,255,.12); }
 html.zm-theme-dark .zm-ow-table td { border-color: rgba(255,255,255,.07); }
 html.zm-theme-dark .zm-ow-link { color: #79c0ff; }
+html.zm-theme-dark .zm-ow-txnote.zm-ow-warnnote { color: #e3b341; }
+html.zm-theme-dark .zm-devmap-row { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); }
+html.zm-theme-dark .zm-devmap-all { background: rgba(63,185,80,.14); color: #3fb950; border-color: rgba(63,185,80,.3); }
+html.zm-theme-dark .zm-devmap-only { background: rgba(88,166,255,.14); color: #79c0ff; border-color: rgba(88,166,255,.3); }
+html.zm-theme-dark .zm-devmap-byp { background: rgba(210,153,34,.14); color: #e3b341; border-color: rgba(210,153,34,.3); }
+html.zm-theme-dark .zm-fk-pin { border-color: rgba(210,153,34,.35); background: rgba(210,153,34,.08); }
 @media (max-width: 720px) {
 	.zm-ow-modes, .zm-ow-radios { grid-template-columns: minmax(0, 1fr); }
 	.zm-ow-table thead { display: none; }
@@ -56579,122 +56103,6 @@ body:not(.zmw-body) .zm-node.zm-node-live:not(.zm-active) { border: 1px dashed v
 body:not(.zmw-body) .zm-node.zm-node-live:not(.zm-active)::after {
 	content: 'сейчас'; position: absolute; z-index: 2; top: -9px; right: 10px; padding: 0 8px; border-radius: 999px; pointer-events: none;
 	font-size: 10.5px; font-weight: 700; line-height: 17px; background: var(--zm-l-sel); color: var(--zm-l-ink); box-shadow: 0 0 0 3px var(--zm-l-bg);
-}
-.zm-tr { max-width: 1280px; --zm-tr-z: #7c5cff; --zm-tr-f: #f08a24; --zm-tr-s: #14b8a6; --zm-tr-d: #94a3b8; --zm-tr-acc: var(--a1, #2d5bff); }
-.zm-tr .zm-card h3 { margin-bottom: 0; }
-.zm-tr .zm-card { margin: 0 !important; }
-.zm-tr-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.zm-tr-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.zm-tr-head, .zm-tr-devhead { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
-.zm-tr-head-l { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.zmw-body .zm-tr-head h3 { display: none; }
-.zm-tr-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.zm-tr-tools .cbi-button { margin: 0; }
-.zm-tr-tools .cbi-button.zm-tr-on { box-shadow: inset 0 0 0 2px var(--zm-tr-acc); }
-.zm-tr-cap { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .65; }
-.zm-tr-big { font-size: 26px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.zm-tr-sub { font-size: 12.5px; opacity: .65; line-height: 1.4; }
-.zm-tr-muted { opacity: .7; }
-.zm-tr-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-.zm-tr-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-@media (max-width: 900px) { .zm-tr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.zm-tr-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-@media (max-width: 900px) { .zm-tr-two { grid-template-columns: minmax(0, 1fr); } }
-.zm-tr-two > .zm-card, .zm-tr-two > .zm-tr-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.zm-tr-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.zm-tr-sort { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
-.zm-tr-sort span { opacity: .65; }
-.zm-tr-sort select { min-width: 0; width: auto; margin: 0; }
-.zm-tr-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
-.zm-tr-table { display: flex; flex-direction: column; min-width: 860px; }
-.zm-tr-tr { display: grid; grid-template-columns: minmax(200px, 1.5fr) minmax(170px, 1.3fr) 90px 100px minmax(110px, 1fr) minmax(140px, 1fr); gap: 12px; align-items: center; padding: 10px 6px; border-top: 1px solid rgba(127,127,127,.16); font-size: 14px; border-radius: 10px; }
-.zm-tr-tr:not(.zm-tr-th) { cursor: pointer; }
-.zm-tr-tr:not(.zm-tr-th):hover, .zm-tr-tr:not(.zm-tr-th):focus-visible { background: rgba(127,127,127,.08); outline: none; }
-.zm-tr-th { border-top: 0; padding-top: 2px; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; opacity: .65; cursor: default; }
-.zm-tr-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.zm-tr-who-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.zm-tr-who-t b, .zm-tr-who-t h3, .zm-tr-who .zm-tr-who-t .zm-tr-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.zm-tr-devhead h3 { font-size: 20px; }
-.zm-tr-ava { flex: none; width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
-.zm-tr-devhead .zm-tr-ava { width: 52px; height: 52px; border-radius: 16px; font-size: 22px; }
-.zm-tr-vol { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.zm-tr-vol b { min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
-.zm-tr-bar { flex: 1 1 auto; height: 8px; border-radius: 6px; background: rgba(127,127,127,.16); overflow: hidden; }
-.zm-tr-bar i { display: block; height: 100%; border-radius: inherit; background: var(--zm-tr-acc); }
-.zm-tr-bar i.zm-tr-z { background: var(--zm-tr-z); } .zm-tr-bar i.zm-tr-f { background: var(--zm-tr-f); } .zm-tr-bar i.zm-tr-s { background: var(--zm-tr-s); } .zm-tr-bar i.zm-tr-d { background: var(--zm-tr-d); }
-.zm-tr-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.zm-tr-chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; line-height: 1.4; }
-.zm-tr-chip.zm-tr-z { background: rgba(124,92,255,.14); color: #5b3fd6; }
-.zm-tr-chip.zm-tr-f { background: rgba(240,138,36,.16); color: #a14e00; }
-.zm-tr-chip.zm-tr-s { background: rgba(20,184,166,.15); color: #0b7a6e; }
-.zm-tr-chip.zm-tr-d { background: rgba(127,127,127,.14); color: inherit; opacity: .85; }
-html.zm-theme-dark .zm-tr-chip.zm-tr-z { color: #b9a8ff; }
-html.zm-theme-dark .zm-tr-chip.zm-tr-f { color: #ffbe82; }
-html.zm-theme-dark .zm-tr-chip.zm-tr-s { color: #6ee3d4; }
-.zm-tr-site { display: flex; flex-direction: column; gap: 6px; }
-.zm-tr-site-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
-.zm-tr-site-h b { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.zm-tr-site .zm-tr-bar { height: 6px; }
-.zm-tr-stack { display: flex; height: 14px; border-radius: 8px; overflow: hidden; background: rgba(127,127,127,.16); }
-.zm-tr-stack i, .zm-tr-leg i, .zm-tr-keys i { display: block; }
-.zm-tr-stack i.zm-tr-z, .zm-tr-leg i.zm-tr-z { background: var(--zm-tr-z); } .zm-tr-stack i.zm-tr-f, .zm-tr-leg i.zm-tr-f { background: var(--zm-tr-f); }
-.zm-tr-stack i.zm-tr-s, .zm-tr-leg i.zm-tr-s { background: var(--zm-tr-s); } .zm-tr-stack i.zm-tr-d, .zm-tr-leg i.zm-tr-d { background: var(--zm-tr-d); }
-.zm-tr-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; }
-.zm-tr-leg { display: flex; flex-direction: column; gap: 2px; }
-.zm-tr-leg > span:first-child { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.zm-tr-leg i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.zm-tr-leg b { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.zm-tr-leg > span:last-child { font-size: 12px; }
-.zm-tr-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid rgba(127,127,127,.16); font-size: 14px; }
-.zm-tr-line:first-of-type { border-top: 0; }
-.zm-tr-num { min-width: 76px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.zm-tr-ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.zm-tr-keys { display: inline-flex; gap: 14px; font-size: 13px; opacity: .8; }
-.zm-tr-keys span { display: inline-flex; align-items: center; gap: 6px; }
-.zm-tr-keys i { width: 10px; height: 10px; border-radius: 3px; }
-.zm-tr-chart { display: flex; align-items: flex-end; gap: 4px; height: 180px; padding-bottom: 4px; border-bottom: 1px solid rgba(127,127,127,.22); }
-.zm-tr-col1 { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
-.zm-tr-col1 i { display: block; width: 100%; }
-.zm-tr-cd { background: var(--zm-tr-acc); border-radius: 4px 4px 0 0; }
-.zm-tr-cu { background: var(--zm-tr-acc); opacity: .4; border-radius: 0 0 2px 2px; }
-.zm-tr-keys i.zm-tr-cd, .zm-tr-keys i.zm-tr-cu { border-radius: 3px; }
-.zm-tr-axis { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; opacity: .65; font-variant-numeric: tabular-nums; }
-.zm-tr-back { align-self: flex-start; margin: 0; }
-.zm-tr-note { border-color: rgba(240,138,36,.45) !important; background: rgba(240,138,36,.08) !important; display: flex; flex-direction: column; gap: 6px; }
-.zm-tr-note p { margin: 0; font-size: 13px; line-height: 1.5; }
-.zm-tr-set { display: flex; flex-direction: column; gap: 4px; }
-.zm-tr-set h3 { margin-bottom: 8px !important; }
-.zm-tr-setrow { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid rgba(127,127,127,.16); font-size: 14px; }
-.zm-tr-set .zm-swrow { border-top: 1px solid rgba(127,127,127,.16); padding-top: 10px; }
-.zm-tr-off { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
-.zm-tr-off p { margin: 0; line-height: 1.55; }
-.zm-tr-off > .cbi-button { align-self: flex-start; margin: 0; }
-.zm-tr-feat { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
-.zm-tr-feat > div { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; }
-.zm-tr-mark { flex: none; width: 18px; font-weight: 800; color: #0f9d8a; text-align: center; }
-.zm-tr-feat .zm-tr-muted .zm-tr-mark { color: inherit; }
-@media (max-width: 720px) {
-	.zm-tr-scroll { overflow: visible; margin: 0; padding: 0; }
-	.zm-tr-table { min-width: 0; }
-	.zm-tr-th { display: none; }
-	.zm-tr-tr { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 12px 4px; }
-	.zm-tr-tr:nth-child(2) { border-top: 0; }
-	.zm-tr-c1 { grid-column: 1; grid-row: 1; }
-	.zm-tr-c4 { grid-column: 2; grid-row: 1; text-align: right; }
-	.zm-tr-c2 { grid-column: 1 / span 2; grid-row: 2; }
-	.zm-tr-c3 { display: none; }
-	.zm-tr-c5 { grid-column: 1; grid-row: 3; font-size: 13px; opacity: .8; }
-	.zm-tr-c6 { grid-column: 2; grid-row: 3; justify-content: flex-end; }
-	.zm-tr-tools { width: 100%; }
-	.zm-tr-seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
-	.zm-tr-seg .zm-seg-item { text-align: center; padding-left: 4px; padding-right: 4px; }
-	.zm-tr-tools > .cbi-button { width: 100%; }
-	.zm-tr-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 640px) {
-	.zm-tr-big { font-size: 21px; }
-	.zm-tr-head, .zm-tr-devhead { align-items: flex-start; }
-	.zm-tr-chart { gap: 2px; height: 150px; }
 }
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
@@ -58445,6 +57853,21 @@ var FLOW = [
 	{ id: 'hw', label: 'Аппаратное', sub: 'быстрее всего, если чип умеет' }
 ];
 var POWER = [ { id: 'low', label: 'Низкая', d: 6 }, { id: 'mid', label: 'Средняя', d: 3 }, { id: 'high', label: 'Высокая', d: 0 } ];
+var WSEC = [
+	{ id: 'psk2', label: 'WPA2', note: 'Подключается любое устройство — даже старое.' },
+	{ id: 'sae-mixed', label: 'WPA2/WPA3', sae: true, note: 'Новые устройства подключаются по WPA3, старые — по WPA2. Если телефон не подключается к WPA2 или WPA3 — выберите этот режим.' },
+	{ id: 'sae', label: 'WPA3', sae: true, note: 'Только WPA3 — надёжнее всего, но старые телефоны, телевизоры и умные устройства не подключатся.' }
+];
+var WSEC_OTHER = { 'none': 'без пароля', 'psk-mixed': 'WPA/WPA2', 'psk': 'WPA', 'owe': 'OWE', 'wpa': 'WPA-Enterprise', 'wpa2': 'WPA2-Enterprise', 'wpa3': 'WPA3-Enterprise', 'wpa-mixed': 'WPA/WPA2-Enterprise', 'wpa3-mixed': 'WPA2/WPA3-Enterprise' };
+function wsecBase(e) {
+	e = String(e || 'none');
+	var b = e.split('+')[0];
+	return WSEC.some(function(x) { return x.id === b; }) ? b : e;
+}
+function wsecName(e) {
+	var b = wsecBase(e), p = WSEC.filter(function(x) { return x.id === b; })[0];
+	return p ? p.label : WSEC_OTHER[b.split('+')[0]] || b;
+}
 var DOWS = [ [ '1', 'понедельник' ], [ '2', 'вторник' ], [ '3', 'среду' ], [ '4', 'четверг' ], [ '5', 'пятницу' ], [ '6', 'субботу' ], [ '0', 'воскресенье' ] ];
 var DOW_SHORT = [ 'вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб' ];
 var MON_GEN = [ 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря' ];
@@ -58655,7 +58078,7 @@ return view.extend({
 		function wifiDraft() {
 			var w = st.wifi || {};
 			wd = { country: w.country || '', radios: (w.radios || []).map(function(r) {
-				return { id: r.id, on: !!r.on, ssid: r.ssid || '', key: r.key || '', channel: r.channel || 'auto', txp: r.txp || '', lvl: txLevel(r) };
+				return { id: r.id, on: !!r.on, ssid: r.ssid || '', key: r.key || '', channel: r.channel || 'auto', txp: r.txp || '', lvl: txLevel(r), enc: wsecBase(r.enc) };
 			}) };
 			wifiOrig = JSON.stringify(wd);
 		}
@@ -58682,15 +58105,17 @@ return view.extend({
 		function wifiDirty() { return JSON.stringify(wd) !== wifiOrig; }
 		function wifiSave() {
 			if (wifiSaving || !wifiDirty()) return;
-			var body = { country: wd.country && wd.country !== (st.wifi.country || '') ? wd.country : '', radios: wd.radios.map(function(d) {
-				return { id: d.id, on: d.on, ssid: d.ssid.trim() ? d.ssid : '', key: d.key, channel: d.channel, txp: d.txp };
+			var body = { country: wd.country && wd.country !== (st.wifi.country || '') ? wd.country : '', radios: wd.radios.map(function(d, i) {
+				var was = wsecBase((st.wifi.radios[i] || {}).enc);
+				return { id: d.id, on: d.on, ssid: d.ssid.trim() ? d.ssid : '', key: d.key, channel: d.channel, txp: d.txp, enc: d.enc !== was && WSEC.some(function(x) { return x.id === d.enc; }) ? d.enc : '' };
 			}) };
 			for (var i = 0; i < body.radios.length; i++) {
 				var b = body.radios[i], lab = (st.wifi.radios[i] || {}).label || '';
 				if (!b.on) continue;
 				if (!b.ssid) { zm.toast('Задайте имя сети ' + lab, 'warning'); return; }
-				var enc = (st.wifi.radios[i] || {}).enc || '';
+				var enc = b.enc || (st.wifi.radios[i] || {}).enc || '';
 				if ((/^(psk|sae)/.test(enc) || b.key) && /^(|none|psk.*|sae.*)$/.test(enc) && b.key.length < 8) { zm.toast('Пароль ' + lab + ' — не короче 8 символов', 'warning'); return; }
+				if (/^sae/.test(enc) && b.key.length > 63) { zm.toast('Пароль ' + lab + ' для WPA3 — не длиннее 63 символов', 'warning'); return; }
 			}
 			wifiSaving = true; renderWifi();
 			call('wifi', body, 'Сохраняем Wi-Fi').then(function(r) {
@@ -58726,7 +58151,19 @@ return view.extend({
 					return E('option', { 'value': c, 'selected': String(d.channel) === c ? '' : null }, c);
 				})));
 			box.appendChild(field('Имя сети', ssid));
-			box.appendChild(field(r.enc && /^sae/.test(r.enc) ? 'Пароль · WPA2/WPA3' : 'Пароль · WPA2-PSK', E('span', { 'class': 'zm-ow-pw' }, [ pw, eye ])));
+			var sae = (st.wifi || {}).sae !== false, known = WSEC.some(function(x) { return x.id === d.enc; }), selSec = WSEC.filter(function(x) { return x.id === d.enc; })[0];
+			var secNote = !known ? 'Сейчас: ' + wsecName(d.enc) + ' — так настроено в OpenWrt. Выберите режим, чтобы заменить.'
+				: (selSec.note + (!sae && !selSec.sae ? ' WPA3 недоступен: wpad на роутере собран без него.' : ''));
+			box.appendChild(E('div', { 'class': 'zm-ow-field' }, [ E('span', {}, 'Защита'),
+				E('div', { 'class': 'zm-seg zm-ow-seg3', 'role': 'radiogroup', 'aria-label': 'Защита ' + (r.label || '') }, WSEC.map(function(p) {
+					var off = p.sae && !sae && d.enc !== p.id;
+					return E('div', { 'class': 'zm-seg-item' + (d.enc === p.id ? ' zm-active' : '') + (off ? ' zm-ow-dis' : ''), 'role': 'radio', 'tabindex': '0',
+						'aria-checked': d.enc === p.id ? 'true' : 'false', 'aria-disabled': off ? 'true' : null, 'title': off ? 'wpad на роутере собран без WPA3' : p.note,
+						'click': function() { if (off || d.enc === p.id) return; d.enc = p.id; renderWifi(); },
+						'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this.click(); } } }, p.label);
+				})),
+				E('span', { 'class': 'zm-ow-txnote' + (!known && d.enc === 'none' ? ' zm-ow-warnnote' : '') }, secNote) ]));
+			box.appendChild(field('Пароль', E('span', { 'class': 'zm-ow-pw' }, [ pw, eye ])));
 			box.appendChild(field('Канал', ch));
 			var txNote = d.lvl === 'own' ? 'Своё значение: ' + d.txp + ' дБм — выберите уровень, чтобы заменить его.' : '';
 			box.appendChild(E('div', { 'class': 'zm-ow-field' }, [ E('span', {}, 'Сила сигнала'),
@@ -59909,416 +59346,6 @@ return view.extend({
 });
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/monitor.js'
-
-cat > '/www/luci-static/resources/view/zapret-manager/traffic.js' << 'ZM_INSTALLER_EOF'
-'use strict';
-'require view';
-'require zapret-manager.common as zm';
-var E = (function(raw) { return function() { var a = Array.prototype.slice.call(arguments), i = a.length - 1; if (i >= 1 && (typeof a[i] === 'string' || typeof a[i] === 'number')) a[i] = [ String(a[i]) ]; return raw.apply(null, a); }; })(window.E);
-
-var PERIODS = [ [ 'now', 'Сейчас' ], [ 'today', 'Сегодня' ], [ 'week', '7 дней' ], [ 'month', '30 дней' ] ];
-var ROUTES = { z: 'через Zapret', f: 'через Forkozz', s: 'через Steer', d: 'напрямую' };
-var ROUTE_ORDER = [ 'z', 'f', 's', 'd' ];
-var DOTS = [ '#7c5cff', '#2d5bff', '#0f9d8a', '#f08a24', '#e0457b', '#3b82f6', '#a855f7', '#14b8a6', '#d97706', '#64748b' ];
-
-function num(v, d) { return (Math.round(v * Math.pow(10, d || 0)) / Math.pow(10, d || 0)).toLocaleString('ru-RU', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
-function size(b) {
-	b = +b || 0;
-	if (b >= 1073741824) return num(b / 1073741824, b >= 107374182400 ? 0 : 1) + ' ГБ';
-	if (b >= 1048576) return num(b / 1048576, b >= 104857600 ? 0 : 1) + ' МБ';
-	if (b >= 1024) return num(b / 1024, 0) + ' КБ';
-	return num(b, 0) + ' Б';
-}
-function rate(bps) {
-	var bit = (+bps || 0) * 8;
-	if (bit >= 1e9) return num(bit / 1e9, 2) + ' Гбит/с';
-	if (bit >= 1e6) return num(bit / 1e6, bit >= 1e8 ? 0 : 1) + ' Мбит/с';
-	if (bit >= 1e3) return num(bit / 1e3, 0) + ' Кбит/с';
-	return bit > 0 ? num(bit, 0) + ' бит/с' : '—';
-}
-function plural(n, one, few, many) {
-	var a = Math.abs(n) % 100, b = a % 10;
-	return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
-}
-function hashColor(s) {
-	var h = 0;
-	for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-	return DOTS[h % DOTS.length];
-}
-function devName(d) { return d.n || d.ip || d.m; }
-function avatar(d) {
-	var t = (d.n || '').trim(), ch = t ? t.charAt(0).toUpperCase() : '•';
-	return E('span', { 'class': 'zm-tr-ava', 'style': 'background:' + hashColor(d.m || ''), 'aria-hidden': 'true' }, ch);
-}
-function chip(r) { return E('span', { 'class': 'zm-tr-chip zm-tr-' + r }, ROUTES[r] || r); }
-function proto(p, t) {
-	if (+t === 443) return p === 'udp' ? 'QUIC' : 'HTTPS';
-	if (+t === 80 && p === 'tcp') return 'HTTP';
-	return (p || '').toUpperCase() + ' ' + t;
-}
-function when(ts) {
-	var d = new Date(ts * 1000), p2 = function(n) { return (n < 10 ? '0' : '') + n; };
-	return p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + ' в ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
-}
-function dayLabel(k) { return k.length === 8 ? k.slice(6, 8) + '.' + k.slice(4, 6) : k + ':00'; }
-
-return view.extend({
-	load: function() {
-		zm.injectCss();
-		return zm.traffic('data', 'today').catch(function() { return null; });
-	},
-
-	render: function(init) {
-		var root = E('div', { 'class': 'zm-wrap zm-tr' });
-		var st = { period: 'today', mac: '', data: init && !init.error ? init : null, dev: null, busy: '', sort: 'down', showSet: false, err: init && init.error ? init.error : '' };
-		var timer = null, seq = 0;
-
-		function alive() { return document.body.contains(root); }
-		function setErr(e) { st.err = e || ''; }
-
-		function card(cls, kids) { return E('div', { 'class': 'zm-card' + (cls ? ' ' + cls : '') }, kids); }
-		function h3(t, extra) { return E('h3', {}, extra ? [ t, ' ', extra ] : t); }
-
-		function seg() {
-			return E('div', { 'class': 'zm-seg zm-tr-seg', 'role': 'radiogroup', 'aria-label': 'Период' }, PERIODS.map(function(p) {
-				var on = st.period === p[0];
-				return E('div', { 'class': 'zm-seg-item' + (on ? ' zm-active' : ''), 'role': 'radio', 'tabindex': '0', 'aria-checked': on ? 'true' : 'false',
-					'click': function() { if (!on) setPeriod(p[0]); },
-					'keydown': function(ev) { if ((ev.key === 'Enter' || ev.key === ' ') && !on) { ev.preventDefault(); setPeriod(p[0]); } } }, p[1]);
-			}));
-		}
-
-		function tile(cap, big, sub) {
-			return E('div', { 'class': 'zm-card zm-tr-tile' }, [ E('span', { 'class': 'zm-tr-cap' }, cap), E('span', { 'class': 'zm-tr-big' }, big), E('span', { 'class': 'zm-tr-sub' }, sub || '') ]);
-		}
-
-		function bar(pct, cls) { return E('div', { 'class': 'zm-tr-bar' }, [ E('i', { 'class': cls || '', 'style': 'width:' + Math.max(pct > 0 ? 2 : 0, Math.min(100, pct)) + '%' }) ]); }
-
-		function routesStack(r, total) {
-			var box = E('div', { 'class': 'zm-tr-stack', 'role': 'img', 'aria-label': 'Как идёт трафик' });
-			ROUTE_ORDER.forEach(function(k) { if (r[k] > 0) box.appendChild(E('i', { 'class': 'zm-tr-' + k, 'style': 'width:' + (100 * r[k] / total) + '%' })); });
-			return box;
-		}
-
-		function periodNote(d) {
-			if (st.period === 'now') return 'за последние ' + (d.every || 20) + ' секунд';
-			if (st.period === 'today') return 'с 00:00';
-			var since = d.since ? when(d.since) : '';
-			return since ? 'учёт идёт с ' + since : '';
-		}
-
-		function header(d) {
-			var tools = E('div', { 'class': 'zm-tr-tools' }, [
-				seg(),
-				E('button', { 'class': 'cbi-button' + (st.showSet ? ' zm-tr-on' : ''), 'aria-expanded': st.showSet ? 'true' : 'false', 'click': function() { st.showSet = !st.showSet; draw(); } }, 'Настройки')
-			]);
-			return card('zm-tr-head', [
-				E('div', { 'class': 'zm-tr-head-l' }, [
-					h3('Трафик устройств'),
-					E('span', { 'class': 'zm-tr-state' }, [
-						E('span', { 'class': 'zm-badge ' + (d.running ? 'zm-ok' : 'zm-warn') }, [ E('span', { 'class': 'zm-dot' }), d.running ? 'идёт учёт' : 'учёт не запущен' ]),
-						E('span', { 'class': 'zm-tr-sub' }, 'обновляется раз в ' + (d.every || 20) + ' секунд')
-					])
-				]),
-				tools
-			]);
-		}
-
-		function notes(d) {
-			var out = [];
-			if (d.offload === 'hw' || d.offload === 'sw') out.push(card('zm-tr-note', [
-				E('b', {}, d.offload === 'hw' ? 'Включено аппаратное ускорение' : 'Включено программное ускорение'),
-				E('p', {}, d.offload === 'hw' ? 'С ним большая часть пакетов идёт мимо счётчиков роутера — объём будет сильно занижен. Точные цифры — только без ускорения.' : 'С ним часть пакетов может идти мимо счётчиков, и объём будет немного занижен.'),
-				E('a', { 'href': zm.pageHref('system') }, 'Перейти в «Система»')
-			]));
-			if (!d.acct) out.push(card('zm-tr-note', [ E('b', {}, 'Счётчики соединений выключены'), E('p', {}, 'Без них роутер не знает объём. Выключите и снова включите учёт — панель включит счётчики.') ]));
-			if (d.dns_block) out.push(card('zm-tr-note', [ E('b', {}, 'Сайты не записываются'), E('p', {}, 'Журнал DNS направлен в другое место строкой log-facility в ' + d.dns_block + '. Объём по устройствам считается, но без сайтов.') ]));
-			return out;
-		}
-
-		function overview(d) {
-			var now = st.period === 'now', wrap = E('div', { 'class': 'zm-tr-col' });
-			var total = d.total || { d: 0, u: 0 }, rt = d.rate || { d: 0, u: 0 };
-			var devs = (d.devices || []).slice(), conns = 0;
-			devs.forEach(function(x) { conns += +x.c || 0; });
-			wrap.appendChild(E('div', { 'class': 'zm-tr-tiles' }, now ? [
-				tile('Скачивание', rate(rt.d), 'все устройства вместе'),
-				tile('Отдача', rate(rt.u), 'все устройства вместе'),
-				tile('Соединений', num(conns, 0), 'открыто сейчас'),
-				tile('Устройств', num(d.online || 0, 0), 'сейчас в сети')
-			] : [
-				tile('Скачано', size(total.d), periodNote(d)),
-				tile('Отдано', size(total.u), periodNote(d)),
-				tile('Сейчас', rate(rt.d + rt.u), '↓ ' + rate(rt.d) + ' · ↑ ' + rate(rt.u)),
-				tile('Устройств', num(d.online || 0, 0) + (d.known > d.online ? ' из ' + num(d.known, 0) : ''), 'сейчас в сети')
-			]));
-
-			var sel = E('select', { 'class': 'cbi-input-select', 'aria-label': 'Сортировать устройства', 'change': function(ev) { st.sort = ev.target.value; draw(); } }, [
-				[ 'down', now ? 'по скорости' : 'по скачанному' ], [ 'up', now ? 'по отдаче' : 'по отданному' ], [ 'name', 'по имени' ]
-			].map(function(o) { return E('option', { 'value': o[0], 'selected': st.sort === o[0] ? '' : null }, o[1]); }));
-			var key = now ? 'rd' : 'd', ukey = now ? 'ru' : 'u';
-			devs.sort(function(a, b) {
-				if (st.sort === 'name') return devName(a).localeCompare(devName(b), 'ru');
-				if (st.sort === 'up') return (b[ukey] || 0) - (a[ukey] || 0);
-				return (b[key] || 0) - (a[key] || 0) || devName(a).localeCompare(devName(b), 'ru');
-			});
-			var max = 0;
-			devs.forEach(function(x) { max = Math.max(max, +x[key] || 0); });
-			var body = E('div', { 'class': 'zm-tr-table', 'role': 'table' });
-			body.appendChild(E('div', { 'class': 'zm-tr-tr zm-tr-th', 'role': 'row' }, [
-				E('span', { 'role': 'columnheader' }, 'Устройство'), E('span', { 'role': 'columnheader' }, now ? 'Скачивает' : 'Скачано'),
-				E('span', { 'role': 'columnheader' }, now ? 'Отдаёт' : 'Отдано'), E('span', { 'role': 'columnheader' }, 'Сейчас'),
-				E('span', { 'role': 'columnheader' }, 'Больше всего'), E('span', { 'role': 'columnheader' }, 'Как идёт')
-			]));
-			devs.forEach(function(x) {
-				var rs = E('span', { 'class': 'zm-tr-chips', 'role': 'cell' }), tot = 0;
-				ROUTE_ORDER.forEach(function(k) { tot += +(x.r && x.r[k]) || 0; });
-				ROUTE_ORDER.forEach(function(k) { if (x.r && x.r[k] > 0 && x.r[k] >= tot * 0.05) rs.appendChild(chip(k)); });
-				rs.className += ' zm-tr-c6';
-				var row = E('div', { 'class': 'zm-tr-tr', 'role': 'row', 'tabindex': '0', 'aria-label': 'Открыть ' + devName(x),
-					'click': function() { openDev(x.m); }, 'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openDev(x.m); } } }, [
-					E('span', { 'class': 'zm-tr-who zm-tr-c1', 'role': 'cell' }, [ avatar(x), E('span', { 'class': 'zm-tr-who-t' }, [
-						E('b', {}, devName(x)), E('span', { 'class': 'zm-tr-sub' }, [ x.ip || x.m, x.on ? '' : ' · не в сети' ].join('')) ]) ]),
-					E('span', { 'class': 'zm-tr-vol zm-tr-c2', 'role': 'cell' }, [ bar(max ? 100 * (+x[key] || 0) / max : 0), E('b', {}, now ? rate(x.rd) : size(x.d)) ]),
-					E('span', { 'role': 'cell', 'class': 'zm-tr-muted zm-tr-c3' }, now ? rate(x.ru) : size(x.u)),
-					E('span', { 'role': 'cell', 'class': 'zm-tr-muted zm-tr-c4' }, x.on ? rate((+x.rd || 0) + (+x.ru || 0)) : '—'),
-					E('span', { 'role': 'cell', 'class': 'zm-tr-c5' }, x.top || '—'),
-					rs
-				]);
-				body.appendChild(row);
-			});
-			var devCard = card('', [
-				E('div', { 'class': 'zm-tr-cardhead' }, [ h3('Устройства'), E('label', { 'class': 'zm-tr-sort' }, [ E('span', {}, 'Сортировать'), sel ]) ]),
-				devs.length ? E('div', { 'class': 'zm-tr-scroll' }, body) : E('p', { 'class': 'zm-hint' }, now ? 'Сейчас никто ничего не качает.' : 'За этот период трафика ещё нет. Первые цифры появятся через минуту после включения учёта.')
-			]);
-			wrap.appendChild(devCard);
-
-			var sites = d.sites || [], smax = sites.length ? sites[0].b : 0;
-			var sCard = card('', [ h3('Куда уходит трафик') ]);
-			if (!d.sites_on) sCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Запись сайтов выключена в настройках — роутер считает только объём.'));
-			else if (!sites.length && !(d.nodom > 0)) sCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Сайтов пока нет — они появятся, когда устройства начнут что-то открывать.'));
-			sites.forEach(function(s) {
-				sCard.appendChild(E('div', { 'class': 'zm-tr-site' }, [
-					E('div', { 'class': 'zm-tr-site-h' }, [ E('span', {}, [ E('b', {}, s.n), s.dm ? E('span', { 'class': 'zm-tr-muted' }, ' ' + s.dm) : '' ]), E('b', {}, now ? rate(s.b / (d.every || 20)) : size(s.b)) ]),
-					bar(smax ? 100 * s.b / smax : 0, 'zm-tr-' + s.r)
-				]));
-			});
-			if (d.rest && d.rest.b > 0) sCard.appendChild(E('div', { 'class': 'zm-tr-site-h zm-tr-muted' }, [ E('span', {}, 'Остальное' + (d.rest.n ? ' · ' + d.rest.n + ' ' + plural(d.rest.n, 'сервис', 'сервиса', 'сервисов') : '')), E('span', {}, now ? rate(d.rest.b / (d.every || 20)) : size(d.rest.b)) ]));
-			if (d.sites_on && d.nodom > 0) sCard.appendChild(E('div', { 'class': 'zm-tr-site-h zm-tr-muted' }, [ E('span', { 'title': 'Устройство само шифрует DNS (DoH) или соединилось по IP-адресу' }, 'Без домена'), E('span', {}, now ? rate(d.nodom / (d.every || 20)) : size(d.nodom)) ]));
-
-			var r = d.routes || {}, rsum = 0;
-			ROUTE_ORDER.forEach(function(k) { rsum += +r[k] || 0; });
-			var rCard = card('', [ h3('Как идёт трафик') ]);
-			if (rsum > 0) {
-				rCard.appendChild(routesStack(r, rsum));
-				var leg = E('div', { 'class': 'zm-tr-legend' });
-				ROUTE_ORDER.forEach(function(k) {
-					if (!(r[k] > 0)) return;
-					leg.appendChild(E('div', { 'class': 'zm-tr-leg' }, [ E('span', { 'class': 'zm-tr-muted' }, [ E('i', { 'class': 'zm-tr-' + k }), ROUTES[k] ]), E('b', {}, now ? rate(r[k] / (d.every || 20)) : size(r[k])), E('span', { 'class': 'zm-tr-muted' }, num(100 * r[k] / rsum, 0) + '%') ]));
-				});
-				rCard.appendChild(leg);
-			} else rCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Данных пока нет.'));
-			rCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Через Zapret» — сайт подходит под стратегию Zapret. «Через Forkozz» и «через Steer» — трафик ушёл в их туннели. Домены роутер берёт из DNS-запросов; что внутри страниц, видео и сообщений — не видно.'));
-			wrap.appendChild(E('div', { 'class': 'zm-tr-two' }, [ sCard, rCard ]));
-			return wrap;
-		}
-
-		function chart(d) {
-			var pts = (d.series && d.series.pts) || [], hrs = d.series && d.series.k === 'h', max = 0;
-			pts.forEach(function(p) { max = Math.max(max, (+p[1] || 0) + (+p[2] || 0)); });
-			var plot = E('div', { 'class': 'zm-tr-chart', 'role': 'img', 'aria-label': hrs ? 'Трафик по часам' : 'Трафик по дням' });
-			pts.forEach(function(p) {
-				var dn = +p[1] || 0, up = +p[2] || 0, t = dayLabel(p[0]) + ' — ↓ ' + size(dn) + ' · ↑ ' + size(up);
-				plot.appendChild(E('div', { 'class': 'zm-tr-col1', 'title': t }, [
-					E('i', { 'class': 'zm-tr-cd', 'style': 'height:' + (max ? Math.max(dn > 0 ? 2 : 0, 100 * dn / max) : 0) + '%' }),
-					E('i', { 'class': 'zm-tr-cu', 'style': 'height:' + (max ? Math.max(up > 0 ? 1 : 0, 100 * up / max) : 0) + '%' })
-				]));
-			});
-			var ax = E('div', { 'class': 'zm-tr-axis' });
-			if (hrs) [ '00:00', '06:00', '12:00', '18:00', '23:00' ].forEach(function(t) { ax.appendChild(E('span', {}, t)); });
-			else if (pts.length) { ax.appendChild(E('span', {}, dayLabel(pts[0][0]))); if (pts.length > 2) ax.appendChild(E('span', {}, dayLabel(pts[Math.floor(pts.length / 2)][0]))); if (pts.length > 1) ax.appendChild(E('span', {}, dayLabel(pts[pts.length - 1][0]))); }
-			return card('', [
-				E('div', { 'class': 'zm-tr-cardhead' }, [ h3(hrs ? 'По часам, сегодня' : 'По дням'), E('span', { 'class': 'zm-tr-keys' }, [ E('span', {}, [ E('i', { 'class': 'zm-tr-cd' }), 'скачано' ]), E('span', {}, [ E('i', { 'class': 'zm-tr-cu' }), 'отдано' ]) ]) ]),
-				max > 0 ? plot : E('p', { 'class': 'zm-hint' }, 'За этот период трафика нет.'), max > 0 ? ax : ''
-			]);
-		}
-
-		function devView(d) {
-			var x = d.dev || {}, now = st.period === 'now', wrap = E('div', { 'class': 'zm-tr-col' });
-			wrap.appendChild(E('button', { 'class': 'cbi-button zm-tr-back', 'click': function() { st.mac = ''; st.dev = null; draw(); refresh(); } }, '← Все устройства'));
-			wrap.appendChild(card('zm-tr-devhead', [
-				E('div', { 'class': 'zm-tr-who' }, [ avatar(x), E('div', { 'class': 'zm-tr-who-t' }, [
-					E('h3', {}, devName(x)),
-					E('span', { 'class': 'zm-tr-sub' }, [ x.ip, x.m, x.on ? 'в сети' : (x.seen ? 'был в сети ' + when(x.seen) : 'не в сети') ].filter(Boolean).join(' · '))
-				]) ]),
-				E('div', { 'class': 'zm-tr-tools' }, [
-					E('button', { 'class': 'cbi-button', 'disabled': st.busy ? '' : null, 'click': function() { rename(x); } }, 'Переименовать'),
-					E('button', { 'class': 'cbi-button', 'disabled': st.busy ? '' : null, 'click': function() { exclude(x, true); } }, 'Не считать это устройство')
-				])
-			]));
-			wrap.appendChild(E('div', { 'class': 'zm-tr-tiles' }, [
-				tile(now ? 'Скачивает' : 'Скачано', now ? rate(x.rd) : size(x.d), now ? '' : periodNote(d)),
-				tile(now ? 'Отдаёт' : 'Отдано', now ? rate(x.ru) : size(x.u), now ? '' : periodNote(d)),
-				tile('Сейчас', x.on ? rate((+x.rd || 0) + (+x.ru || 0)) : '—', x.on ? '↓ ' + rate(x.rd) + ' · ↑ ' + rate(x.ru) : 'не в сети'),
-				tile('Соединений', num(x.c || 0, 0), 'открыто сейчас')
-			]));
-			wrap.appendChild(chart(d));
-
-			var sites = d.sites || [], sc = card('', [ h3('Сайты и сервисы') ]);
-			if (!d.sites_on) sc.appendChild(E('p', { 'class': 'zm-hint' }, 'Запись сайтов выключена в настройках.'));
-			else if (!sites.length) sc.appendChild(E('p', { 'class': 'zm-hint' }, 'За этот период сайтов нет.'));
-			sites.forEach(function(s) {
-				sc.appendChild(E('div', { 'class': 'zm-tr-line' }, [
-					E('span', { 'class': 'zm-tr-who-t' }, [ E('b', {}, s.n), s.dm ? E('span', { 'class': 'zm-tr-sub zm-tr-ell' }, s.dm) : '' ]),
-					chip(s.r), E('b', { 'class': 'zm-tr-num' }, now ? rate(s.b / (d.every || 20)) : size(s.b))
-				]));
-			});
-			var tot = (+x.d || 0) + (+x.u || 0);
-			if (d.sites_on && x.nodom > 0) sc.appendChild(E('div', { 'class': 'zm-tr-line zm-tr-muted' }, [ E('span', {}, 'Без домена'), E('span', {}, ''), E('b', { 'class': 'zm-tr-num' }, now ? rate(x.nodom / (d.every || 20)) : size(x.nodom)) ]));
-
-			var lc = card('', [ h3('Сейчас открыто') ]), live = d.live || [];
-			if (!live.length) lc.appendChild(E('p', { 'class': 'zm-hint' }, x.on ? 'Сейчас устройство ничего не качает.' : 'Устройство не в сети.'));
-			live.forEach(function(c) {
-				lc.appendChild(E('div', { 'class': 'zm-tr-line' }, [
-					E('span', { 'class': 'zm-tr-who-t' }, [ E('b', { 'class': 'zm-tr-ell' }, c.h), E('span', { 'class': 'zm-tr-sub' }, proto(c.p, c.t) + (c.x ? ' · домен неизвестен' : '')) ]),
-					chip(c.r), E('b', { 'class': 'zm-tr-num' }, rate(c.s))
-				]));
-			});
-			var side = E('div', { 'class': 'zm-tr-col' }, [ lc ]);
-			if (d.sites_on && tot > 0 && x.nodom > tot * 0.03) side.appendChild(card('zm-tr-note', [ E('p', {}, 'У ' + num(100 * x.nodom / tot, 0) + '% трафика этого устройства домен не определился: устройство само шифрует DNS или соединяется по IP-адресу. Такой трафик учтён, но без сайта.') ]));
-			wrap.appendChild(E('div', { 'class': 'zm-tr-two' }, [ sc, side ]));
-			return wrap;
-		}
-
-		function settings(d) {
-			var c = card('zm-tr-set', [ h3('Настройки учёта') ]);
-			function row(label, hint, ctl) { return E('div', { 'class': 'zm-tr-setrow' }, [ E('span', { 'class': 'zm-tr-who-t' }, [ E('b', {}, label), hint ? E('span', { 'class': 'zm-tr-sub' }, hint) : '' ]), ctl ]); }
-			function segOf(list, cur, key) {
-				return E('div', { 'class': 'zm-seg' + (st.busy ? ' zm-seg-busy' : ''), 'role': 'radiogroup', 'aria-label': key }, list.map(function(o) {
-					var on = String(cur) === String(o[0]);
-					return E('div', { 'class': 'zm-seg-item' + (on ? ' zm-active' : ''), 'role': 'radio', 'tabindex': '0', 'aria-checked': on ? 'true' : 'false',
-						'click': function() { if (!on && !st.busy) set(key + '=' + o[0]); },
-						'keydown': function(ev) { if ((ev.key === 'Enter' || ev.key === ' ') && !on && !st.busy) { ev.preventDefault(); set(key + '=' + o[0]); } } }, o[1]);
-				}));
-			}
-			c.appendChild(row('Хранить историю', 'дольше — больше места в памяти', segOf([ [ 7, '7 дней' ], [ 30, '30 дней' ], [ 90, '90 дней' ] ], d.days, 'days')));
-			c.appendChild(row('Где хранить', d.store === 'flash' ? 'копия на флеше раз в сутки и при выключении роутера' : 'в памяти: после перезагрузки роутера история начнётся заново', segOf([ [ 'ram', 'в памяти' ], [ 'flash', 'на флеше' ] ], d.store, 'store')));
-			c.appendChild(zm.swRow(!!d.sites, 'Записывать сайты', d.sites ? 'Роутер включает журнал DNS-запросов dnsmasq и по нему узнаёт домены.' : 'Выключено: роутер считает только объём по устройствам.', function() { if (!st.busy) set('sites=' + (d.sites ? 0 : 1)); }, !!st.busy));
-			var ex = d.excl || [];
-			c.appendChild(row('Не считать устройства', ex.length ? '' : 'например, рабочий ноутбук — кнопка есть на странице устройства', ex.length ? E('span', { 'class': 'zm-tr-sub' }, ex.length + ' ' + plural(ex.length, 'устройство', 'устройства', 'устройств')) : ''));
-			ex.forEach(function(x) {
-				c.appendChild(E('div', { 'class': 'zm-tr-line' }, [ E('span', { 'class': 'zm-tr-who-t' }, [ E('b', {}, x.n || 'Без имени'), E('span', { 'class': 'zm-tr-sub' }, x.m) ]), E('span'),
-					E('button', { 'class': 'cbi-button', 'disabled': st.busy ? '' : null, 'click': function() { exclude(x, false); } }, 'Снова считать') ]));
-			});
-			c.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button', 'disabled': st.busy ? '' : null, 'click': function() { wipe(); } }, 'Очистить историю'),
-				E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': st.busy ? '' : null, 'click': function() { turnOff(); } }, 'Выключить учёт')
-			]));
-			c.appendChild(E('p', { 'class': 'zm-hint' }, 'Данные остаются на роутере и никуда не отправляются. Видят их только те, кто входит в панель.'));
-			return c;
-		}
-
-		function offPage(d) {
-			var ok = d && d.conntrack !== false;
-			var list = E('div', { 'class': 'zm-tr-feat' }, [
-				[ '✓', 'Объём по каждому устройству — сейчас, за день, неделю и месяц' ],
-				[ '✓', 'Сайты и сервисы — по доменам из DNS-запросов' ],
-				[ '✓', 'Какой трафик идёт через Zapret, Forkozz, Steer или напрямую' ],
-				[ '✕', 'Что внутри страниц, видео и переписки — роутер этого не видит' ]
-			].map(function(t) { return E('div', { 'class': t[0] === '✓' ? '' : 'zm-tr-muted' }, [ E('span', { 'class': 'zm-tr-mark', 'aria-hidden': 'true' }, t[0]), t[1] ]); }));
-			return card('zm-tr-off', [
-				h3('Трафик устройств', E('span', { 'class': 'zm-badge zm-off' }, [ E('span', { 'class': 'zm-dot' }), 'выключен' ])),
-				E('p', {}, 'Включите, чтобы видеть, сколько качает каждое устройство и на какие сайты оно ходит. Данные начнут собираться с этой минуты — прошлый трафик не узнать.'),
-				list,
-				ok ? E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': st.busy ? '' : null, 'click': function() { set('on=1'); } }, st.busy ? 'Включаем…' : 'Включить учёт')
-					: E('p', { 'class': 'zm-hint' }, 'На этом роутере нет таблицы соединений ядра (/proc/net/nf_conntrack) — учёт трафика не заработает.'),
-				E('p', { 'class': 'zm-hint' }, 'Нагрузка небольшая: раз в 20 секунд роутер читает таблицу соединений. Данные хранятся в памяти и никуда не отправляются.')
-			]);
-		}
-
-		function draw() {
-			root.innerHTML = '';
-			var d = st.mac ? st.dev : st.data;
-			if (st.err && !d) { root.appendChild(card('zm-tr-note', [ E('b', {}, 'Не удалось получить данные'), E('p', {}, st.err) ])); return; }
-			if (!d) { root.appendChild(card('', [ E('p', { 'class': 'zm-hint' }, 'Загружаем…') ])); return; }
-			d.sites_on = !!d.sites && !d.dns_block;
-			if (!d.on) { root.appendChild(offPage(d)); return; }
-			root.appendChild(header(d));
-			notes(d).forEach(function(n) { root.appendChild(n); });
-			if (st.showSet) root.appendChild(settings(d));
-			if (st.err) root.appendChild(card('zm-tr-note', [ E('p', {}, st.err) ]));
-			root.appendChild(st.mac ? devView(d) : overview(d));
-		}
-
-		function load() {
-			var my = ++seq;
-			var p = st.mac ? zm.traffic('dev', st.period + '|' + st.mac) : zm.traffic('data', st.period);
-			return p.then(function(r) {
-				if (my !== seq) return;
-				if (!r || r.error) { setErr((r && r.error) || 'роутер не ответил'); }
-				else { setErr(''); if (st.mac) st.dev = r; else st.data = r; }
-				draw();
-			}, function() { if (my === seq) { setErr('роутер не ответил'); draw(); } });
-		}
-		function refresh() {
-			clearTimeout(timer);
-			if (!alive()) return;
-			load().then(function() {
-				if (!alive()) return;
-				var d = st.mac ? st.dev : st.data;
-				if (d && d.on) timer = setTimeout(function() { if (document.hidden) timer = setTimeout(refresh, 5000); else refresh(); }, ((d.every || 20) * 1000));
-			});
-		}
-		function setPeriod(p) { st.period = p; draw(); refresh(); }
-		function openDev(m) { st.mac = m; st.dev = null; draw(); refresh(); }
-
-		function act(a, v, msg, after) {
-			st.busy = a; draw();
-			return zm.traffic(a, v).then(function(r) {
-				st.busy = '';
-				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); draw(); return; }
-				if (msg) zm.toast(typeof msg === 'function' ? msg(r) : msg, 'info');
-				if (after) after(r);
-				refresh();
-			}, function() { st.busy = ''; zm.toast('Роутер не ответил', 'error'); draw(); });
-		}
-		function set(kv) {
-			var M = { 'on=1': 'Учёт трафика включён — первые цифры появятся через минуту', 'sites=1': 'Сайты записываются', 'sites=0': 'Сайты больше не записываются', 'store=flash': 'История сохраняется на флеш раз в сутки', 'store=ram': 'История хранится только в памяти' };
-			act('set', kv, M[kv] || 'Сохранено', function(r) { if (kv === 'on=1') { st.data = null; st.showSet = false; } else if (st.data) Object.keys(r).forEach(function(k) { st.data[k] = r[k]; }); });
-		}
-		function rename(x) {
-			zm.dialog({ title: 'Имя устройства', okText: 'Сохранить', blocks: [ { type: 'input', id: 'n', value: x.n || '', placeholder: 'например, Телевизор в гостиной', hint: 'Имя видно во всей панели. Пустое поле — вернуть имя из DHCP.' } ] }).then(function(v) {
-				if (!v || typeof v !== 'object') return;
-				act('name', x.m + '|' + String(v.n || '').trim(), 'Имя сохранено');
-			});
-		}
-		function exclude(x, on) {
-			if (!on) { act('excl', x.m + '|0', 'Устройство снова считается'); return; }
-			zm.dialog({ title: 'Не считать ' + devName(x) + '?', okText: 'Не считать', intro: 'Роутер перестанет записывать трафик этого устройства, а его прошлые цифры пропадут из отчётов. Вернуть можно в «Настройки».' }).then(function(ok) {
-				if (!ok) return;
-				act('excl', x.m + '|1', 'Устройство больше не считается', function() { st.mac = ''; st.dev = null; st.showSet = true; });
-			});
-		}
-		function wipe() {
-			zm.dialog({ title: 'Очистить историю?', danger: true, okText: 'Очистить', intro: 'Все собранные цифры и сайты удалятся. Учёт продолжится с этой минуты.' }).then(function(ok) { if (ok) act('wipe', '', 'История очищена'); });
-		}
-		function turnOff() {
-			zm.dialog({ title: 'Выключить учёт трафика?', danger: true, okText: 'Выключить', intro: 'Роутер перестанет считать трафик, вся собранная история удалится. Журнал DNS выключится, если его не использует блокировка рекламы.' }).then(function(ok) {
-				if (ok) act('set', 'on=0', 'Учёт трафика выключен', function() { st.mac = ''; st.dev = null; st.showSet = false; });
-			});
-		}
-
-		draw();
-		if (st.data && st.data.on) timer = setTimeout(refresh, ((st.data.every || 20) * 1000));
-		return root;
-	},
-
-	handleSaveApply: null,
-	handleSave: null,
-	handleReset: null
-});
-ZM_INSTALLER_EOF
-chmod 0644 '/www/luci-static/resources/view/zapret-manager/traffic.js'
 
 cat > '/www/luci-static/resources/view/zapret-manager/tgproxy.js' << 'ZM_INSTALLER_EOF'
 'use strict';
@@ -63753,6 +62780,23 @@ return view.extend({
 			});
 		}
 
+		function pinDevs(list, btn) {
+			if (btn.disabled) return;
+			btn.disabled = true; btn.textContent = 'Закрепляем…';
+			var ok = 0, err = '';
+			list.reduce(function(p, d) {
+				return p.then(function() {
+					return zm.owrtSet('pin', JSON.stringify({ op: 'pin', mac: d.mac, ip: d.ip, name: /^[A-Za-z0-9 _-]+$/.test(d.name || '') ? d.name : '' })).then(function(r) {
+						if (r && !r.error) { d.fixed = true; ok++; } else if (!err) err = (r && r.error) || 'роутер не ответил';
+					}, function() { if (!err) err = 'роутер не ответил'; });
+				});
+			}, Promise.resolve()).then(function() {
+				if (ok) zm.toast(ok > 1 ? 'Адреса закреплены: ' + ok : 'Адрес закреплён — устройство всегда будет получать ' + list[0].ip, 'info');
+				if (err) zm.toast('Не получилось закрепить: ' + err, 'error');
+				renderDev();
+			});
+		}
+
 		function devCard(card, key, title, hint) {
 			card.innerHTML = '';
 			var list = draft[key], devs = (cfg && cfg.devices) || [], known = {}, assigned = {}, akey = key === 'all' ? 'all' : 'full', taken = {};
@@ -63788,6 +62832,15 @@ return view.extend({
 			});
 			if (!grid.childNodes.length) grid.appendChild(E('p', { 'class': 'zm-hint', 'style': 'grid-column: 1 / -1; margin: 0' }, 'Устройства не найдены — добавьте адрес вручную.'));
 			card.appendChild(grid);
+			var unpinned = devs.filter(function(d) { return d.fixed === false && d.mac && list.indexOf(d.ip) >= 0; });
+			if (unpinned.length) {
+				var pinBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { pinDevs(unpinned, pinBtn); } }, unpinned.length > 1 ? 'Закрепить адреса' : 'Закрепить адрес');
+				card.appendChild(E('div', { 'class': 'zm-fk-pin' }, [
+					E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, [ '⚠ ', E('b', {}, unpinned.map(function(d) { return (d.name || d.ip) + (d.name ? ' (' + d.ip + ')' : ''); }).join(', ')),
+						unpinned.length > 1 ? ' — адреса не закреплены' : ' — адрес не закреплён',
+						'. Forkozz узнаёт устройства по IP: если роутер выдаст другой адрес, выбор перестанет действовать. Закрепите — устройство всегда будет получать этот же адрес.' ]),
+					pinBtn ]));
+			}
 			var inp = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': '192.168.1.100', 'style': 'flex:1; min-width:180px' });
 			function add() {
 				var v = inp.value.trim();
@@ -68819,7 +67872,6 @@ var ROUTES = [
 	{ id: 'hosts', title: 'Hosts', sub: 'Свои IP-адреса для сайтов', icon: 'list', group: 'Сеть', dot: 'hosts' },
 	{ id: 'adblock', title: 'Блокировка рекламы', sub: 'Реклама и трекеры для всей сети', icon: 'adblock', group: 'Сеть', dot: 'adblock' },
 	{ id: 'doh', title: 'DNS over HTTPS', sub: 'Шифрованный DNS для всей сети', icon: 'globe', group: 'Сеть', dot: 'doh' },
-	{ id: 'traffic', title: 'Трафик устройств', sub: 'Кто сколько качает и куда ходит', icon: 'traffic', group: 'Сеть' },
 	{ id: 'awg', title: 'AmneziaWG', sub: 'Туннели AmneziaWG и WARP', icon: 'anarchy', group: 'Сеть', dot: 'awg' },
 	{ id: 'tailscale', title: 'Удалённый доступ', sub: 'Вход в роутер из любой сети', icon: 'phone', group: 'Сеть', dot: 'ts' },
 	{ id: 'terminal', title: 'Терминал', sub: 'Командная строка в браузере', icon: 'terminal', group: 'Сеть', dot: 'term' },
@@ -72917,7 +71969,6 @@ ZM_GET_EOF
 	chmod +x "/usr/bin/${_zm_c%% *}"
 done
 ( /opt/zapret-manager-luci/backend.sh zm_stats_hit ) >/dev/null 2>&1 </dev/null &
-/opt/zapret-manager-luci/backend.sh traffic heal >/dev/null 2>&1 || true
 _zm_login_restart() {
 	if [ -x /etc/init.d/rpcd ]; then
 		/etc/init.d/rpcd restart >/dev/null 2>&1 || true
