@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.111
+# Version: 5.055
 ZM_VERSION_EOF
 set -e
 
@@ -1237,6 +1237,7 @@ _st_via_ok() { _zmL steer1 && _st_via_ok "$@"; }
 _st_via_pick() { _zmL steer1 && _st_via_pick "$@"; }
 _st_fetch() { _zmL steer1 && _st_fetch "$@"; }
 _st_cat_build() { _zmL steer1 && _st_cat_build "$@"; }
+_st_tch_build() { _zmL steer1 && _st_tch_build "$@"; }
 _st_cat_dl() { _zmL steer1 && _st_cat_dl "$@"; }
 _st_set_have() { _zmL steer1 && _st_set_have "$@"; }
 _st_srs_get() { _zmL steer1 && _st_srs_get "$@"; }
@@ -5773,7 +5774,7 @@ _rb_list_get() {
 
 _rb_say() { echo "==> $*"; }
 _rb_warn() { echo "!! $*"; }
-_rb_svc_src() { grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || awk -F'|' -v skip="$ST_CAT_SKIP" -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { if (l ~ /^#/) continue; split(l, a, "|"); if (a[1] == "") continue; b[a[1]] = 1; m = split(a[8], c, ","); for (i = 1; i <= m; i++) if (c[i] != "") b[c[i]] = 1 } } $9 != "" && $9 != "Свои списки каталога" { k = $1; sub(/^c_/, "", k); if (index(skip, " " k " ")) next; if (k ~ /^itdoginfo_/ && (substr(k, 11) in b)) next; print }' "$ST_CAT_SVC" 2>/dev/null; }
+_rb_svc_src() { grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || awk -F'|' -v skip="$ST_CAT_SKIP" -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { if (l ~ /^#/) continue; split(l, a, "|"); if (a[1] == "") continue; b[a[1]] = 1; m = split(a[8], c, ","); for (i = 1; i <= m; i++) if (c[i] != "") b[c[i]] = 1 } } $9 != "" && $9 != "Свои списки каталога" { k = $1; sub(/^c_/, "", k); if (index(skip, " " k " ")) next; if (k ~ /^itdoginfo_/ && (substr(k, 11) in b)) next; print }' "$ST_CAT_SVC" 2>/dev/null; [ -f "$ST_TCH_OFF" ] || cat "$ST_TCH_SVC" 2>/dev/null; }
 _rb_svc_field() { _rb_svc_src | grep "^$1|" | head -n1 | cut -d'|' -f"$2"; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
 _rb_routable() { [ "$1" = custom ] && [ -n "$(_rb_svc_field custom 1)" ] && return 0; [ -n "$(_rb_svc_field "$1" 3)$(_rb_svc_field "$1" 4)$(_rb_svc_field "$1" 8)" ]; }
@@ -5798,6 +5799,16 @@ ST_CAT_IDX="$ST_DIR/catalog.idx"
 ST_CAT_META="$ST_DIR/catalog.meta"
 ST_CAT_URL="$ST_DIR/catalog.url"
 ST_CAT_OFF="$ST_DIR/catalog.off"
+ST_TCH_SVC="$ST_DIR/tachyon.svc"
+ST_TCH_DIRECT="$ST_DIR/tachyon.direct"
+ST_TCH_IDX="$ST_DIR/tachyon.idx"
+ST_TCH_META="$ST_DIR/tachyon.meta"
+ST_TCH_OFF="$ST_DIR/tachyon.off"
+ST_TCH_ERR="$ST_DIR/tachyon.err"
+ST_TCH_XSETS="$ST_DIR/user/exclude.sets"
+ST_TCH_REPO="https://github.com/Dushnilin/tachyon-lists"
+ST_TCH_RAW="https://raw.githubusercontent.com/Dushnilin/tachyon-lists/main"
+ST_TCH_CDN="https://cdn.jsdelivr.net/gh/Dushnilin/tachyon-lists@main"
 ST_SKIP="$ST_DIR/skip"
 ST_OFF="$ST_DIR/stopped"
 ST_WARP_CONF="$ST_DIR/warp.conf"
@@ -6528,7 +6539,59 @@ _st_cat_refresh() {
 	return $rc
 }
 
+_st_tch_on() { [ ! -f "$ST_TCH_OFF" ]; }
+
+_st_age() { echo $(( $(date +%s) - $(date -r "$1" +%s 2>/dev/null || echo 0) )); }
+
+_st_tch_idx_merge() {
+	mkdir -p "$ST_DIR"
+	{ grep -v '^t_' "$ST_CAT_IDX" 2>/dev/null; _st_tch_on && cat "$ST_TCH_IDX" 2>/dev/null; } > "$ST_CAT_IDX.t$$"
+	if [ -s "$ST_CAT_IDX.t$$" ] || [ -f "$ST_CAT_IDX" ]; then mv -f "$ST_CAT_IDX.t$$" "$ST_CAT_IDX"; else rm -f "$ST_CAT_IDX.t$$"; fi
+}
+
+_st_tch_refresh() {
+	local m="$ST_RUN/tachyon.json" lk="$ST_RUN/tch.lock" rc=0 t
+	_st_tch_on || return 0
+	mkdir -p "$ST_DIR" "$ST_RUN"
+	[ "$1" != force ] && [ -s "$ST_TCH_META" ] && [ "$(_st_age "$ST_TCH_META")" -lt 21600 ] && return 0
+	if ! mkdir "$lk" 2>/dev/null; then
+		t=0
+		while [ "$1" = force ] && [ "$t" -lt 10 ] && [ -d "$lk" ]; do sleep 1; t=$((t + 1)); done
+		if ! mkdir "$lk" 2>/dev/null; then
+			[ -n "$(find "$lk" -maxdepth 0 -mmin +5 2>/dev/null)" ] || return 0
+			rmdir "$lk" 2>/dev/null; mkdir "$lk" 2>/dev/null || return 0
+		fi
+	fi
+	if { _st_fetch "$ST_TCH_RAW/release/catalog.json" "$m" || _st_fetch "$ST_TCH_CDN/release/catalog.json" "$m"; } && _st_tch_build "$m"; then
+		rm -f "$ST_TCH_ERR"
+		_st_tch_idx_merge
+	else
+		date +%s > "$ST_TCH_ERR"
+		rc=1
+	fi
+	rm -f "$m"
+	rmdir "$lk" 2>/dev/null
+	return $rc
+}
+
+_st_tch_bg() {
+	_st_tch_on || return 0
+	[ -d "$ST_RUN/tch.lock" ] && [ -z "$(find "$ST_RUN/tch.lock" -maxdepth 0 -mmin +5 2>/dev/null)" ] && return 0
+	[ -f "$ST_TCH_ERR" ] && [ "$(_st_age "$ST_TCH_ERR")" -lt 1800 ] && return 0
+	[ -s "$ST_TCH_META" ] && [ "$(_st_age "$ST_TCH_META")" -lt 21600 ] && [ "$RB_SHARE/services.conf" -ot "$ST_TCH_META" ] && return 0
+	( _st_tch_refresh force >/dev/null 2>&1 & )
+}
+
+_st_tch_json() {
+	local d="" n=0 x=0
+	[ -s "$ST_TCH_META" ] && { d="$(sed -n 's/^version=//p' "$ST_TCH_META")"; n="$(sed -n 's/^lists=//p' "$ST_TCH_META")"; x="$(sed -n 's/^direct=//p' "$ST_TCH_META")"; }
+	printf '{"on":%s,"version":"%s","lists":%s,"direct":%s,"age":%s,"error":%s,"busy":%s,"url":"%s"}' \
+		"$(_st_tch_on && echo true || echo false)" "$(esc "$d")" "${n:-0}" "${x:-0}" "$([ -s "$ST_TCH_META" ] && _st_age "$ST_TCH_META" || echo -1)" \
+		"$([ -f "$ST_TCH_ERR" ] && echo true || echo false)" "$([ -d "$ST_RUN/tch.lock" ] && echo true || echo false)" "$ST_TCH_REPO"
+}
+
 _st_cat_bg() {
+	_st_tch_bg
 	[ -f "$ST_CAT_OFF" ] && return 0
 	[ -d "$ST_RUN/cat.lock" ] && [ -z "$(find "$ST_RUN/cat.lock" -maxdepth 0 -mmin +5 2>/dev/null)" ] && return 0
 	if grep -q '|Свои списки каталога$' "$ST_CAT_SVC" 2>/dev/null; then ( _st_cat_refresh force >/dev/null 2>&1 & ); return 0; fi
@@ -6552,9 +6615,9 @@ _st_cat_json() {
 	[ -f "$ST_DIR/catalog.err" ] && err=true
 	[ -f "$ST_CAT_OFF" ] && off=true
 	src="$(_st_cat_src)"
-	printf '{"url":"%s","custom":%s,"version":"%s","sets":%s,"services":%s,"error":%s,"off":%s,"busy":%s}' \
+	printf '{"url":"%s","custom":%s,"version":"%s","sets":%s,"services":%s,"error":%s,"off":%s,"busy":%s,"tachyon":%s}' \
 		"$(esc "$src")" "$([ -s "$ST_CAT_URL" ] && echo true || echo false)" "$(esc "$ver")" "${sets:-0}" "${svcs:-0}" "$err" "$off" \
-		"$([ -d "$ST_RUN/cat.lock" ] && echo true || echo false)"
+		"$([ -d "$ST_RUN/cat.lock" ] && echo true || echo false)" "$(_st_tch_json)"
 }
 
 ST_LISTS_TAG="# zm-stlists"
@@ -7168,6 +7231,36 @@ steer_action() {
 			rm -f "$ST_DIR/catalog.err"
 			( _st_cat_refresh force >/dev/null 2>&1 & )
 			printf '{"ok":true}\n'
+			;;
+		tachyon)
+			mkdir -p "$ST_DIR"
+			case "$mode" in
+				off) touch "$ST_TCH_OFF"; _st_tch_idx_merge; printf '{"ok":true}\n' ;;
+				on|refresh)
+					[ "$mode" = refresh ] && ! _st_tch_on && { echo '{"error":"Tachyon Lists выключен"}'; return 1; }
+					rm -f "$ST_TCH_OFF" "$ST_TCH_ERR"
+					_st_tch_idx_merge
+					if [ "$mode" = on ] && [ -s "$ST_TCH_SVC" ]; then ( _st_tch_refresh >/dev/null 2>&1 & ); printf '{"ok":true}\n'; return 0; fi
+					_zm_run 25 _st_tch_refresh force >/dev/null 2>&1
+					case $? in
+						0) printf '{"ok":true}\n' ;;
+						137|143) rmdir "$ST_RUN/tch.lock" 2>/dev/null; rm -f "$ST_RUN/tachyon.json"; echo '{"error":"каталог Tachyon Lists не успел скачаться — попробуйте позже"}'; return 1 ;;
+						*) echo '{"error":"каталог Tachyon Lists не скачался — проверьте доступ к GitHub"}'; return 1 ;;
+					esac ;;
+				*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+			esac
+			;;
+		xsets)
+			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			mkdir -p "$ST_USER_DIR"
+			printf '%s\n' $(printf '%s' "$mode" | tr ',' ' ') | grep -E '^t_[a-z0-9_]+$' | while IFS= read -r x; do
+				grep -q "^$x|" "$ST_TCH_DIRECT" 2>/dev/null && echo "$x"
+			done | awk '!s[$0]++' > "$ST_TCH_XSETS.t"
+			if cmp -s "$ST_TCH_XSETS.t" "$ST_TCH_XSETS" 2>/dev/null || { [ ! -s "$ST_TCH_XSETS.t" ] && [ ! -s "$ST_TCH_XSETS" ]; }; then rm -f "$ST_TCH_XSETS.t"; printf '{"ok":true,"saved":true}\n'; return 0; fi
+			mv -f "$ST_TCH_XSETS.t" "$ST_TCH_XSETS"
+			[ -s "$ST_TCH_XSETS" ] || rm -f "$ST_TCH_XSETS"
+			if _st_installed && [ ! -f "$ST_OFF" ] && [ "$(_st_exit)" != none ] && { _st_work || _st_owns "steer-spec"; }; then job_start steer do_steer_excl
+			else printf '{"ok":true,"saved":true}\n'; fi
 			;;
 		catalog_src)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -10000,9 +10093,10 @@ _zm_junk_raw() {
 		fi
 	fi
 	if [ -d "$ST_DIR/lists" ] && [ -s "$RB_SHARE/services.conf" ] && [ -z "$foreign" ] && ! _st_running; then
-		ls "$ST_DIR/lists" 2>/dev/null | awk -F'|' -v sel="$ST_SEL" -v conf="$RB_SHARE/services.conf" -v rem="$ST_CAT_SVC" -v dir="$ST_DIR/lists" '
+		ls "$ST_DIR/lists" 2>/dev/null | awk -F'|' -v sel="$ST_SEL" -v conf="$RB_SHARE/services.conf" -v rem="$ST_CAT_SVC" -v tch="$ST_TCH_SVC" -v xs="$ST_TCH_XSETS" -v dir="$ST_DIR/lists" '
 			function load(file,    l, a, c, m, i) { while ((getline l < file) > 0) { if (l ~ /^#/) continue; split(l, a, "|"); if (!(a[1] in on)) continue; m = split(a[8], c, ","); for (i = 1; i <= m; i++) if (c[i] != "") keep[c[i]] = 1 } close(file) }
-			BEGIN { while ((getline l < sel) > 0) if (l != "") { on[l] = 1; keep[l] = 1 } close(sel); load(conf); load(rem) }
+			BEGIN { while ((getline l < sel) > 0) if (l != "") { on[l] = 1; keep[l] = 1 } close(sel); load(conf); load(rem); load(tch)
+				while ((getline l < xs) > 0) if (l != "") { keep[l] = 1; keep[l "_ip"] = 1 } close(xs) }
 			{ n = $0; sub(/\..*$/, "", n); if (n == "" || (n in keep)) next; print dir "/" $0 }' | while IFS= read -r f; do
 			echo "$f"
 		done
@@ -15258,6 +15352,8 @@ forkop_config_get() {
 		else
 			_st_cat_bg
 		fi
+	else
+		_st_tch_bg
 	fi
 	ZM_FK_CAT="$(_st_cat_json)" _fk_ucj get "$1"
 }
@@ -26161,8 +26257,20 @@ _st_dev_key() {
 _st_work_main() { [ -n "$(_st_sel)" ] || _st_devs_all; }
 
 _st_excl_model() {
+	local id st set
 	[ -s "$ST_DIR/user/exclude.lst" ] && printf 'xdom\t%s\n' "$ST_DIR/user/exclude.lst"
 	[ -s "$ST_DIR/user/exclude.pfx" ] && printf 'xpfx\t%s\n' "$ST_DIR/user/exclude.pfx"
+	[ -s "$ST_TCH_XSETS" ] && [ -s "$ST_TCH_DIRECT" ] && _st_tch_on || return 0
+	for id in $(cat "$ST_TCH_XSETS"); do
+		st="$(awk -F'|' -v k="$id" '$1 == k { print $4; exit }' "$ST_TCH_DIRECT")"
+		[ -n "$st" ] || continue
+		echo "   → Мимо Steer: «$(awk -F'|' -v k="$id" '$1 == k { print $2; exit }' "$ST_TCH_DIRECT")»" >&2
+		for set in $(echo "$st" | tr ',' ' '); do
+			_st_srs_get "$set" || { _rb_warn "Список $set для «Мимо Steer» не скачался — пропускаем его в этот раз" >&2; continue; }
+			[ -s "$ST_DIR/lists/$set.dom" ] && printf 'xdom\t%s\n' "$ST_DIR/lists/$set.dom"
+			[ -s "$ST_DIR/lists/$set.pfx" ] && printf 'xpfx\t%s\n' "$ST_DIR/lists/$set.pfx"
+		done
+	done
 	return 0
 }
 
@@ -26171,7 +26279,7 @@ do_steer_excl() {
 	_st_phase rules
 	rm -f "$ST_STOP_FLAG"
 	nd="$(cat "$ST_DIR/user/exclude.lst" 2>/dev/null | grep -c .)"; np="$(cat "$ST_DIR/user/exclude.pfx" 2>/dev/null | grep -c .)"
-	_rb_say "Исключения: доменов $nd, IP и подсетей $np"
+	_rb_say "Исключения: доменов $nd, IP и подсетей $np$([ -s "$ST_TCH_XSETS" ] && echo ", готовых списков $(grep -c . "$ST_TCH_XSETS")")"
 	if _st_owns "steer-spec" && _st_work; then
 		if _st_use_vpn; then _st_spec_quick; else _st_spec_quick_warp; fi
 		rc=$?
@@ -27365,9 +27473,74 @@ _st_cat_build() {
 		}' "$flat" > "$ST_CAT_SVC.tmp" || { rm -f "$flat" "$ST_CAT_SVC.tmp" "$ST_CAT_IDX.tmp" "$ST_CAT_META.tmp"; return 1; }
 	rm -f "$flat"
 	[ -s "$ST_CAT_SVC.tmp" ] && [ -s "$ST_CAT_IDX.tmp" ] || { rm -f "$ST_CAT_SVC.tmp" "$ST_CAT_IDX.tmp" "$ST_CAT_META.tmp"; return 1; }
+	_st_tch_on && [ -s "$ST_TCH_IDX" ] && cat "$ST_TCH_IDX" >> "$ST_CAT_IDX.tmp"
 	mv -f "$ST_CAT_IDX.tmp" "$ST_CAT_IDX"
 	mv -f "$ST_CAT_SVC.tmp" "$ST_CAT_SVC"
 	mv -f "$ST_CAT_META.tmp" "$ST_CAT_META"
+}
+
+_st_tch_build() {
+	local flat="$ST_RUN/tch.flat" bids
+	mkdir -p "$ST_RUN" "$ST_DIR"
+	_json_flat "$1" > "$flat" 2>/dev/null
+	grep -q '^lists\.0\.id	' "$flat" || { rm -f "$flat"; return 1; }
+	bids=" $(grep -v '^#' "$RB_SHARE/services.conf" | cut -d'|' -f1,8 | tr ',|\n' '   ') "
+	awk -F'\t' -v b="$bids" -v raw="$ST_TCH_RAW" -v svc="$ST_TCH_SVC.tmp" -v dir="$ST_TCH_DIRECT.tmp" -v idx="$ST_TCH_IDX.tmp" -v meta="$ST_TCH_META.tmp" '
+		function clean(x) { gsub(/[|\t\r\n]/, " ", x); gsub(/  +/, " ", x); sub(/^ /, "", x); sub(/ $/, "", x); return x }
+		function short(x,    m, a, i, o) {
+			m = split(x, a, ", "); o = a[1]
+			for (i = 2; i <= m; i++) { if (length(o ", " a[i]) > 160) return o "…"; o = o ", " a[i] }
+			return o
+		}
+		function num(n) { return n >= 1000 ? int(n / 1000) " тыс." : n "" }
+		{
+			if ($1 == "generated_at") { gen = $2; next }
+			n = split($1, a, ".")
+			if (a[1] != "lists" || a[2] !~ /^[0-9]+$/) next
+			e = a[2] + 0; if (e + 1 > cnt) cnt = e + 1
+			k = a[3]; if (n == 4) k = a[3] "." a[4]
+			f[e, k] = $2
+		}
+		END {
+			G["ai"] = "ИИ и нейросети"; G["media"] = "Видео, музыка и кино"; G["social"] = "Соцсети и мессенджеры"; G["gaming"] = "Игры"
+			G["tech"] = "Технологии и разработка"; G["infra"] = "Хостинги и CDN"; G["regional"] = "Регионы и блокировки"; G["other"] = "Разное"
+			split("ai media social gaming tech infra regional other", ord, " ")
+			for (e = 0; e < cnt; e++) {
+				id = tolower(f[e, "id"]); if (id !~ /^[a-z0-9_]+$/) continue
+				act = f[e, "recommended_action"]; grp = f[e, "group"]
+				if (grp == "internal" || act == "block" || id == "ru_blocked_all") continue
+				nd = f[e, "counts.domain"] + f[e, "counts.domain_suffix"]; ni = f[e, "counts.ipv4_cidr"] + 0
+				if (nd + ni == 0 || nd > 300000) continue
+				t = clean(f[e, "title"]); nm = t; ds = ""
+				p = index(t, " — ")
+				if (p) { nm = substr(t, 1, p - 1); ds = substr(t, p + length(" — ")) }
+				if (p && gsub(/\(/, "(", nm) > gsub(/\)/, ")", nm)) { nm = t; ds = "" }
+				if (nm == "") nm = id
+				ds = short(ds)
+				if (nd + ni >= 20000) ds = "большой список: " (nd ? num(nd) " доменов" : "") (nd && ni ? ", " : "") (ni ? num(ni) " подсетей" : "") (ds != "" ? " · " ds : "")
+				st = ""
+				fd = f[e, "files.domains"]; fs = f[e, "files.subnets"]
+				if (nd > 0 && fd ~ /^release\/domains\/[a-z0-9_]+\.lst$/) { st = "t_" id; line[st] = st "|lst|" raw "/" fd "|d" }
+				if (ni > 0 && fs ~ /^release\/subnets\/[a-z0-9_]+\.lst$/) { sub(/^release\/subnets\//, "release/subnets/ipv4/", fs); line["t_" id "_ip"] = "t_" id "_ip|lst|" raw "/" fs "|s"; st = st (st != "" ? "," : "") "t_" id "_ip" }
+				if (st == "") continue
+				if (act == "direct") { print "t_" id "|" nm "|" ds "|" st > dir; nx++; keepset(st); continue }
+				if (!(grp in G) || index(b, " " id " ")) continue
+				body[grp] = body[grp] "t_" id "|" nm "||||||" st "|" G[grp] " (Tachyon Lists)|" ds "\n"; ns++
+				keepset(st)
+			}
+			for (i = 1; i <= 8; i++) if (body[ord[i]] != "") printf "%s", body[ord[i]] > svc
+			for (k in use) print line[k] > idx
+			printf "version=%s\nlists=%d\ndirect=%d\n", substr(gen, 1, 10), ns, nx > meta
+		}
+		function keepset(x,    m, c, i) { m = split(x, c, ","); for (i = 1; i <= m; i++) use[c[i]] = 1 }
+	' "$flat" || { rm -f "$flat" "$ST_TCH_SVC.tmp" "$ST_TCH_DIRECT.tmp" "$ST_TCH_IDX.tmp" "$ST_TCH_META.tmp"; return 1; }
+	rm -f "$flat"
+	[ -s "$ST_TCH_SVC.tmp" ] && [ -s "$ST_TCH_IDX.tmp" ] || { rm -f "$ST_TCH_SVC.tmp" "$ST_TCH_DIRECT.tmp" "$ST_TCH_IDX.tmp" "$ST_TCH_META.tmp"; return 1; }
+	touch "$ST_TCH_DIRECT.tmp"
+	mv -f "$ST_TCH_IDX.tmp" "$ST_TCH_IDX"
+	mv -f "$ST_TCH_SVC.tmp" "$ST_TCH_SVC"
+	mv -f "$ST_TCH_DIRECT.tmp" "$ST_TCH_DIRECT"
+	mv -f "$ST_TCH_META.tmp" "$ST_TCH_META"
 }
 
 _st_cat_dl() {
@@ -27390,6 +27563,13 @@ _st_srs_url() {
 	echo "${u:-$ST_SRS_FALLBACK/$1.srs}"
 }
 
+_st_cdn_url() {
+	case "$1" in
+		https://raw.githubusercontent.com/*/*/*/*) printf '%s\n' "$1" | sed 's#^https://raw.githubusercontent.com/\([^/]*\)/\([^/]*\)/\(refs/heads/\)\{0,1\}\([^/]*\)/#https://cdn.jsdelivr.net/gh/\1/\2@\4/#' ;;
+		*) return 1 ;;
+	esac
+}
+
 _st_set_fmt() { awk -F'|' -v k="$1" '$1 == k { print $2; exit }' "$ST_CAT_IDX" 2>/dev/null; }
 
 _st_set_have() {
@@ -27410,7 +27590,8 @@ _st_srs_get() {
 	f="$ST_RUN/$set.src"
 	if [ "$fmt" = lst ]; then
 		{ [ -s "$d/$set.dom" ] || [ -s "$d/$set.pfx" ]; } && old=1
-		if ! _st_fetch "$(_st_srs_url "$set")" "$f"; then
+		x="$(_st_srs_url "$set")"
+		if ! _st_fetch "$x" "$f" && ! { _st_cdn_url "$x" >/dev/null && _st_fetch "$(_st_cdn_url "$x")" "$f"; }; then
 			rm -f "$f"
 			[ -n "$old" ] || return 1
 			_rb_warn "Набор $set не скачался — беру прошлую копию" >&2
@@ -27848,6 +28029,7 @@ _st_apply0() {
 		if _st_cat_refresh force >/dev/null 2>&1; then echo "   ✓ Каталог $(sed -n 's/^version=//p' "$ST_CAT_META" 2>/dev/null): наборов $(sed -n 's/^sets=//p' "$ST_CAT_META" 2>/dev/null)"
 		else _rb_warn "Каталог списков не скачался — сервисы из каталога берём по прежнему списку"; fi
 	fi
+	if _st_tch_on && ! _st_tch_refresh >/dev/null 2>&1; then _rb_warn "Каталог Tachyon Lists не скачался — его списки берём по прежнему каталогу"; fi
 	sel="$(_st_sel | tr '\n' ' ')"
 	if [ -z "$(echo $sel)" ] && ! _st_devs_all && ! _st_secs_work; then
 		_st_spec_clear
@@ -28752,6 +28934,11 @@ do_steer_lists() {
 		if _st_cat_refresh force >/dev/null 2>&1; then echo "   ✓ Каталог $(sed -n 's/^version=//p' "$ST_CAT_META" 2>/dev/null): наборов $(sed -n 's/^sets=//p' "$ST_CAT_META" 2>/dev/null)"
 		else _rb_warn "Каталог списков не скачался — наборы берём по прежнему каталогу"; fi
 	fi
+	if [ "$mode" = all ] && _st_tch_on; then
+		_rb_say "Обновляем каталог Tachyon Lists"
+		if _st_tch_refresh force >/dev/null 2>&1; then echo "   ✓ Tachyon Lists $(sed -n 's/^version=//p' "$ST_TCH_META" 2>/dev/null): списков $(sed -n 's/^lists=//p' "$ST_TCH_META" 2>/dev/null)"
+		else _rb_warn "Каталог Tachyon Lists не скачался — его списки берём по прежнему каталогу"; fi
+	fi
 	sets="$(_st_lists_used any $(_st_sec_with main _st_sel))"
 	if [ "$mode" = missing ]; then
 		for set in $sets; do _st_set_have "$set" || m="$m $set"; done
@@ -29046,7 +29233,7 @@ steer_status() {
 		{ seen[$1] = 1 }
 		$1 != "custom" && $3 $4 $8 == "" { next }
 		{
-			printf "%s{\"id\":\"%s\",\"name\":\"%s\",\"group\":\"%s\",\"on\":%s,\"skip\":%s,\"dom\":%s}", (n++ ? "," : ""), $1, j($2), j($9),
+			printf "%s{\"id\":\"%s\",\"name\":\"%s\",\"group\":\"%s\",\"desc\":\"%s\",\"on\":%s,\"skip\":%s,\"dom\":%s}", (n++ ? "," : ""), $1, j($2), j($9), j($10),
 				(index(sel, " " $1 " ") ? "true" : "false"), (($1 in sk) ? "true" : "false"), (hasdom() ? "true" : "false")
 		}')"
 	local vexit vup=false vsub=false latest="" ext=false won=false failed=false active="" wfail=false
@@ -29071,12 +29258,21 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s]}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
 		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$([ -f "$ST_SUB_VIA" ] && echo true || echo false)" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
 		"$(_st_owns "pkg kmod-amneziawg" || _st_owns "pkg amneziawg-tools" && echo true || echo false)" \
-		"$(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p" | grep -cvE '^zmwarp[0-9]*$')"
+		"$(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p" | grep -cvE '^zmwarp[0-9]*$')" \
+		"$(_st_xsets_json)"
+}
+
+_st_xsets_json() {
+	[ -s "$ST_TCH_DIRECT" ] && _st_tch_on || return 0
+	awk -F'|' -v xs="$ST_TCH_XSETS" '
+		function j(v,    o, i, c) { o = ""; for (i = 1; i <= length(v); i++) { c = substr(v, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else o = o c } return o }
+		BEGIN { while ((getline l < xs) > 0) on[l] = 1 }
+		$1 ~ /^t_[a-z0-9_]+$/ && !s[$1]++ { printf "%s{\"id\":\"%s\",\"name\":\"%s\",\"desc\":\"%s\",\"on\":%s}", (n++ ? "," : ""), $1, j($2), j($3), (($1 in on) ? "true" : "false") }' "$ST_TCH_DIRECT"
 }
 
 _st_tunnels_json() {
@@ -29241,7 +29437,7 @@ _st_dom_stale() {
 	local f
 	[ -f "$1.deps" ] || return 0
 	[ -n "$(find "$1" -mmin +720 2>/dev/null)" ] && return 0
-	for f in "$RB_SHARE/services.conf" "$ST_CAT_IDX" "$ST_CAT_SVC" $(cat "$1.deps" 2>/dev/null); do
+	for f in "$RB_SHARE/services.conf" "$ST_CAT_IDX" "$ST_CAT_SVC" "$ST_TCH_SVC" $(cat "$1.deps" 2>/dev/null); do
 		[ "$f" -nt "$1" ] && return 0
 	done
 	return 1
@@ -35189,7 +35385,8 @@ function catalog_items(known_list) {
 		seen[id] = true;
 		push(items, { id, name: s(f[1]) || id, group: "", targets: uniq(t) });
 	}
-	if (fs.access(ST_DIR + "/catalog.off")) return items;
+	let cat_off = !!fs.access(ST_DIR + "/catalog.off"), tch_off = !!fs.access(ST_DIR + "/tachyon.off");
+	if (cat_off && tch_off) return items;
 	for (let l in split(s(fs.readfile(ST_DIR + "/catalog.idx")), "\n")) {
 		let f = split(l, "|");
 		if (length(f) >= 3 && f[0] != "" && match(f[2], /^https:\/\//))
@@ -35197,7 +35394,10 @@ function catalog_items(known_list) {
 	}
 	let covered = {};
 	for (let it in items) for (let tk in it.targets) covered[tk] = true;
-	for (let l in split(s(fs.readfile(ST_DIR + "/services.remote")), "\n")) {
+	let rlines = [];
+	if (!cat_off) rlines = split(s(fs.readfile(ST_DIR + "/services.remote")), "\n");
+	if (!tch_off) rlines = [ ...rlines, ...split(s(fs.readfile(ST_DIR + "/tachyon.svc")), "\n") ];
+	for (let l in rlines) {
 		let f = split(l, "|"), id = f[0], grp = s(f[8]), t = [], cat = false;
 		if (!id || seen[id] || grp == "" || grp == "Свои списки каталога") continue;
 		if (CAT_SKIP[replace(id, /^c_/, "")]) continue;
@@ -35213,7 +35413,7 @@ function catalog_items(known_list) {
 			if (own) continue;
 		}
 		seen[id] = true;
-		push(items, { id, name: s(f[1]) || id, group: itd ? "" : grp, cat: itd && cat, targets: uniq(t) });
+		push(items, { id, name: s(f[1]) || id, group: itd ? "" : grp, cat: itd && cat, desc: s(f[9]), targets: uniq(t) });
 	}
 	return items;
 }
@@ -41139,6 +41339,37 @@ function svcGrid(list) {
 	return E('div', { 'class': 'zm-svc-grid' }, list);
 }
 
+function tachyonBlock(t, o) {
+	t = t || {};
+	var box = E('div', { 'class': 'zm-cat-src' });
+	function ago(sec) {
+		if (sec < 0) return '';
+		if (sec < 3600) return 'обновлён ' + Math.max(1, Math.round(sec / 60)) + ' мин назад';
+		if (sec < 86400) return 'обновлён ' + Math.round(sec / 3600) + ' ч назад';
+		return 'обновлён ' + Math.round(sec / 86400) + ' дн. назад';
+	}
+	var on = t.on !== false, have = (+t.lists || 0) > 0;
+	var state = !on ? 'выключен — его списков нет в «Дополнительных списках»'
+		: t.busy ? 'обновляется…'
+		: have ? [ 'списков: ' + t.lists, +t.direct ? 'для «Мимо Steer»: ' + t.direct : '', ago(+t.age), t.error ? 'последнее обновление не удалось' : '' ].filter(Boolean).join(' · ')
+		: t.error ? 'не скачался — проверьте доступ к GitHub' : 'скачиваем каталог…';
+	var cls = !on ? 'zm-off' : t.error && !have ? 'zm-warn' : have ? 'zm-ok' : 'zm-off';
+	box.appendChild(E('div', { 'class': 'zm-cat-src-info' }, [
+		E('div', { 'class': 'zm-cat-src-title' }, [ 'Tachyon Lists ', E('span', { 'class': 'zm-badge ' + cls }, !on ? 'выключен' : t.busy ? 'обновляется' : have ? 'работает' : t.error ? 'ошибка' : 'скачивается') ]),
+		E('div', { 'class': 'zm-cat-src-state' }, state),
+		E('div', { 'class': 'zm-cat-src-url' }, [ E('a', { 'href': t.url || 'https://github.com/Dushnilin/tachyon-lists', 'target': '_blank', 'rel': 'noopener' }, 'github.com/Dushnilin/tachyon-lists') ])
+	]));
+	var b = [];
+	if (on) b.push(E('button', { 'class': 'cbi-button', 'click': function() { o.call('tachyon', 'refresh', 'Каталог Tachyon Lists обновлён'); } }, 'Обновить'));
+	b.push(E('button', { 'class': 'cbi-button', 'click': function() {
+		if (!on) toast('Включаем Tachyon Lists — скачиваем каталог…', 'info');
+		o.call('tachyon', on ? 'off' : 'on', on ? 'Tachyon Lists выключен' : 'Tachyon Lists включён');
+	} }, on ? 'Выключить' : 'Включить'));
+	box.appendChild(E('div', { 'class': 'zm-actions zm-cat-src-actions' }, b));
+	if (on && !have && !t.error && o.reload) setTimeout(function() { if (document.body.contains(box)) o.reload(); }, 6000);
+	return box;
+}
+
 function svcGroup(o) {
 	var body = E('div', { 'style': o.open ? '' : 'display:none' }, [ o.body ]);
 	var head = svcCard({ name: o.name, sub: o.sub, key: o.key, color: o.color, ico: o.ico, on: false, cls: 'zm-svc-group' + (o.open ? ' zm-svc-open' : ''),
@@ -42227,6 +42458,7 @@ return baseclass.extend({
 	svcCard: svcCard,
 	svcGrid: svcGrid,
 	svcGroup: svcGroup,
+	tachyonBlock: tachyonBlock,
 	renderLog: renderLog,
 	refreshBanner: refreshBanner,
 	floatBanner: floatBanner,
@@ -46647,7 +46879,7 @@ return view.extend({
 			domCards = {};
 			function tile(s) {
 				var oth = sel[s.id] && above[s.id] ? 'идёт через «' + secName(above[s.id]) + '» — она выше' : other[s.id] ? (sel[s.id] ? 'ещё и в «' : 'в секции «') + secName(other[s.id]) + '»' : '';
-				var el = zm.svcCard({ name: s.name, key: s.id, sub: oth, on: !!sel[s.id], inc: !!sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
+				var el = zm.svcCard({ name: s.name, key: s.id, sub: oth || s.desc || '', title: s.desc ? s.name + ' — ' + s.desc : '', on: !!sel[s.id], inc: !!sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
 					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 					pick = {};
 					for (var k in sel) if (sel[k] && k !== 'custom') pick[k] = true;
@@ -46694,6 +46926,13 @@ return view.extend({
 				}));
 			});
 			listCard.appendChild(catalogBlock());
+			listCard.appendChild(zm.tachyonBlock((data.catalog || {}).tachyon, { reload: function() { refresh(); }, call: function(a, m, okText) {
+				zm.steerAction(a, m).then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); refresh(); return; }
+					zm.toast(okText, 'info');
+					refresh();
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			} }));
 			var canRun = data.installed && !data.stopped && secIds().some(function(id) { return secWork(id) && secExit(id) !== 'none'; });
 			var li = data.lists || {}, lBusy = !!li.busy || listsBusy;
 			listCard.appendChild(E('div', { 'class': 'zm-lists-now' }, [
@@ -46852,7 +47091,45 @@ return view.extend({
 			}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 		}
 
+		var xsetCard = E('div', { 'class': 'zm-card' }), xsetPick = null;
+		function renderXsets() {
+			xsetCard.innerHTML = '';
+			var list = data.xsets || [], t = (data.catalog || {}).tachyon || {};
+			var show = !data.blocker && list.length > 0 && t.on !== false;
+			xsetCard.style.display = show ? '' : 'none';
+			if (!show) return;
+			var cur = {};
+			list.forEach(function(x) { cur[x.id] = !!x.on; });
+			var pick = xsetPick || cur, changed = list.some(function(x) { return !!pick[x.id] !== !!cur[x.id]; });
+			var n = list.filter(function(x) { return pick[x.id]; }).length;
+			xsetCard.appendChild(E('h3', {}, [ 'Готовые списки «напрямую» ', badge(n ? 'zm-ok' : 'zm-off', n ? 'выбрано ' + n + ' из ' + list.length : 'не выбраны') ]));
+			xsetCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Наборы из Tachyon Lists, которые всегда идут мимо WARP и VPN: госуслуги и банки, push-уведомления, загрузки игр. Действуют как исключения выше' + (hasSecs() ? ' — во всех секциях' : '') + ' и важнее выбранных сервисов.'));
+			xsetCard.appendChild(zm.svcGrid(list.map(function(x) {
+				return zm.svcCard({ name: x.name, key: 'x_' + x.id, sub: x.desc || '', title: x.desc ? x.name + ' — ' + x.desc : '', on: !!pick[x.id], click: function() {
+					if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+					var np = {};
+					for (var k in pick) np[k] = pick[k];
+					np[x.id] = !np[x.id];
+					xsetPick = np;
+					renderXsets();
+				} });
+			})));
+			var bar = zm.saveBar({
+				saveLabel: data.installed && !data.stopped ? 'Сохранить и применить' : 'Сохранить',
+				onCancel: function() { xsetPick = null; renderXsets(); },
+				busyHint: 'Ход работы — в окне вывода',
+				async: true,
+				onSave: function() {
+					var ids = list.filter(function(x) { return pick[x.id]; }).map(function(x) { return x.id; });
+					return new Promise(function(done) { act('xsets', ids.join(','), 'Применяем готовые списки «напрямую»', function(ok) { if (ok) { xsetPick = null; renderXsets(); } done(ok); }, true); });
+				}
+			});
+			bar.set(changed, false);
+			xsetCard.appendChild(bar);
+		}
+
 		function renderExcl() {
+			renderXsets();
 			if (exclEditor && exclDirty) exclDraft = exclEditor.value;
 			if (exclEditor && !exclDirty) exclDraft = null;
 			exclCard.innerHTML = '';
@@ -48568,6 +48845,7 @@ return view.extend({
 		panes.dev.appendChild(devCard);
 		panes.dev.appendChild(devMapCard);
 		panes.byp.appendChild(exclCard);
+		panes.byp.appendChild(xsetCard);
 		var flowEl = E('div', {}), FLOW_TXT = { hw: 'аппаратный', sw: 'программный' };
 		function flowApply() {
 			zm.toast('Применяем поправку для Steer', 'warning');
@@ -57670,6 +57948,7 @@ var CREDITS = [
 	{ g: 'dns', product: 'ios_rule_script (списки)', author: 'blackmatrix7', url: 'https://github.com/blackmatrix7/ios_rule_script' },
 	{ g: 'dns', product: 'b4geoip (списки игр и сервисов)', author: 'DanielLavrushin', url: 'https://github.com/DanielLavrushin/b4geoip' },
 	{ g: 'dns', product: 'b4geoip-forkop (сборка для sing-box)', author: 'Greeg0ry', url: 'https://github.com/Greeg0ry/b4geoip-forkop' },
+	{ g: 'dns', product: 'Tachyon Lists (каталог списков для Steer и Forkozz)', author: 'Dushnilin', url: 'https://github.com/Dushnilin/tachyon-lists' },
 	{ g: 'dns', product: 'sing-box-supercell-ruleset', author: 'ushan0v', url: 'https://github.com/ushan0v/sing-box-supercell-ruleset' },
 	{ g: 'other', product: 'ttyd (терминал)', author: 'tsl0922', url: 'https://github.com/tsl0922/ttyd' },
 	{ g: 'other', product: 'hls.js (радио в формате HLS)', author: 'video-dev', url: 'https://github.com/video-dev/hls.js' },
@@ -62641,7 +62920,7 @@ return view.extend({
 				title: s.name + ' уже идёт через секцию «' + by + '»', click: function() {
 					zm.toast('«' + s.name + '» уже идёт через секцию «' + by + '». Сначала выключите его там — один сервис работает только в одной секции.', 'warning');
 				} }));
-			return domKeep(s, zm.svcCard({ name: s.name, key: s.id, on: !!draft.sel[s.id], sub: by ? 'и в секции «' + by + '» — сработает верхняя' : shadowed ? 'перекрыт «Всё сразу» секции «' + ra + '»' : '', inc: !!draft.sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
+			return domKeep(s, zm.svcCard({ name: s.name, key: s.id, on: !!draft.sel[s.id], sub: by ? 'и в секции «' + by + '» — сработает верхняя' : shadowed ? 'перекрыт «Всё сразу» секции «' + ra + '»' : s.desc || '', title: s.desc ? s.name + ' — ' + s.desc : '', inc: !!draft.sel.russia_inside && s.id !== 'russia_inside' && !s.group && zm.riCovers(s.id), extra: domIcon(s), click: function() {
 				var nsel = {};
 				for (var k in draft.sel) if (draft.sel[k]) nsel[k] = true;
 				zm.svcPickToggle(nsel, s.id);
@@ -62702,6 +62981,13 @@ return view.extend({
 			if (sel.discord && (sel.cloudflare || sel.c_itdoginfo_cloudflare))
 				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord вместе с Cloudflare уводят в Forkozz много лишнего, даже торренты.'));
 			svcCard.appendChild(catalogBlock());
+			svcCard.appendChild(zm.tachyonBlock(((cfg && cfg.catalog && cfg.catalog.meta) || {}).tachyon, { reload: function() { reload(); }, call: function(a, m, okText) {
+				zm.steerAction(a, m).then(function(res) {
+					if (res.error) { zm.toast(res.error, 'error'); reload(); return; }
+					zm.toast(okText, 'info');
+					reload();
+				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
+			} }));
 			svcCard.appendChild(listsNow());
 			if (domOpen && !domCards[domOpen]) domOpen = null;
 			domPlace();
