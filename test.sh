@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.058
+# Version: 5.120
 ZM_VERSION_EOF
 set -e
 
@@ -959,7 +959,7 @@ case "$1" in
 		if [ -f /opt/zapret-manager-luci/state/traffic.hist ] && [ -s "$_zt/ctx.json" ] && command -v ucode >/dev/null 2>&1; then
 			_t="$(date -r "$_zt/ctx.json" +%s 2>/dev/null || echo 0)"; _n="$(date +%s)"
 			if [ $((_n - _t)) -lt 300 ] && [ "$_t" -le "$_n" ] && mkdir "$_zt/.hlock" 2>/dev/null; then
-				ZM_TRF_RUN="$_zt" ZM_TRF_HDIR=/opt/zapret-manager-luci/state/traffic ucode /opt/zapret-manager-luci/traffic.uc collect "$(date +%Y-%m-%d)" >/dev/null 2>&1
+				ZM_TRF_RUN="$_zt" ZM_TRF_HDIR=/opt/zapret-manager-luci/state/traffic ucode /opt/zapret-manager-luci/traffic.uc collect "$(date +%Y-%m-%d)" "$(date +%H)" >/dev/null 2>&1
 				rmdir "$_zt/.hlock" 2>/dev/null
 				exit 0
 			fi
@@ -1452,6 +1452,7 @@ _trf_dns_plug() { _zmL traffic && _trf_dns_plug "$@"; }
 _trf_dns_unplug() { _zmL traffic && _trf_dns_unplug "$@"; }
 _trf_dns_feed() { _zmL traffic && _trf_dns_feed "$@"; }
 _trf_resume() { _trf_names_on || return 0; _zmL traffic && _trf_resume "$@"; }
+traffic_migrate() { _zmL traffic && traffic_migrate "$@"; }
 _ab_free_sync() { _zmL adblock && _ab_free_sync "$@"; }
 adblock_status() { _zmL adblock && adblock_status "$@"; }
 adblock_action() { _zmL adblock && adblock_action "$@"; }
@@ -3490,7 +3491,7 @@ ZPG_OFF="$ZM_STATE_DIR/pages.off"
 ZPG_SIZE="$ZM_STATE_DIR/pages.size"
 ZPG_MENU="/usr/share/luci/menu.d/luci-app-zapret-manager.json"
 ZPG_IDS="traffic strategy zapret2 steer forkozz bytetube tgproxy mixomo hosts adblock doh awg tailscale terminal monitor openwrt"
-ZPG_LIST='traffic|Монитор трафика|Обзор|Какие устройства куда ходят и через что: напрямую, Zapret, Steer, Forkozz
+ZPG_LIST='traffic|Монитор трафика|Обзор|Кто, куда и через что: скорость, сайты и история по дням
 strategy|Zapret|Обход блокировок|Стратегии, тесты, YouTube, Discord, игры и списки
 zapret2|Zapret2|Обход блокировок|Установка и управление Zapret2
 steer|Steer|Обход блокировок|Выбранные сервисы через WARP или VPN
@@ -8427,6 +8428,8 @@ case "$cmd" in
 	zm_autoclean)                                  zm_autoclean "$1" ;;
 	gh_proxy)                                      gh_proxy "$1" "$2" ;;
 	webui)                                         webui "$1" "$2" ;;
+	traffic_daemon|traffic_save)                   traffic_migrate ;;
+	traffic_migrate)                               traffic_migrate ;;
 	gh_mirrors)                                    gh_mirrors ;;
 	gh_net)                                        gh_net "$1" "$2" ;;
 	gh_get)                                        gh_get "$1" "$2" "$3" ;;
@@ -8537,7 +8540,7 @@ case "$cmd" in
 	traffic_nlbw_get)                     traffic_nlbw_get ;;
 	traffic_dns_tick)                     traffic_dns_tick ;;
 	traffic_collect)                      traffic_collect ;;
-	traffic_hist_get)                     traffic_hist_get ;;
+	traffic_hist_get)                     traffic_hist_get "$1" "$2" ;;
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
@@ -10245,6 +10248,7 @@ _zpg_used() {
 		mixomo) _mx_installed || [ -x /etc/init.d/magitrickle ] ;;
 		adblock) _ab_on ;;
 		doh) [ -x /etc/init.d/https-dns-proxy ] ;;
+		traffic) _trf_names_on || [ -f "$ZM_STATE_DIR/traffic.hist" ] ;;
 		awg) command -v awg >/dev/null 2>&1 ;;
 		tailscale) _tsc_installed ;;
 		terminal) _term_installed ;;
@@ -10630,6 +10634,14 @@ for zm_d in $(sed -n 's/^conf-dir=\([^,]*\).*/\1/p' /var/etc/dnsmasq.conf.* 2>/d
 	if [ -f "$zm_d/zm-adblock-stats.conf" ]; then rm -f "$zm_d/zm-adblock-stats.conf"; zm_dns=1; fi
 	if [ -f "$zm_d/zm-traffic-dns.conf" ]; then rm -f "$zm_d/zm-traffic-dns.conf"; zm_dns=1; fi
 done
+if [ -x /etc/init.d/zm-traffic ]; then /etc/init.d/zm-traffic stop >/dev/null 2>&1; /etc/init.d/zm-traffic disable >/dev/null 2>&1; fi
+pkill -f 'backend[.]sh traffic_daemon' >/dev/null 2>&1
+rm -f /etc/init.d/zm-traffic /etc/rc.d/*zm-traffic
+rm -rf /tmp/zm-traffic
+if [ -f /etc/sysctl.d/90-zm-traffic.conf ]; then
+	grep -q 'было 0' /etc/sysctl.d/90-zm-traffic.conf && echo 0 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null
+	rm -f /etc/sysctl.d/90-zm-traffic.conf
+fi
 nft delete table inet zm_adblock_free >/dev/null 2>&1
 [ -s /var/run/zm-adblock-free.pid ] && kill "$(cat /var/run/zm-adblock-free.pid)" 2>/dev/null
 rm -f /var/run/zm-adblock-free.pid /var/etc/zm-adblock-free.conf /var/etc/zm-adblock-free.conf.macs
@@ -10764,7 +10776,7 @@ _pg_trace() {
 		doh) echo "pkg:luci-i18n-https-dns-proxy-ru pkg:luci-app-https-dns-proxy pkg:https-dns-proxy /usr/sbin/https-dns-proxy /etc/uci-defaults/*https-dns-proxy* $(_zm_luci_files https-dns-proxy) /etc/config/https-dns-proxy /etc/init.d/https-dns-proxy /etc/rc.d/*https-dns-proxy /etc/config/https-dns-proxy-opkg /etc/config/https-dns-proxy.apk-new /etc/config/https-dns-proxy.zm-prev $DOH_FORCE_MODE_FILE $DOH_BOOT_FILE $DOH_FO_FILE $DOH_OWN_FILE $DOH_FO_STATE $DOH_FO_EVENTS /tmp/zm-doh-failover.lock cron:zm-dohwatch" ;;
 		dnsnet) echo "$DN_FILE $DN_OWN" ;;
 		hosts) echo "$HOSTS_FILE.zm-bak $HOSTS_FILE.bak" ;;
-		panel) echo "/opt/zapret-manager-luci /www/zm /www/zm-webui.html /usr/libexec/rpcd/zapret-manager /usr/share/rpcd/ucode/zm-fast /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /usr/share/luci/menu.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /www/luci-static/resources/bytetube /www/luci-static/resources/view/bytetube /usr/share/zm-redbtn /usr/bin/zmw /usr/bin/zms /lib/upgrade/keep.d/zapret-manager uci:uhttpd.zmweb cronrx:/opt/zapret-manager-luci/backend.sh" ;;
+		panel) echo "/opt/zapret-manager-luci /www/zm /www/zm-webui.html /usr/libexec/rpcd/zapret-manager /usr/share/rpcd/ucode/zm-fast /usr/share/rpcd/acl.d/luci-app-zapret-manager.json /usr/share/luci/menu.d/luci-app-zapret-manager.json /www/luci-static/resources/view/zapret-manager /www/luci-static/resources/zapret-manager /www/luci-static/resources/bytetube /www/luci-static/resources/view/bytetube /usr/share/zm-redbtn /usr/bin/zmw /usr/bin/zms /lib/upgrade/keep.d/zapret-manager uci:uhttpd.zmweb cronrx:/opt/zapret-manager-luci/backend.sh /etc/init.d/zm-traffic /etc/rc.d/*zm-traffic /tmp/zm-traffic /etc/sysctl.d/90-zm-traffic.conf dnsconf:zm-traffic-dns.conf" ;;
 	esac
 }
 
@@ -35174,7 +35186,11 @@ ZM_INSTALLER_EOF
 cat > "$_zmi_st/mod/traffic.sh" << 'ZM_INSTALLER_EOF'
 TRF_UC="/opt/zapret-manager-luci/traffic.uc"
 TRF_CRON="# zm-trfdns"
-TRF_SYSCTL="/etc/sysctl.d/12-zm-conntrack-acct.conf"
+TRF_SYSCTL="/etc/sysctl.d/90-zm-traffic.conf"
+TRF_EXCL="$ZM_STATE_DIR/traffic.excl"
+TRF_CONF="$ZM_STATE_DIR/traffic.conf"
+TRF_OLD_RAM="/tmp/zm-traffic"
+TRF_OLD_INIT="/etc/init.d/zm-traffic"
 TRF_NLBW_OWN="$ZM_STATE_DIR/nlbw.own"
 TRF_HIST="$ZM_STATE_DIR/traffic.hist"
 TRF_HDIR="$ZM_STATE_DIR/traffic"
@@ -35262,11 +35278,18 @@ _trf_fk_labels() {
 }
 
 _trf_hosts() {
-	uci -q show dhcp 2>/dev/null | awk -F'=' '
+	{ [ -s "$OW_NAMES" ] && awk -F'\t' '$1 != "" && $2 != "" { print "U\t" tolower($1) "\t" $2 }' "$OW_NAMES"
+	  uci -q show dhcp 2>/dev/null | awk -F'=' '
 		function uq(v) { gsub("\047", "", v); return v }
 		{ k = $1; v = substr($0, length($1) + 2); n = split(k, p, "."); if (n != 3) next
 		  if (p[3] == "name") nm[p[2]] = uq(v); else if (p[3] == "mac") mc[p[2]] = tolower(uq(v)) }
-		END { for (s in mc) { if (nm[s] == "") continue; c = split(mc[s], m, " "); for (i = 1; i <= c; i++) if (m[i] ~ /^[0-9a-f][0-9a-f](:[0-9a-f][0-9a-f])+$/) { x = nm[s]; gsub(/[\\"]/, "", x); printf "%s\"%s\":\"%s\"", (o++ ? "," : ""), m[i], x } } }'
+		END { for (s in mc) { if (nm[s] == "") continue; c = split(mc[s], m, " "); for (i = 1; i <= c; i++) print "S\t" m[i] "\t" nm[s] } }'
+	} | awk -F'\t' '
+		$2 ~ /^[0-9a-f][0-9a-f](:[0-9a-f][0-9a-f])+$/ { if ($1 == "U") U[$2] = $3; else if (!($2 in S)) S[$2] = $3 }
+		END {
+			for (m in S) if (!(m in U)) U[m] = S[m]
+			for (m in U) { x = U[m]; gsub(/[\\"]/, "", x); gsub(/[\001-\037]/, " ", x); printf "%s\"%s\":\"%s\"", (o++ ? "," : ""), m, x }
+		}'
 }
 
 _trf_offload() {
@@ -35275,8 +35298,73 @@ _trf_offload() {
 	if [ "$sw" = 1 ] && [ "$hw" = 1 ]; then echo hw; elif [ "$sw" = 1 ]; then echo sw; fi
 }
 
+_trf_zr_body() {
+	[ -f "$CONF" ] || return 0
+	sed -n "/^[[:space:]]*option[[:space:]]\{1,\}NFQWS_OPT[[:space:]]/,/^[[:space:]]*'[[:space:]]*\$/p" "$CONF" | sed "1s/^[[:space:]]*option[[:space:]]*NFQWS_OPT[[:space:]]*'//; \$s/'[[:space:]]*\$//"
+}
+
+_trf_zr() {
+	local mf
+	mf="$(_ports_get MODE_FILTER)"
+	_trf_zr_body | awk -v mf="$mf" -v pt="$(_ports_get NFQWS_PORTS_TCP)" -v pu="$(_ports_get NFQWS_PORTS_UDP)" '
+		function je(v,   o, i, c) { o = ""; for (i = 1; i <= length(v); i++) { c = substr(v, i, 1); if (c == "\\" || c == "\"") o = o "\\" c; else if (c >= " ") o = o c } return o }
+		function addl(arr, k, v) { arr[k] = arr[k] (arr[k] == "" ? "" : ",") "\"" je(v) "\"" }
+		function macro(auto) {
+			if (mf != "hostlist" && mf != "autohostlist") return
+			addl(HL, pi, "/opt/zapret/ipset/zapret-hosts-user.txt")
+			addl(HL, pi, "/opt/zapret/ipset/zapret-hosts.txt")
+			addl(HL, pi, "/opt/zapret/ipset/zapret-hosts.txt.gz")
+			if (auto && mf == "autohostlist") addl(HL, pi, "/opt/zapret/ipset/zapret-hosts-auto.txt")
+			addl(HX, pi, "/opt/zapret/ipset/zapret-hosts-user-exclude.txt")
+		}
+		function doms(arr, v,   n, a, i) { n = split(v, a, ","); for (i = 1; i <= n; i++) if (a[i] != "") addl(arr, pi, tolower(a[i])) }
+		BEGIN { pi = 1 }
+		{
+			sub(/\r$/, "")
+			if ($0 ~ /^[ \t]*#/) next
+			for (i = 1; i <= NF; i++) {
+				t = $i
+				if (t == "--new") { pi++; continue }
+				e = index(t, "="); k = e ? substr(t, 1, e - 1) : t; v = e ? substr(t, e + 1) : ""
+				gsub(/"/, "", v)
+				if (k == "--filter-tcp") T[pi] = T[pi] (T[pi] == "" ? "" : ",") v
+				else if (k == "--filter-udp") U[pi] = U[pi] (U[pi] == "" ? "" : ",") v
+				else if (k == "--hostlist" || k == "--hostlist-auto") addl(HL, pi, v)
+				else if (k == "--hostlist-exclude") addl(HX, pi, v)
+				else if (k == "--hostlist-domains") doms(HD, v)
+				else if (k == "--hostlist-exclude-domains") doms(HE, v)
+				else if (k == "--ipset" || k == "--ipset-ip") IP[pi] = 1
+				else if (k == "--dpi-desync") { if (v != "none" && v != "") DS[pi] = 1 }
+				else if (k == "--skip") SK[pi] = 1
+				else if (t == "<HOSTLIST>") macro(1)
+				else if (t == "<HOSTLIST_NOAUTO>") macro(0)
+			}
+		}
+		END {
+			printf "{\"tcp\":\"%s\",\"udp\":\"%s\",\"p\":[", je(pt), je(pu)
+			for (i = 1; i <= pi; i++) if (!SK[i]) printf "%s{\"t\":\"%s\",\"u\":\"%s\",\"hl\":[%s],\"hx\":[%s],\"hd\":[%s],\"he\":[%s],\"ip\":%d,\"ds\":%d}", (o++ ? "," : ""), je(T[i]), je(U[i]), HL[i], HX[i], HD[i], HE[i], IP[i] + 0, DS[i] + 0
+			printf "]}"
+		}'
+}
+
+_trf_zsig() {
+	local f sig
+	sig="$(date -r "$CONF" +%s 2>/dev/null)"
+	for f in $(printf '%s' "$1" | sed 's/"\(\/[^"]*\)"/\n\1\n/g' | grep '^/' | sort -u); do sig="$sig.$(date -r "$f" +%s 2>/dev/null || echo 0)"; done
+	printf '%s' "$sig"
+}
+
+_trf_excl_json() { [ -s "$TRF_EXCL" ] && awk 'NF { printf "%s\"%s\"", (o++ ? "," : ""), tolower($1) }' "$TRF_EXCL"; return 0; }
+_trf_days() { local v; v="$(_kv_last "$TRF_CONF" days)"; case "$v" in 7|90) echo "$v" ;; *) echo 30 ;; esac; }
+_trf_store() { [ "$(_kv_last "$TRF_CONF" store)" = ram ] && echo ram || echo flash; }
+_trf_put() {
+	local k="$1" v="$2"
+	mkdir -p "$ZM_STATE_DIR"
+	{ [ -f "$TRF_CONF" ] && grep -v "^$k=" "$TRF_CONF"; echo "$k=$v"; } > "$TRF_CONF.zm" && mv -f "$TRF_CONF.zm" "$TRF_CONF"
+}
+
 _trf_ctx() {
-	local ifl wan st=false secs="" sep="" s sb="" mx="" zon=false zl=false z6=true tcp="" udp="" ab=false
+	local ifl wan st=false secs="" sep="" s sb="" mx="" zon=false z6=true ab=false zr=null zsig=""
 	ifl="$(_trf_ifl)"
 	wan="$(_trf_wan "$ifl")"
 	if stl_present && stl_running; then
@@ -35287,17 +35375,17 @@ _trf_ctx() {
 	if _mx_installed && pidof mihomo >/dev/null 2>&1; then mx="$(_trf_api mx)"; fi
 	if [ -f /etc/init.d/zapret ] && [ -f "$CONF" ] && pgrep -f "/opt/zapre[t]/" >/dev/null 2>&1; then
 		zon=true
-		tcp="$(_ports_get NFQWS_PORTS_TCP)"; udp="$(_ports_get NFQWS_PORTS_UDP)"
 		[ "$(_ports_get DISABLE_IPV6)" = 1 ] && z6=false
-		_zo_user_on && zl=true
+		zr="$(_trf_zr)"
+		case "$zr" in '{'*'}') zsig="$(_trf_zsig "$zr")" ;; *) zr=null ;; esac
 	fi
 	[ "$(_ab_get stats 0)" = 1 ] && [ "$(_ab_get on 0)" = 1 ] && ab=true
 	printf '{"wan":[%s],"ifl":{%s},"ports":{%s},"steer":%s,"steer_secs":{%s},"sb":%s,"fk_labels":{%s},"mx":%s,"ytb_mark":%s,' \
 		"$wan" "$ifl" "$(_trf_ports)" "$st" "$secs" "${sb:-null}" "$(_fk_installed && _trf_fk_labels)" "${mx:-null}" \
 		"$([ -x /usr/bin/bytetube ] && echo 65536 || echo 0)"
-	printf '"zapret":{"on":%s,"tcp":%s,"udp":%s,"v6":%s,"list":%s,"lf":%s,"ef":%s},"names":%s,"hosts":{%s},' \
-		"$zon" "$(_trf_j "$tcp")" "$(_trf_j "$udp")" "$z6" "$zl" "$(_trf_j "$ZO_USER_FILE")" "$(_trf_j /opt/zapret/ipset/zapret-hosts-user-exclude.txt)" \
-		"$(_trf_names_on && echo true || echo false)" "$(_trf_hosts)"
+	printf '"zapret":{"on":%s,"v6":%s},"zr":%s,"zsig":%s,"names":%s,"hosts":{%s},"excl":[%s],"hist":{"on":%s,"days":%s,"store":"%s"},' \
+		"$zon" "$z6" "$zr" "$(_trf_j "$zsig")" "$(_trf_names_on && echo true || echo false)" "$(_trf_hosts)" "$(_trf_excl_json)" \
+		"$([ -f "$TRF_HIST" ] && echo true || echo false)" "$(_trf_days)" "$(_trf_store)"
 	printf '"x":{"hist":%s,"offload":"%s","acct":"%s","nlbw":%s,"nlbw_own":%s,"ab_stats":%s,"fast":%s,"names_bad":%s}}\n' \
 		"$([ -f "$TRF_HIST" ] && echo true || echo false)" "$(_trf_offload)" "$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)" \
 		"$(command -v nlbw >/dev/null 2>&1 && echo true || echo false)" "$([ -f "$TRF_NLBW_OWN" ] && echo true || echo false)" "$ab" \
@@ -35308,6 +35396,7 @@ _trf_json_err() { local e; e="$(cat "$TRF_RUN/names.err" 2>/dev/null)"; [ -n "$e
 
 traffic_get() {
 	local out
+	_trf_migrate_maybe
 	command -v ucode >/dev/null 2>&1 || { echo '{"error":"Монитору нужен ucode — он есть в OpenWrt 22.03 и новее"}'; return 0; }
 	[ -f "$TRF_UC" ] || { echo '{"error":"Нет файла монитора — переустановите панель"}'; return 0; }
 	_trf_ctx_fresh 15
@@ -35431,10 +35520,13 @@ _trf_names_set() {
 }
 
 _trf_acct_on() {
+	local was
+	was="$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)"
+	[ "$was" = 1 ] && { [ "$1" = quiet ] || printf '{"ok":true}\n'; return 0; }
 	sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || echo 1 > /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null
-	[ "$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)" = 1 ] || { echo '{"error":"ядро не дало включить счётчики соединений"}'; return 1; }
-	grep -qs '^net.netfilter.nf_conntrack_acct=1' /etc/sysctl.d/*.conf /etc/sysctl.conf 2>/dev/null || printf 'net.netfilter.nf_conntrack_acct=1\n' > "$TRF_SYSCTL"
-	printf '{"ok":true}\n'
+	[ "$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)" = 1 ] || { [ "$1" = quiet ] || echo '{"error":"ядро не дало включить счётчики соединений"}'; return 1; }
+	grep -qs '^net.netfilter.nf_conntrack_acct=1' /etc/sysctl.d/*.conf /etc/sysctl.conf 2>/dev/null || printf '%s\n' "# Zapret Manager: учёт трафика, было 0" "net.netfilter.nf_conntrack_acct=1" > "$TRF_SYSCTL"
+	[ "$1" = quiet ] || printf '{"ok":true}\n'
 }
 
 traffic_nlbw_get() {
@@ -35511,17 +35603,31 @@ traffic_collect() {
 		rmdir "$lk" 2>/dev/null; mkdir "$lk" 2>/dev/null || return 0
 	fi
 	_trf_ctx_fresh 300
-	ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" _zm_tmo 50 ucode "$TRF_UC" collect "$(date +%Y-%m-%d)" "$1" >/dev/null 2>&1
+	ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" _zm_tmo 50 ucode "$TRF_UC" collect "$(date +%Y-%m-%d)" "$(date +%H)" "$1" >/dev/null 2>&1
 	rmdir "$lk" 2>/dev/null
 	return 0
 }
 
 traffic_hist_get() {
-	local h on=false
+	local h on=false p="$1" d
 	[ -f "$TRF_HIST" ] && on=true
-	command -v ucode >/dev/null 2>&1 && [ -f "$TRF_UC" ] || { printf '{"on":%s,"days":{}}\n' "$on"; return 0; }
-	h="$(ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" _zm_tmo 20 ucode "$TRF_UC" hist 2>/dev/null)"
-	case "$h" in '{"ok":true'*) printf '{"on":%s,"today":"%s",%s\n' "$on" "$(date +%Y-%m-%d)" "${h#\{}" ;; *) printf '{"on":%s,"today":"%s","days":{}}\n' "$on" "$(date +%Y-%m-%d)" ;; esac
+	case "$p" in today|7|30|90) ;; *) p=7 ;; esac
+	d="$(printf '%s' "$2" | tr 'A-F' 'a-f' | tr -cd '0-9a-f:.')"
+	if ! command -v ucode >/dev/null 2>&1 || [ ! -f "$TRF_UC" ]; then printf '{"on":%s,"days":[]}\n' "$on"; return 0; fi
+	_trf_migrate_maybe
+	_trf_ctx_fresh 60
+	h="$(ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" _zm_tmo 25 ucode "$TRF_UC" hist "$p" "$d" "$(date +%Y-%m-%d)" 2>/dev/null)"
+	case "$h" in '{"ok":true'*) printf '{"on":%s,"excl":[%s],%s\n' "$on" "$(_trf_excl_json)" "${h#\{}" ;; *) printf '{"on":%s,"days":[]}\n' "$on" ;; esac
+}
+
+_trf_days_move() {
+	local f
+	mkdir -p "$TRF_RUN/h" "$TRF_HDIR"
+	if [ "$1" = ram ]; then
+		for f in "$TRF_HDIR"/20??-??-??.json; do [ -f "$f" ] || continue; [ -f "$TRF_RUN/h/${f##*/}" ] || cp -f "$f" "$TRF_RUN/h/"; rm -f "$f"; done
+	else
+		for f in "$TRF_RUN/h"/20??-??-??.json; do [ -f "$f" ] && cp -f "$f" "$TRF_HDIR/" && rm -f "$f"; done
+	fi
 }
 
 _trf_hist_set() {
@@ -35529,22 +35635,98 @@ _trf_hist_set() {
 	case "$1" in
 		on)
 			[ "$(date +%Y)" -ge 2024 ] 2>/dev/null || { echo '{"error":"Часы роутера ещё не выставлены — включите историю чуть позже"}'; return 1; }
+			[ -r /proc/net/nf_conntrack ] || { echo '{"error":"В ядре роутера нет таблицы соединений /proc/net/nf_conntrack — история здесь не заработает"}'; return 1; }
+			_trf_acct_on quiet
 			: > "$TRF_HIST"
 			_trf_hcron on
+			rm -f "$TRF_RUN/ctx.json"
 			traffic_collect 1
 			printf '{"ok":true,"hist":true}\n' ;;
 		off)
 			rm -f "$TRF_HIST"
 			_trf_hcron off
-			[ -f "$TRF_RUN/hist.json" ] && { mkdir -p "$TRF_HDIR"; cp -f "$TRF_RUN/hist.json" "$TRF_HDIR/hist.json.zm" && mv -f "$TRF_HDIR/hist.json.zm" "$TRF_HDIR/hist.json"; }
-			rm -f "$TRF_RUN/hprev" "$TRF_RUN/hist.json"
+			[ "$(_trf_store)" = flash ] && _trf_days_move flash
+			rm -f "$TRF_RUN/hprev"
 			printf '{"ok":true,"hist":false}\n' ;;
 		clear)
-			rm -rf "$TRF_HDIR" "$TRF_RUN/hist.json" "$TRF_RUN/hprev"
+			rm -rf "$TRF_HDIR" "$TRF_RUN/h" "$TRF_RUN/hprev"
 			[ -f "$TRF_HIST" ] && traffic_collect 1
 			printf '{"ok":true}\n' ;;
 		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
 	esac
+}
+
+_trf_mac_ok() { printf '%s' "$1" | grep -Eq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; }
+
+_trf_name_set() {
+	local m n
+	m="$(printf '%s' "${1%%|*}" | tr 'A-F' 'a-f')"; n="${1#*|}"
+	_trf_mac_ok "$m" || { echo '{"error":"неверный MAC-адрес"}'; return 1; }
+	n="$(printf '%s' "$n" | tr -d '\000-\037\\"\177' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/[[:space:]][[:space:]]*/ /g')"
+	[ "$(printf '%s' "$n" | wc -c)" -le 96 ] || { echo '{"error":"имя слишком длинное — до 32 букв"}'; return 1; }
+	mkdir -p "$ZM_STATE_DIR"
+	{ [ -f "$OW_NAMES" ] && awk -F'\t' -v m="$m" 'tolower($1) != m' "$OW_NAMES"; [ -n "$n" ] && printf '%s\t%s\n' "$m" "$n"; } > "$OW_NAMES.zm"
+	if [ -s "$OW_NAMES.zm" ]; then mv -f "$OW_NAMES.zm" "$OW_NAMES"; else rm -f "$OW_NAMES.zm" "$OW_NAMES"; fi
+	printf '{"ok":true,"m":"%s","n":"%s"}\n' "$m" "$(esc "$n")"
+}
+
+_trf_excl_set() {
+	local m x
+	m="$(printf '%s' "${1%%|*}" | tr 'A-F' 'a-f')"; x="${1#*|}"
+	_trf_mac_ok "$m" || { echo '{"error":"неверный MAC-адрес"}'; return 1; }
+	mkdir -p "$ZM_STATE_DIR"
+	{ [ -s "$TRF_EXCL" ] && grep -vix "$m" "$TRF_EXCL"; [ "$x" = 1 ] && echo "$m"; } > "$TRF_EXCL.zm"
+	if [ -s "$TRF_EXCL.zm" ]; then mv -f "$TRF_EXCL.zm" "$TRF_EXCL"; else rm -f "$TRF_EXCL.zm" "$TRF_EXCL"; fi
+	printf '{"ok":true,"excl":[%s]}\n' "$(_trf_excl_json)"
+}
+
+_trf_migrate_maybe() {
+	{ [ -f "$TRF_CONF" ] && grep -q '^on=' "$TRF_CONF"; } || [ -f "$TRF_RUN/hist.json" ] || [ -f "$TRF_HDIR/hist.json" ] || return 0
+	traffic_migrate
+	return 0
+}
+
+_trf_mig117() {
+	local f="" n
+	[ -f "$TRF_RUN/hist.json" ] && f="$TRF_RUN/hist.json"
+	[ -f "$TRF_HDIR/hist.json" ] && f="$f $TRF_HDIR/hist.json"
+	[ -n "$f" ] || return 0
+	if command -v ucode >/dev/null 2>&1 && [ -f "$TRF_UC" ]; then
+		n="$(ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" ZM_TRF_MIG_FLASH="$([ "$(_trf_store)" = ram ] && echo 0 || echo 1)" _zm_tmo 60 ucode "$TRF_UC" mig117 $f 2>/dev/null)"
+		case "$n" in *'"ok":true'*) rm -f $f ;; esac
+	fi
+	return 0
+}
+
+traffic_migrate() {
+	local on sites days store src="" n
+	_trf_mig117
+	{ [ -f "$TRF_CONF" ] && grep -q '^on=' "$TRF_CONF"; } || [ -x "$TRF_OLD_INIT" ] || return 0
+	on="$(_kv_last "$TRF_CONF" on)"; sites="$(_kv_last "$TRF_CONF" sites)"; days="$(_kv_last "$TRF_CONF" days)"; store="$(_kv_last "$TRF_CONF" store)"
+	if [ -x "$TRF_OLD_INIT" ]; then "$TRF_OLD_INIT" stop >/dev/null 2>&1; "$TRF_OLD_INIT" disable >/dev/null 2>&1; fi
+	pkill -f 'backend[.]sh traffic_daemon' >/dev/null 2>&1
+	rm -f "$TRF_OLD_INIT" /etc/rc.d/*zm-traffic
+	[ -d "$TRF_OLD_RAM" ] && src="$TRF_OLD_RAM"
+	[ -d "$TRF_HDIR/d" ] || [ -d "$TRF_HDIR/h" ] && src="$src $TRF_HDIR"
+	mkdir -p "$TRF_RUN"
+	if [ -n "$src" ] && command -v ucode >/dev/null 2>&1 && [ -f "$TRF_UC" ]; then
+		n="$(ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" ZM_TRF_MIG_FLASH="$([ "$store" = flash ] && echo 1 || echo 0)" _zm_tmo 60 ucode "$TRF_UC" migrate $src 2>/dev/null)"
+		logger -t zapret-manager "Монитор трафика: история «Трафика устройств» перенесена ($n)"
+	fi
+	rm -rf "$TRF_OLD_RAM" "$TRF_HDIR/d" "$TRF_HDIR/h" "$TRF_HDIR/meta" "$TRF_HDIR/dev"
+	{ case "$days" in 7|30|90) echo "days=$days" ;; esac; [ "$store" = flash ] && echo "store=flash"; [ "$store" = ram ] && echo "store=ram"; } > "$TRF_CONF.zm"
+	mv -f "$TRF_CONF.zm" "$TRF_CONF"
+	[ -s "$TRF_CONF" ] || rm -f "$TRF_CONF"
+	if [ "$on" = 1 ]; then
+		: > "$TRF_HIST"
+		_trf_hcron on
+		if [ "$sites" != 0 ] && ! _trf_names_on; then
+			: > "$TRF_NAMES"
+			_zmE adblock >/dev/null 2>&1 && _trf_resume
+		fi
+	fi
+	rm -f "$TRF_RUN/ctx.json"
+	return 0
 }
 
 traffic_set() {
@@ -35552,6 +35734,18 @@ traffic_set() {
 	case "$1" in
 		names) _trf_names_set "$2" ;;
 		hist) _trf_hist_set "$2" ;;
+		days)
+			case "$2" in 7|30|90) _trf_put days "$2"; [ -f "$TRF_HIST" ] && traffic_collect 1; printf '{"ok":true,"days":%s}\n' "$2" ;; *) echo '{"error":"неверный срок"}'; return 1 ;; esac ;;
+		store)
+			case "$2" in
+				ram|flash)
+					[ "$(_trf_store)" = "$2" ] || { _trf_put store "$2"; _trf_days_move "$2"; }
+					[ "$2" = flash ] && [ -f "$TRF_HIST" ] && traffic_collect 1
+					printf '{"ok":true,"store":"%s"}\n' "$2" ;;
+				*) echo '{"error":"неверное место"}'; return 1 ;;
+			esac ;;
+		name) _trf_name_set "$2" ;;
+		excl) _trf_excl_set "$2" ;;
 		acct) _trf_acct_on ;;
 		nlbw)
 			case "$2" in
@@ -39775,6 +39969,11 @@ function in_nets(ip, list) {
 	return null;
 }
 function is_loop(ip) { return index(ip, '127.') == 0 || ip == '::1'; }
+function is_fake(ip) {
+	if (index(ip, ':') >= 0) return index(ip, '2001:2:') == 0;
+	let a = v4int(ip);
+	return a != null && int(a / 131072) == int(v4int('198.18.0.0') / 131072);
+}
 function is_mc(ip) {
 	if (index(ip, ':') >= 0) return index(ip, 'ff') == 0 || index(ip, 'fe80:') == 0;
 	let a = v4int(ip);
@@ -39805,26 +40004,6 @@ function ports_of(spec) {
 function port_in(p, list) {
 	p = n(p);
 	for (let i = 0; i < length(list); i++) if (p >= list[i][0] && p <= list[i][1]) return true;
-	return false;
-}
-
-function dom_set(path) {
-	let o = {};
-	let ls = lns(rd(path));
-	for (let i = 0; i < length(ls); i++) {
-		let l = lc(trim(replace(ls[i], /#.*$/, '')));
-		if (l != '') o[l] = true;
-	}
-	return o;
-}
-function dom_hit(host, set) {
-	host = lc(s(host));
-	while (host != '') {
-		if (set[host]) return true;
-		let i = index(host, '.');
-		if (i < 0) return false;
-		host = substr(host, i + 1);
-	}
 	return false;
 }
 
@@ -40000,27 +40179,98 @@ function ctx_load() {
 		X.leases[ip] = mac;
 		if (nm != '') X.lname[mac] = nm;
 	}
-	let zp = type(c.zapret) == 'object' ? c.zapret : null;
-	if (zp && zp.on) X.zp = { tcp: ports_of(zp.tcp), udp: ports_of(zp.udp), v6: !!zp.v6, list: !!zp.list, lf: s(zp.lf), ef: s(zp.ef) };
+	X.excl = {};
+	let el = type(c.excl) == 'array' ? c.excl : [];
+	for (let i = 0; i < length(el); i++) X.excl[lc(el[i])] = true;
 	X.ytb = n(c.ytb_mark);
 	return X;
 }
 
-function zp_hit(X, c, host) {
-	let z = X.zp;
-	if (!z || (c.v6 && !z.v6)) return false;
-	if (!port_in(c.dp, c.p == 'tcp' ? z.tcp : z.udp)) return false;
-	if (z.list) {
-		if (s(host) == '') return false;
-		if (!z.ls) z.ls = dom_set(z.lf);
-		return dom_hit(host, z.ls);
+const ZRC = RUN + '/zrc';
+function zr_init(X) {
+	let z = type(X.ctx.zr) == 'object' && X.ctx.zapret && X.ctx.zapret.on ? X.ctx.zr : null;
+	X.zr = null;
+	if (!z || type(z.p) != 'array') return;
+	X.zr = { tcp: ports_of(z.tcp), udp: ports_of(z.udp), v6: !!(X.ctx.zapret.v6), p: [], files: {} };
+	for (let i = 0; i < length(z.p); i++) {
+		let q = z.p[i], hd = {}, he = {};
+		for (let j = 0; j < length(q.hd || []); j++) hd[lc(q.hd[j])] = true;
+		for (let j = 0; j < length(q.he || []); j++) he[lc(q.he[j])] = true;
+		let o = { t: ports_of(q.t), u: ports_of(q.u), ft: s(q.t) != '', fu: s(q.u) != '', hl: q.hl || [], hx: q.hx || [], hd: hd, he: he,
+			hasl: length(q.hl || []) > 0 || length(keys(hd)) > 0, ip: !!q.ip, ds: !!q.ds };
+		for (let j = 0; j < length(o.hl); j++) X.zr.files[o.hl[j]] = true;
+		for (let j = 0; j < length(o.hx); j++) X.zr.files[o.hx[j]] = true;
+		push(X.zr.p, o);
 	}
-	if (s(host) != '' && z.ef != '') {
-		if (!z.es) z.es = dom_set(z.ef);
-		if (dom_hit(host, z.es)) return false;
-	}
-	return true;
+	X.zc = {}; X.zmiss = {}; X.zm = null;
+	let lines = lns(rd(ZRC)), sig = s(X.ctx.zsig);
+	if (length(lines) && lines[0] == 'sig ' + sig) {
+		for (let i = 1; i < length(lines); i++) { let k = index(lines[i], ' '); if (k > 0) X.zc[substr(lines[i], 0, k)] = substr(lines[i], k + 1) == 'z'; }
+	} else wr(ZRC, 'sig ' + sig + '\n');
 }
+function zr_port(X, c) {
+	let z = X.zr;
+	if (!z || (c.v6 && !z.v6)) return false;
+	return port_in(c.dp, c.p == 'tcp' ? z.tcp : z.udp);
+}
+function sfx(host) {
+	let a = split(lc(s(host)), '.'), o = [];
+	if (length(a) < 2) return o;
+	let x = a[length(a) - 1];
+	for (let i = length(a) - 2; i >= 0; i--) { x = a[i] + '.' + x; push(o, x); }
+	return o;
+}
+function zr_load(X) {
+	let need = {}, n = 0;
+	for (let h in X.zmiss) { let l = sfx(h); for (let i = 0; i < length(l); i++) { need[l[i]] = true; n++; } }
+	X.zm = {};
+	if (!n) return;
+	let pat = [];
+	for (let x in need) { push(pat, x); push(pat, '^' + x); push(pat, '*.' + x); push(pat, '.' + x); }
+	let pf = RUN + '/zpat.' + s(fs.readlink('/proc/self'));
+	fs.writefile(pf, join('\n', pat) + '\n');
+	for (let f in X.zr.files) {
+		if (!fs.stat(f)) continue;
+		let cmd = match(f, /\.gz$/) ? 'gzip -dc ' + q(f) + ' | grep -Fxf ' + q(pf) : 'grep -Fxf ' + q(pf) + ' ' + q(f);
+		let m = {}, hits = lns(sh(cmd));
+		for (let i = 0; i < length(hits); i++) {
+			let l = lc(trim(hits[i])), ex = 0;
+			if (l == '') continue;
+			if (substr(l, 0, 1) == '^') { ex = 1; l = substr(l, 1); }
+			if (substr(l, 0, 2) == '*.') l = substr(l, 2);
+			else if (substr(l, 0, 1) == '.') l = substr(l, 1);
+			m[l + '|' + ex] = true;
+		}
+		X.zm[f] = m;
+	}
+	fs.unlink(pf);
+}
+function zr_inl(X, files, doms, host) {
+	let l = sfx(host);
+	for (let i = 0; i < length(l); i++) {
+		if (doms[l[i]]) return true;
+		for (let j = 0; j < length(files); j++) {
+			let m = X.zm[files[j]];
+			if (!m) continue;
+			if (m[l[i] + '|0']) return true;
+			if (i == length(l) - 1 && m[l[i] + '|1']) return true;
+		}
+	}
+	return false;
+}
+function zr_eval(X, c, host) {
+	let port = c.dp;
+	for (let i = 0; i < length(X.zr.p); i++) {
+		let p = X.zr.p[i];
+		if (p.ft || p.fu) { if (c.p == 'tcp' ? !(p.ft && port_in(port, p.t)) : !(p.fu && port_in(port, p.u))) continue; }
+		if (p.hasl) { if (s(host) == '' || !zr_inl(X, p.hl, p.hd, host)) continue; }
+		else if (p.ip) continue;
+		if (s(host) != '' && zr_inl(X, p.hx, p.he, host)) continue;
+		return p.ds;
+	}
+	return false;
+}
+function zr_key(c, host) { return c.p + ':' + c.dp + ':' + s(host); }
 
 function ct_line(l) {
 	let f = split(l, / +/);
@@ -40091,9 +40341,11 @@ function route_of(X, c) {
 		if (!X.wan[dev]) return { who: c.s, k: 'tunnel', l: dev, dst: dst };
 		return { who: c.s, k: 'direct', l: '', dst: dst };
 	}
-	if (c.rd == c.s && !c.v6) {
-		if (X.sb_on) return { who: c.s, k: 'forkozz', l: '', dst: dst };
-		if (X.mx_on) return { who: c.s, k: 'mixomo', l: '', dst: dst };
+	if (c.rd == c.s) {
+		if (int(c.mark / 1048576) % 256 != 0) return { who: c.s, k: 'steer', l: '', dst: dst };
+		if (is_fake(c.d) && (X.sb_on || X.ctx.sb)) return { who: c.s, k: 'forkozz', l: '', dst: dst };
+		if (!c.v6 && X.sb_on) return { who: c.s, k: 'forkozz', l: '', dst: dst };
+		if (!c.v6 && X.mx_on) return { who: c.s, k: 'mixomo', l: '', dst: dst };
 	}
 	return { who: c.s, k: 'direct', l: '', dst: dst };
 }
@@ -40127,8 +40379,43 @@ function resolve(X, c, r, MX, DNS) {
 		if (mm) { if (r.l == '') r.l = mm.l; if (host == '') host = mm.h; }
 	}
 	if (host == '' && DNS[r.dst]) host = DNS[r.dst];
-	if (r.k == 'direct' && zp_hit(X, c, host)) r.k = 'zapret';
 	return { dp: dp, host: host, rid: r.k + (r.l != '' ? ':' + r.l : '') };
+}
+
+function scan(X, raw, MX, DNS, need_bytes) {
+	zr_init(X);
+	let out_ = [], cl = raw == null ? [] : split(raw, '\n'), pend = [];
+	for (let li = 0; li < length(cl) && li < MAXL; li++) {
+		let c = ct_line(cl[li]);
+		if (!c || (need_bytes && c.tb == null)) continue;
+		let r = route_of(X, c);
+		if (!r) continue;
+		let z = resolve(X, c, r, MX, DNS), e = { c: c, r: r, z: z };
+		if (r.k == 'direct' && zr_port(X, c)) {
+			let k = zr_key(c, z.host);
+			if (exists(X.zc, k)) { if (X.zc[k]) e.zap = true; }
+			else { push(pend, e); if (s(z.host) != '') X.zmiss[z.host] = true; }
+		}
+		push(out_, e);
+	}
+	if (length(pend)) {
+		zr_load(X);
+		let add = [];
+		for (let i = 0; i < length(pend); i++) {
+			let e = pend[i], k = zr_key(e.c, e.z.host);
+			if (!exists(X.zc, k)) { X.zc[k] = zr_eval(X, e.c, e.z.host); push(add, k + ' ' + (X.zc[k] ? 'z' : 'd')); }
+			if (X.zc[k]) e.zap = true;
+		}
+		if (length(add)) {
+			let f = fs.open(ZRC, 'a');
+			if (f) { f.write(join('\n', add) + '\n'); f.close(); }
+		}
+	}
+	for (let i = 0; i < length(out_); i++) {
+		let e = out_[i];
+		if (e.zap) { e.r.k = 'zapret'; e.z.rid = 'zapret' + (e.r.l != '' ? ':' + e.r.l : ''); }
+	}
+	return out_;
 }
 
 function snap() {
@@ -40160,12 +40447,9 @@ function snap() {
 	res.dt = rated ? dt : 0;
 
 	let devs = {}, routes = {}, flows = {}, save = [ 't ' + now ], acct = false, hosts = X.hosts;
-	let cl = split(raw, '\n');
-	for (let li = 0; li < length(cl) && li < MAXL; li++) {
-		let c = ct_line(cl[li]);
-		if (!c) continue;
-		let r = route_of(X, c);
-		if (!r) continue;
+	let ents = scan(X, raw, MX, DNS, false), excl = X.excl;
+	for (let ei = 0; ei < length(ents); ei++) {
+		let c = ents[ei].c, r = ents[ei].r;
 		if (c.tb != null) acct = true;
 		let tb = c.tb || 0, rb = c.rb || 0, key = c.p + '|' + c.s + '|' + c.sp + '|' + c.d + '|' + c.dp;
 		push(save, key + ' ' + tb + ' ' + rb);
@@ -40176,12 +40460,12 @@ function snap() {
 			if (dtx > 0) rtx = dtx / dt;
 			if (drx > 0) rrx = drx / dt;
 		}
-		let z = resolve(X, c, r, MX, DNS), dp = z.dp, host = z.host, rid = z.rid;
+		let z = ents[ei].z, dp = z.dp, host = z.host, rid = z.rid;
 		let who = r.who == 'router' ? 'router' : devkey(X, r.who);
 		let d = devs[who];
 		if (!d) {
 			let mac = who != 'router' && index(who, ':') > 0 && length(who) == 17 && match(who, /^[0-9a-f:]+$/) ? who : '';
-			d = devs[who] = { k: who, mac: mac, ip: [], name: who == 'router' ? 'Роутер' : s(hosts[mac] || X.lname[mac]), tx: 0, rx: 0, rtx: 0, rrx: 0, n: 0, r: {} };
+			d = devs[who] = { k: who, mac: mac, ip: [], name: who == 'router' ? 'Роутер' : s(hosts[mac] || X.lname[mac]), tx: 0, rx: 0, rtx: 0, rrx: 0, n: 0, r: {}, ex: excl[who] ? 1 : 0 };
 		}
 		if (r.who != 'router' && index(d.ip, r.who) < 0 && length(d.ip) < 4) push(d.ip, r.who);
 		d.tx += tb; d.rx += rb; d.rtx += rtx; d.rrx += rrx; d.n++;
@@ -40219,16 +40503,84 @@ function snap() {
 }
 
 
-const HPREV = RUN + '/hprev', HRAM = RUN + '/hist.json';
+const HPREV = RUN + '/hprev', HRAMD = RUN + '/h';
 const HDIR = getenv('ZM_TRF_HDIR') || '/opt/zapret-manager-luci/state/traffic';
-const HFILE = HDIR + '/hist.json', HKEEP = 35;
 const NETDEV = getenv('ZM_TRF_NETDEV') || '/proc/net/dev';
+const SITES_MAX = 150;
+const TLD2 = { com: 1, net: 1, org: 1, co: 1, gov: 1, edu: 1, ac: 1, msk: 1, spb: 1 };
 
-function hist_load() {
-	let h = jparse(rd(HRAM));
-	if (type(h) != 'object' || type(h.days) != 'object') h = jparse(rd(HFILE));
-	if (type(h) != 'object' || type(h.days) != 'object') h = { v: 1, days: {} };
-	return h;
+function site_of(host) {
+	host = lc(s(host));
+	if (host == '' || match(host, /^[0-9.]+$/) || index(host, ':') >= 0) return '';
+	let a = split(host, '.'), k = length(a);
+	if (k <= 2) return host;
+	if (length(a[k - 1]) == 2 && TLD2[a[k - 2]]) return a[k - 3] + '.' + a[k - 2] + '.' + a[k - 1];
+	return a[k - 2] + '.' + a[k - 1];
+}
+function hcfg(X) {
+	let h = type(X.ctx.hist) == 'object' ? X.ctx.hist : {};
+	let days = int(h.days || 30);
+	if (days != 7 && days != 90) days = 30;
+	return { days: days, flash: s(h.store) != 'ram' };
+}
+function day_path(date, flash) { return (flash ? HDIR : HRAMD) + '/' + date + '.json'; }
+function day_load(date) {
+	let d = jparse(rd(day_path(date, false)));
+	if (type(d) != 'object') d = jparse(rd(day_path(date, true)));
+	if (type(d) != 'object' || type(d.d) != 'object') d = { v: 2, w: [ 0, 0 ], wh: {}, d: {} };
+	if (type(d.w) != 'array') d.w = [ 0, 0 ];
+	if (type(d.wh) != 'object') d.wh = {};
+	return d;
+}
+function sites_cap(dv) {
+	let ks = keys(dv.s);
+	if (length(ks) <= SITES_MAX + 10) return;
+	let arr = [];
+	for (let i = 0; i < length(ks); i++) {
+		if (ks[i] == '' || ks[i] == '*') continue;
+		let t = 0, m = dv.s[ks[i]];
+		for (let id in m) t += m[id][0] + m[id][1];
+		push(arr, [ ks[i], t ]);
+	}
+	arr = sort(arr, (a, b) => b[1] - a[1]);
+	let o = dv.s['*'] || {};
+	for (let i = SITES_MAX; i < length(arr); i++) {
+		let m = dv.s[arr[i][0]];
+		for (let id in m) { if (type(o[id]) != 'array') o[id] = [ 0, 0 ]; o[id][0] += m[id][0]; o[id][1] += m[id][1]; }
+		delete dv.s[arr[i][0]];
+	}
+	dv.s['*'] = o;
+}
+function add2(o, k, rx, tx) { if (type(o[k]) != 'array') o[k] = [ 0, 0 ]; o[k][0] += rx; o[k][1] += tx; }
+function list_dates(dir) {
+	let l = fs.lsdir(dir), o = [];
+	if (type(l) != 'array') return o;
+	for (let i = 0; i < length(l); i++) { let m = match(l[i], /^(20[0-9][0-9]-[01][0-9]-[0-3][0-9])\.json$/); if (m) push(o, m[1]); }
+	return sort(o);
+}
+function prune(dir, keepFrom) {
+	let l = list_dates(dir);
+	for (let i = 0; i < length(l); i++) if (l[i] < keepFrom) fs.unlink(dir + '/' + l[i] + '.json');
+}
+function dfc(y, m, d) {
+	y -= m <= 2 ? 1 : 0;
+	let era = int(y / 400), yoe = y - era * 400, mp = (m + 9) % 12;
+	let doy = int((153 * mp + 2) / 5) + d - 1, doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy;
+	return era * 146097 + doe - 719468;
+}
+function cfd(z) {
+	z += 719468;
+	let era = int(z / 146097), doe = z - era * 146097;
+	let yoe = int((doe - int(doe / 1460) + int(doe / 36524) - int(doe / 146096)) / 365);
+	let y = yoe + era * 400, doy = doe - (365 * yoe + int(yoe / 4) - int(yoe / 100)), mp = int((5 * doy + 2) / 153);
+	let d = doy - int((153 * mp + 2) / 5) + 1, m = mp < 10 ? mp + 3 : mp - 9;
+	if (m <= 2) y++;
+	return sprintf('%04d-%02d-%02d', y, m, d);
+}
+function date_add(date, delta) {
+	let m = match(s(date), /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/);
+	if (!m) return null;
+	return cfd(dfc(int(m[1]), int(m[2]), int(m[3])) + delta);
 }
 function dev_bytes(list) {
 	let rows = lns(rd(NETDEV)), o = {};
@@ -40240,68 +40592,221 @@ function dev_bytes(list) {
 	return null;
 }
 
-function collect(date, force) {
+function collect(date, hour, force) {
 	if (!match(s(date), /^20[2-9][0-9]-[01][0-9]-[0-3][0-9]$/)) { out({ error: 'часы роутера ещё не выставлены' }); return; }
-	let X = ctx_load(), now = uptime(), h = hist_load();
+	hour = match(s(hour), /^[0-2][0-9]$/) ? hour : '00';
+	let X = ctx_load(), now = uptime(), cfg = hcfg(X), tnow = time();
+	fs.mkdir(HRAMD);
 	let raw = fs.readfile(CTF, 16777216);
 	let MX = clash_maps(X).MX, DNS = X.ctx.names ? dns_load() : {};
-	let prev = {}, pt = 0, pw = null, pl = lns(rd(HPREV));
+	let prev = {}, pt = 0, pw = null, pd = '', pl = lns(rd(HPREV));
 	for (let i = 0; i < length(pl); i++) {
 		let f = split(pl[i], ' ');
-		if (f[0] == 't' && length(f) == 2) pt = +f[1];
+		if (f[0] == 't' && length(f) >= 2) { pt = +f[1]; pd = s(f[2]); }
 		else if (f[0] == 'w' && length(f) == 4) pw = [ f[1], n(f[2]), n(f[3]) ];
 		else if (length(f) == 3) prev[f[0]] = [ n(f[1]), n(f[2]) ];
 	}
 	let valid = pt > 0 && now > pt && now - pt < 600;
-	let day = h.days[date];
-	if (type(day) != 'object') day = h.days[date] = { w: [ 0, 0 ], d: {} };
-	let save = [ 't ' + now ], added = 0;
+	let day = day_load(date), save = [ 't ' + now + ' ' + date ], added = 0;
 	let wb = dev_bytes(type(X.ctx.wan) == 'array' ? X.ctx.wan : []);
 	if (wb) {
 		push(save, 'w ' + wb[0] + ' ' + wb[1] + ' ' + wb[2]);
-		if (valid && pw && pw[0] == wb[0] && wb[1] >= pw[1] && wb[2] >= pw[2]) { day.w[0] += wb[1] - pw[1]; day.w[1] += wb[2] - pw[2]; }
+		if (valid && pw && pw[0] == wb[0] && wb[1] >= pw[1] && wb[2] >= pw[2]) {
+			let a = wb[1] - pw[1], b = wb[2] - pw[2];
+			day.w[0] += a; day.w[1] += b; add2(day.wh, hour, a, b);
+		}
 	}
-	let cl = raw == null ? [] : split(raw, '\n');
-	for (let li = 0; li < length(cl) && li < MAXL; li++) {
-		let c = ct_line(cl[li]);
-		if (!c || c.tb == null) continue;
-		let r = route_of(X, c);
-		if (!r || r.k == 'local') continue;
+	let ents = scan(X, raw, MX, DNS, true);
+	for (let ei = 0; ei < length(ents); ei++) {
+		let c = ents[ei].c, r = ents[ei].r, z = ents[ei].z;
+		if (r.k == 'local') continue;
 		let key = c.p + '|' + c.s + '|' + c.sp + '|' + c.d + '|' + c.dp;
 		push(save, key + ' ' + c.tb + ' ' + c.rb);
 		if (!valid) continue;
+		let who = r.who == 'router' ? 'router' : devkey(X, r.who);
+		if (X.excl[who]) continue;
 		let pv = prev[key], dtx = pv ? c.tb - pv[0] : c.tb, drx = pv ? c.rb - pv[1] : c.rb;
 		if (dtx < 0) dtx = 0;
 		if (drx < 0) drx = 0;
 		if (dtx + drx <= 0) continue;
-		let z = resolve(X, c, r, MX, DNS);
-		let who = r.who == 'router' ? 'router' : devkey(X, r.who);
 		let d = day.d[who];
-		if (type(d) != 'object') d = day.d[who] = { n: '', r: {} };
+		if (type(d) != 'object') d = day.d[who] = { n: '', r: {}, h: {}, s: {} };
+		if (type(d.h) != 'object') d.h = {};
+		if (type(d.s) != 'object') d.s = {};
 		let mac = who != 'router' && length(who) == 17 && match(who, /^[0-9a-f:]+$/) ? who : '';
 		let nm = who == 'router' ? 'Роутер' : s(X.hosts[mac] || X.lname[mac]);
 		if (nm != '') d.n = nm;
-		else if (d.n == '' && who != 'router' && !mac) d.n = r.who;
-		let q = d.r[z.rid];
-		if (type(q) != 'array') q = d.r[z.rid] = [ 0, 0 ];
-		q[0] += drx; q[1] += dtx;
+		d.t = tnow;
+		if (r.who != 'router' && (index(r.who, ':') < 0 || s(d.ip) == '')) d.ip = r.who;
+		add2(d.r, z.rid, drx, dtx);
+		if (type(d.h[hour]) != 'object') d.h[hour] = {};
+		let hh = d.h[hour];
+		hh[z.rid] = (hh[z.rid] || 0) + drx + dtx;
+		let st = site_of(z.host);
+		if (type(d.s[st]) != 'object') d.s[st] = {};
+		add2(d.s[st], z.rid, drx, dtx);
 		added += drx + dtx;
 	}
-	let ks = sort(keys(h.days));
-	for (let i = 0; i < length(ks) - HKEEP; i++) delete h.days[ks[i]];
-	let ft = int(h.ft || 0), tnow = time();
-	let flush = force || h.fd != date || tnow - ft >= 3600 || tnow < ft;
-	if (flush) { h.fd = date; h.ft = tnow; }
+	for (let k in day.d) if (type(day.d[k].s) == 'object') sites_cap(day.d[k]);
 	wr(HPREV, join('\n', save) + '\n');
-	let js = sprintf('%J', h);
-	wr(HRAM, js);
-	if (flush) { fs.mkdir(HDIR); wr(HFILE, js); }
-	out({ ok: true, valid: valid, added: added, flushed: !!flush });
+	let js = sprintf('%J', day);
+	wr(day_path(date, false), js);
+	let fl = false;
+	if (cfg.flash) {
+		fs.mkdir(HDIR);
+		let ram = list_dates(HRAMD);
+		for (let i = 0; i < length(ram); i++) if (ram[i] != date) {
+			let t = rd(day_path(ram[i], false));
+			if (t != '' && wr(day_path(ram[i], true), t)) fs.unlink(day_path(ram[i], false));
+		}
+		let st = fs.stat(day_path(date, true)), ft = st ? st.mtime : 0;
+		if (force || !st || tnow - ft >= 3600 || tnow < ft) { wr(day_path(date, true), js); fl = true; }
+	}
+	let from = date_add(date, -(cfg.days - 1));
+	if (from) { prune(HRAMD, from); prune(HDIR, from); }
+	out({ ok: true, valid: valid, added: added, flushed: fl });
 }
 
-function hist() {
-	let h = hist_load();
-	out({ ok: true, days: h.days, fd: h.fd || '', ft: h.ft || 0 });
+function hist(period, dev, today) {
+	if (!match(s(today), /^20[2-9][0-9]-[01][0-9]-[0-3][0-9]$/)) { out({ ok: true, days: [], devs: [], routes: [], sites: [] }); return; }
+	let X = ctx_load(), cfg = hcfg(X), nd = period == 'today' ? 1 : int(period);
+	if (nd != 1 && nd != 7 && nd != 30 && nd != 90) nd = 7;
+	if (nd > cfg.days) nd = cfg.days;
+	dev = lc(s(dev));
+	let from = nd > 1 ? date_add(today, -(nd - 1)) : today;
+	let avail = {}, l1 = list_dates(HRAMD), l2 = list_dates(HDIR);
+	for (let i = 0; i < length(l1); i++) avail[l1[i]] = true;
+	for (let i = 0; i < length(l2); i++) avail[l2[i]] = true;
+	let dates = sort(filter(keys(avail), (x) => x >= from && x <= today));
+	let days = [], devs = {}, routes = {}, sites = {}, hours = {}, nodom = 0, other = 0, first = '';
+	for (let i = 0; i < length(dates); i++) {
+		let date = dates[i], D = day_load(date), dr = {}, tot = 0;
+		if (first == '' && length(keys(D.d))) first = date;
+		for (let k in D.d) {
+			let x = D.d[k];
+			let o = devs[k];
+			if (!o) o = devs[k] = { k: k, n: '', ip: '', t: 0, rx: 0, tx: 0, r: {}, ex: X.excl[k] ? 1 : 0 };
+			if (s(x.n) != '') o.n = x.n;
+			if (s(x.ip) != '') o.ip = x.ip;
+			if (int(x.t || 0) > o.t) o.t = int(x.t);
+			for (let id in x.r) { let v = x.r[id]; o.rx += v[0]; o.tx += v[1]; o.r[id] = (o.r[id] || 0) + v[0] + v[1]; }
+			if (o.ex && k != dev) continue;
+			if (dev != '' ? k != dev : k == 'router') continue;
+			for (let id in x.r) {
+				let v = x.r[id];
+				dr[id] = (dr[id] || 0) + v[0] + v[1]; tot += v[0] + v[1];
+				add2(routes, id, v[0], v[1]);
+			}
+			if (nd == 1 && type(x.h) == 'object') for (let h in x.h) {
+				if (type(hours[h]) != 'object') hours[h] = {};
+				for (let id in x.h[h]) hours[h][id] = (hours[h][id] || 0) + x.h[h][id];
+			}
+			if (type(x.s) == 'object') for (let st in x.s) {
+				let m = x.s[st], b = 0;
+				for (let id in m) b += m[id][0] + m[id][1];
+				if (st == '') { nodom += b; continue; }
+				if (st == '*') { other += b; continue; }
+				let sv = svc_of(st, null) || st, o2 = sites[sv];
+				if (!o2) o2 = sites[sv] = { n: sv, b: 0, dm: {}, r: {} };
+				o2.b += b; o2.dm[st] = (o2.dm[st] || 0) + b;
+				for (let id in m) o2.r[id] = (o2.r[id] || 0) + m[id][0] + m[id][1];
+			}
+		}
+		push(days, { k: date, w: D.w, r: dr, tot: tot });
+	}
+	let dl = [];
+	for (let k in devs) { if (k != 'router' && s(X.hosts[k]) != '') devs[k].n = X.hosts[k]; push(dl, devs[k]); }
+	dl = sort(dl, (a, b) => (b.rx + b.tx) - (a.rx + a.tx));
+	let rl = [];
+	for (let k in routes) push(rl, { id: k, rx: routes[k][0], tx: routes[k][1] });
+	rl = sort(rl, (a, b) => (b.rx + b.tx) - (a.rx + a.tx));
+	let sl = [];
+	for (let k in sites) {
+		let o2 = sites[k], dm = sort(keys(o2.dm), (a, b) => o2.dm[b] - o2.dm[a]);
+		push(sl, { n: o2.n, b: o2.b, dm: slice(dm, 0, 4), more: length(dm) > 4 ? length(dm) - 4 : 0, r: o2.r });
+	}
+	sl = sort(sl, (a, b) => b.b - a.b);
+	let rest = { b: 0, n: 0 };
+	for (let i = 30; i < length(sl); i++) { rest.b += sl[i].b; rest.n++; }
+	let hl = [];
+	if (nd == 1) for (let h = 0; h < 24; h++) {
+		let hk = sprintf('%02d', h), tot = 0, r = hours[hk] || {};
+		for (let id in r) tot += r[id];
+		let D = length(dates) ? day_load(today) : null, w = D && D.wh[hk] ? D.wh[hk][0] + D.wh[hk][1] : 0;
+		push(hl, { h: hk, r: r, tot: tot, w: w });
+	}
+	let fst = cfg.flash ? fs.stat(day_path(today, true)) : null;
+	out({ ok: true, period: nd == 1 ? 'today' : '' + nd, today: today, from: from, first: first, keep: cfg.days, store: cfg.flash ? 'flash' : 'ram', ft: fst ? fst.mtime : 0, now: time(),
+		days: days, hours: hl, devs: dl, routes: rl, sites: slice(sl, 0, 30), rest: rest, nodom: nodom, other: other, names: !!X.ctx.names });
+}
+
+function mig117(files) {
+	let flash = getenv('ZM_TRF_MIG_FLASH') != '0', days = {}, made = 0;
+	for (let i = 0; i < length(files); i++) {
+		let h = jparse(rd(files[i]));
+		if (type(h) != 'object' || type(h.days) != 'object') continue;
+		for (let k in h.days) if (!days[k] && match(k, /^20[0-9][0-9]-[01][0-9]-[0-3][0-9]$/) && type(h.days[k]) == 'object') days[k] = h.days[k];
+	}
+	for (let k in days) {
+		if (fs.stat(day_path(k, true)) || fs.stat(day_path(k, false))) continue;
+		let o = days[k], D = { v: 2, w: type(o.w) == 'array' ? [ n(o.w[0]), n(o.w[1]) ] : [ 0, 0 ], wh: {}, d: {} };
+		if (type(o.d) == 'object') for (let who in o.d) {
+			let x = o.d[who];
+			if (type(x) != 'object' || type(x.r) != 'object') continue;
+			let r = {};
+			for (let id in x.r) if (type(x.r[id]) == 'array') r[id] = [ n(x.r[id][0]), n(x.r[id][1]) ];
+			D.d[who] = { n: s(x.n), r: r, h: {}, s: {} };
+		}
+		fs.mkdir(flash ? HDIR : HRAMD);
+		if (wr(day_path(k, flash), sprintf('%J', D))) made++;
+	}
+	out({ ok: true, days: made });
+}
+
+function migrate(dirs) {
+	let made = 0, cfgf = getenv('ZM_TRF_MIG_FLASH') != '0';
+	let RM = { z: 'zapret', f: 'forkozz', s: 'steer', d: 'direct' };
+	let acc = {};
+	for (let di = 0; di < length(dirs); di++) {
+		let base = dirs[di];
+		for (let sub in { d: 1, h: 1 }) {
+			let l = fs.lsdir(base + '/' + sub);
+			if (type(l) != 'array') continue;
+			for (let i = 0; i < length(l); i++) {
+				let m = match(l[i], /^(20[0-9][0-9])([01][0-9])([0-3][0-9])([0-2][0-9])?$/);
+				if (!m) continue;
+				let date = m[1] + '-' + m[2] + '-' + m[3], hour = m[4];
+				if (sub == 'd' && hour) continue;
+				let key = date + (hour ? '|' + hour : '');
+				if (acc[key]) continue;
+				acc[key] = true;
+				let D = acc[date];
+				if (type(D) != 'object') D = acc[date] = { v: 2, w: [ 0, 0 ], wh: {}, d: {} };
+				let rows = lns(rd(base + '/' + sub + '/' + l[i]));
+				for (let j = 0; j < length(rows); j++) {
+					let f = split(rows[j], '\t');
+					if (length(f) < 5) continue;
+					let mac = lc(f[0]), st = f[1], rid = RM[f[2]] || 'direct', dn = n(f[3]), up = n(f[4]);
+					if (dn + up <= 0) continue;
+					let d = D.d[mac];
+					if (type(d) != 'object') d = D.d[mac] = { n: '', r: {}, h: {}, s: {} };
+					add2(d.r, rid, dn, up);
+					if (hour) { if (type(d.h[hour]) != 'object') d.h[hour] = {}; d.h[hour][rid] = (d.h[hour][rid] || 0) + dn + up; }
+					if (type(d.s[st]) != 'object') d.s[st] = {};
+					add2(d.s[st], rid, dn, up);
+				}
+			}
+		}
+	}
+	for (let k in acc) {
+		if (type(acc[k]) != 'object') continue;
+		let target = day_path(k, cfgf);
+		if (fs.stat(target)) continue;
+		fs.mkdir(cfgf ? HDIR : HRAMD);
+		for (let dvk in acc[k].d) sites_cap(acc[k].d[dvk]);
+		if (wr(target, sprintf('%J', acc[k]))) made++;
+	}
+	out({ ok: true, days: made });
 }
 
 function feed(path) {
@@ -40315,8 +40820,10 @@ let mode = ARGV[0] || '';
 fs.mkdir(RUN);
 if (mode == 'snap') snap();
 else if (mode == 'dnsfeed') feed(ARGV[1]);
-else if (mode == 'collect') collect(ARGV[1], ARGV[2] == '1');
-else if (mode == 'hist') hist();
+else if (mode == 'collect') collect(ARGV[1], ARGV[2], ARGV[3] == '1');
+else if (mode == 'hist') hist(ARGV[1], ARGV[2], ARGV[3]);
+else if (mode == 'migrate') migrate(slice(ARGV, 1));
+else if (mode == 'mig117') mig117(slice(ARGV, 1));
 else { out({ error: 'неизвестная команда' }); exit(1); }
 ZM_INSTALLER_EOF
 chmod 0644 '/opt/zapret-manager-luci/traffic.uc'
@@ -40513,7 +41020,7 @@ list_methods() {
 	json_add_object "traffic_get";            json_close_object
 	json_add_object "traffic_set";            json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "traffic_nlbw_get";       json_close_object
-	json_add_object "traffic_hist_get";       json_close_object
+	json_add_object "traffic_hist_get";       json_add_string "period" "string"; json_add_string "dev" "string"; json_close_object
 	json_add_object "monitor_procs";          json_close_object
 	json_add_object "monitor_action";         json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "watch_status";           json_close_object
@@ -40686,7 +41193,7 @@ call_method() {
 		traffic_get)             "$BACKEND" traffic_get ;;
 		traffic_set)             json_get_var action action; json_get_var value value; "$BACKEND" traffic_set "$action" "$value" ;;
 		traffic_nlbw_get)        "$BACKEND" traffic_nlbw_get ;;
-		traffic_hist_get)        "$BACKEND" traffic_hist_get ;;
+		traffic_hist_get)        json_get_var period period; json_get_var dev dev; "$BACKEND" traffic_hist_get "$period" "$dev" ;;
 		monitor_procs)           "$BACKEND" monitor_procs ;;
 		monitor_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" monitor_action "$action" @stdin ;;
 		watch_status)            "$BACKEND" watch_status ;;
@@ -41152,7 +41659,7 @@ var callMonitorAction = zmDeclare({ object: 'zapret-manager', method: 'monitor_a
 var callTrafficGet = zmDeclare({ object: 'zapret-manager', method: 'traffic_get', expect: {} });
 var callTrafficSet = zmDeclare({ object: 'zapret-manager', method: 'traffic_set', params: ['action', 'value'], expect: {} });
 var callTrafficNlbw = zmDeclare({ object: 'zapret-manager', method: 'traffic_nlbw_get', expect: {} });
-var callTrafficHist = zmDeclare({ object: 'zapret-manager', method: 'traffic_hist_get', expect: {} });
+var callTrafficHist = zmDeclare({ object: 'zapret-manager', method: 'traffic_hist_get', params: ['period', 'dev'], expect: {} });
 var callFastNet = rpc.declare({ object: 'zm-fast', method: 'net', expect: {} });
 var callDevStatus = rpc.declare({ object: 'network.device', method: 'status', expect: {} });
 var callUiNet = zmDeclare({ object: 'zapret-manager', method: 'ui_net_get', expect: {} });
@@ -57881,7 +58388,7 @@ html.zm-theme-dark .zm-trf-htip { background: #22272e; }
 .zm-trf-hleg-i i { width: 9px; height: 9px; border-radius: 3px; }
 .zm-trf-hleg-i b { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .8; }
 .zm-trf-hdevs { display: flex; flex-direction: column; margin-top: 12px; }
-.zm-trf-hdev { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(80px, 2fr) 150px; gap: 14px; align-items: center; padding: 8px 10px; margin: 0 -10px; border-radius: 10px; cursor: pointer; font-size: 13px; border-top: 1px solid rgba(127,127,127,.12); }
+.zm-trf-hdev { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(40px, 1fr) 132px; gap: 12px; align-items: center; padding: 8px 10px; margin: 0 -10px; border-radius: 10px; cursor: pointer; font-size: 13px; border-top: 1px solid rgba(127,127,127,.12); }
 .zm-trf-hdev:first-child { border-top: 0; }
 .zm-trf-hdev:hover { background: rgba(127,127,127,.08); }
 .zm-trf-hdev:focus-visible { outline: 2px solid var(--a1, #7c5cff); outline-offset: -2px; }
@@ -57889,11 +58396,60 @@ html.zm-theme-dark .zm-trf-htip { background: #22272e; }
 .zm-trf-hdev .zm-trf-r small, .zm-trf-hdev .zm-trf-nname small { font-size: 11.5px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zm-trf-hbar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(127,127,127,.1); }
 .zm-trf-hbar span { height: 100%; }
-@media (max-width: 600px) { .zm-trf-hdev { grid-template-columns: minmax(0, 1fr) auto; } .zm-trf-hbar { grid-column: 1 / -1; grid-row: 2; } .zm-trf-hchart { padding-left: 50px; height: 180px; } .zm-trf-hgrid span { left: 50px; } .zm-trf-hgrid em { left: -50px; width: 46px; } }
+@media (max-width: 600px) { .zm-trf-hdev, .zm-trf-site { grid-template-columns: minmax(0, 1fr) auto; } .zm-trf-hdev .zm-trf-hbar, .zm-trf-site .zm-trf-hbar { grid-column: 1 / -1; grid-row: 2; } .zm-trf-hchart { padding-left: 50px; height: 180px; } .zm-trf-hgrid span { left: 50px; } .zm-trf-hgrid em { left: -50px; width: 46px; } }
 .zm-trf-hfoot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(127,127,127,.14); }
 .zm-trf-hfoot .zm-hint { margin: 0; flex: 1 1 320px; }
 .zm-trf-hbtns { display: flex; gap: 8px; flex-wrap: wrap; }
 .zm-trf-hbtns .cbi-button { margin: 0; }
+.zm-trf-hhead { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.zm-trf-hist { transition: opacity .2s; }
+.zm-trf-hist.zm-trf-loading .zm-trf-htiles, .zm-trf-hist.zm-trf-loading .zm-trf-hchart, .zm-trf-hist.zm-trf-loading .zm-trf-hgrid2 { opacity: .55; transition: opacity .2s .15s; }
+.zm-trf-hcols-xs { gap: 1px; }
+.zm-trf-hcols-xs .zm-trf-hstack { border-radius: 2px 2px 0 0; }
+.zm-trf-hcols-xs .zm-trf-hcol small, .zm-trf-hcols-m .zm-trf-hcol small { overflow: visible; text-align: left; }
+.zm-trf-hcol.zm-trf-fut .zm-trf-hbarbox { background: repeating-linear-gradient(0deg, transparent 0 6px, rgba(127,127,127,.05) 6px 7px); border-radius: 4px; }
+.zm-trf-hcol.zm-trf-fut small { opacity: .35; }
+.zm-trf-hcard { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.zm-trf-back { all: unset; align-self: flex-start; cursor: pointer; font-size: 12.5px; opacity: .7; padding: 2px 0; }
+.zm-trf-back:hover { opacity: 1; text-decoration: underline; }
+.zm-trf-back:focus-visible { outline: 2px solid var(--a1, #7c5cff); outline-offset: 2px; border-radius: 4px; }
+.zm-trf-hcard-m { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: rgba(127,127,127,.06); border: 1px solid rgba(127,127,127,.16); }
+.zm-trf-hcard-m .zm-trf-ava { width: 42px; height: 42px; border-radius: 13px; font-size: 18px; flex: none; }
+.zm-trf-hcard-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 200px; }
+.zm-trf-hcard-t b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zm-trf-hcard-t small { font-size: 12px; opacity: .65; overflow-wrap: anywhere; }
+.zm-trf-hcard-b { display: flex; gap: 8px; flex-wrap: wrap; }
+.zm-trf-hcard-b .cbi-button { margin: 0; }
+.zm-trf-hgrid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 28px; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(127,127,127,.14); }
+.zm-trf-hgrid1 { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 960px) { .zm-trf-hgrid2 { grid-template-columns: minmax(0, 1fr); } }
+.zm-trf-hpart { min-width: 0; display: flex; flex-direction: column; }
+.zm-trf-hpart > h4 { margin: 0 0 6px; font-size: 13.5px; display: flex; align-items: baseline; gap: 8px; }
+.zm-trf-hpart > h4 small { font-weight: 400; font-size: 12px; opacity: .55; }
+.zm-trf-hpart > .zm-hint { margin: 4px 0 0; }
+.zm-trf-hpart .zm-trf-hdevs { margin-top: 0; }
+.zm-trf-hpart .zm-trf-more { align-self: flex-start; margin-top: 8px; }
+.zm-trf-hdev-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.zm-trf-hdev-who .zm-trf-ava { width: 30px; height: 30px; border-radius: 10px; font-size: 13px; flex: none; }
+.zm-trf-hdev .zm-trf-nname small.zm-trf-off { opacity: .45; }
+.zm-trf-sites { display: flex; flex-direction: column; }
+.zm-trf-site { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(40px, 1fr) 132px; gap: 12px; align-items: center; padding: 8px 0; font-size: 13px; border-top: 1px solid rgba(127,127,127,.12); min-width: 0; }
+.zm-trf-site:first-child { border-top: 0; }
+.zm-trf-site .zm-trf-nname small, .zm-trf-site .zm-trf-r small { font-size: 11.5px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zm-trf-site .zm-trf-r { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; min-width: 0; }
+.zm-trf-site .zm-trf-r b { white-space: nowrap; }
+.zm-trf-site-x .zm-trf-nname b { font-weight: 500; opacity: .75; }
+.zm-trf-hset { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(127,127,127,.15); }
+.zm-trf-hset h4 { margin: 0 0 8px; font-size: 13.5px; }
+.zm-trf-hset .zm-swrow { margin-top: 0; }
+.zm-trf-srow { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid rgba(127,127,127,.12); font-size: 13px; }
+.zm-trf-srow .zm-trf-nname { flex: 1 1 220px; }
+.zm-trf-srow .zm-trf-nname small { font-size: 12px; opacity: .6; }
+.zm-trf-srow .cbi-button { margin: 0; }
+.zm-trf-srow-x { padding-left: 14px; border-top-style: dashed; }
+.zm-trf-hset .zm-actions { margin-top: 10px; }
+@media (max-width: 600px) { .zm-trf-site { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; } .zm-trf-hdev { gap: 4px 12px; } .zm-trf-hcard-b { width: 100%; } .zm-trf-hcard-b .cbi-button { flex: 1 1 0; } }
+@media (max-width: 600px) { .zm-trf-hist .zm-trf-tools { flex-direction: column; align-items: stretch; } .zm-trf-hist .zm-trf-tools .zm-trf-hsel { max-width: none; width: 100%; } .zm-trf-hist .zm-trf-tools .zm-trf-hseg { display: flex; flex-wrap: nowrap; width: 100%; gap: 4px; } .zm-trf-hist .zm-trf-tools .zm-trf-hseg .zm-seg-item { flex: 1 1 auto; padding: 6px 4px; text-align: center; white-space: nowrap; font-size: 12.5px; } .zm-trf-site-x > span:nth-child(2) { display: none; } .zm-trf-site-x .zm-trf-nname small { white-space: normal; } }
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
 
@@ -61209,7 +61765,7 @@ return view.extend({
 		return Promise.all([
 			zm.trafficGet().catch(function(e) { return { error: 'Роутер не ответил: ' + ((e && e.message) || e) }; }),
 			zm.trafficNlbw().catch(function() { return null; }),
-			zm.trafficHist().catch(function() { return null; })
+			zm.trafficHist(/^(today|7|30|90)$/.test(prefGet().hper || '') ? prefGet().hper : '7', '').catch(function() { return null; })
 		]);
 	},
 
@@ -61261,13 +61817,20 @@ return view.extend({
 					'Устройства и соединения — таблица соединений ядра (conntrack), обновляется каждые 3 секунды',
 					'Через что идёт соединение, видно по интерфейсу выхода и меткам: туннели Steer, WARP, VPN, AmneziaWG, ByeTube, Mixomo, Tailscale',
 					'Forkozz и Mixomo сами сообщают, через какой узел идёт каждое соединение',
-					'Zapret отмечен у прямых соединений на портах, которые он обрабатывает; сайты из исключений идут напрямую'
+					'Zapret отмечен у прямых соединений по его профилям — портам и спискам сайтов'
 				] },
 				{ type: 'list', title: 'Важно знать', items: [
 					'Скорость устройств — разница счётчиков между замерами, короткие всплески сглаживаются',
 					'Включённое ускорение (flow offloading) может занижать скорость устройств — интернет в целом считается верно',
 					'Имена сайтов появляются после включения «Имён сайтов» и только для новых запросов',
-					'Ничего из этого не сохраняется на флеш и никуда не отправляется'
+					'Адреса fake-IP 198.18.x.x принадлежат Forkozz или Mixomo — такие соединения засчитываются им'
+				] },
+				{ type: 'list', title: 'История', items: [
+					'Раз в минуту роутер складывает трафик устройств по сайтам и способам выхода',
+					'«Сегодня» — по часам, дальше — по дням; хранится 7, 30 или 90 дней',
+					'На флеш итоги пишутся раз в час, можно хранить только в памяти',
+					'Устройство можно переименовать или не считать — в его карточке',
+					'Ничего никуда не отправляется'
 				] }
 			] });
 		}
@@ -61478,7 +62041,7 @@ return view.extend({
 				var top = d.r[0] ? colorOf(d.r[0][0]) : KINDS.direct.c, nm = devName(d);
 				list.appendChild(E('button', { 'type': 'button', 'class': 'zm-trf-dev' + (selDev === d.k ? ' zm-active' : selDev ? ' zm-trf-dim' : ''), 'click': function() { selDev = selDev === d.k ? '' : d.k; flowMore = 0; savePref(); paintAll(); } }, [
 					E('span', { 'class': 'zm-trf-ava', 'style': 'background:' + top }, d.k === 'router' ? '⌂' : String(nm).replace(/^[^A-Za-zА-Яа-яЁё0-9]+/, '').charAt(0).toUpperCase() || '•'),
-					E('span', { 'class': 'zm-trf-dev-n' }, [ E('b', {}, nm), E('small', {}, d.k === 'router' ? 'собственный трафик роутера' : (d.ip || []).filter(function(x) { return x !== nm; }).slice(0, 2).concat(d.mac ? [ d.mac ] : []).join(' · ')) ]),
+					E('span', { 'class': 'zm-trf-dev-n' }, [ E('b', {}, nm), E('small', {}, d.k === 'router' ? 'собственный трафик роутера' : (d.ip || []).filter(function(x) { return x !== nm; }).slice(0, 2).concat(d.mac ? [ d.mac ] : []).join(' · ') + (d.ex && hist && hist.on ? ' · не в истории' : '')) ]),
 					E('span', { 'class': 'zm-trf-dev-r' }, [ mini, E('small', {}, d.n + ' ' + plural(d.n, 'соединение', 'соединения', 'соединений') + (d.r.length ? ' · ' + routeName(d.r[0][0]) : '')) ]),
 					E('span', { 'class': 'zm-trf-dev-v' }, [ E('b', {}, '↓ ' + spdT(d.rrx)), E('small', {}, '↑ ' + spdT(d.rtx) + ' · ' + vol(d.rx + d.tx)) ])
 				]));
@@ -61541,145 +62104,234 @@ return view.extend({
 		function fchip(t, x, col) {
 			return E('span', { 'class': 'zm-trf-fchip' }, [ col ? E('i', { 'style': 'background:' + col }) : E([]), t, E('button', { 'type': 'button', 'aria-label': 'Убрать фильтр', 'click': x }, '×') ]);
 		}
-		function savePref() { prefPut({ dev: selDev, svc: showSvc, hdays: hDays }); }
+		function savePref() { prefPut({ dev: selDev, svc: showSvc, hper: hPer }); }
 
-		/* ---------- история по дням ---------- */
+		/* ---------- история ---------- */
 		var histCard = E('div', { 'class': 'zm-card zm-trf-hist' });
-		var hDays = pref.hdays === 30 ? 30 : 7, hDev = '', hBusy = '', hTimer = 0, hTipI = -1;
+		var PERS = [ [ 'today', 'Сегодня' ], [ '7', '7 дней' ], [ '30', '30 дней' ], [ '90', '90 дней' ] ];
+		var hPer = /^(today|7|30|90)$/.test(pref.hper || '') ? pref.hper : '7', hDev = '', hBusy = '', hTimer = 0, hTipI = -1, hSeq = 0, hLoading = false, hSitesAll = false, hDevAll = false;
 		var MONS = [ 'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек' ], WDS = [ 'Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб' ];
 		function dOf(k) { var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(k || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
 		function kOf(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-		function dayList() {
-			var end = dOf(hist && hist.today) || new Date(), out = [];
-			for (var i = hDays - 1; i >= 0; i--) { var d = new Date(end.getFullYear(), end.getMonth(), end.getDate() - i); out.push({ k: kOf(d), d: d }); }
-			return out;
-		}
-		function hDay(k) { var x = hist && hist.days && hist.days[k]; return x && typeof x === 'object' ? x : null; }
-		function hAgg(list) {
-			var days = list.map(function(it) {
-				var x = hDay(it.k), r = {}, tot = 0;
-				if (x && x.d) Object.keys(x.d).forEach(function(dk) {
-					if (dk === 'router' && !showSvc) return;
-					if (hDev && dk !== hDev) return;
-					var rr = x.d[dk].r || {};
-					Object.keys(rr).forEach(function(id) { var v = rr[id] || [ 0, 0 ]; r[id] = (r[id] || 0) + v[0] + v[1]; tot += v[0] + v[1]; });
-				});
-				return { k: it.k, d: it.d, r: r, tot: tot, w: x && x.w ? x.w[0] + x.w[1] : 0, wr: x && x.w ? x.w : [ 0, 0 ] };
-			});
-			var routes = {}, devs = {};
-			list.forEach(function(it) {
-				var x = hDay(it.k);
-				if (!x || !x.d) return;
-				Object.keys(x.d).forEach(function(dk) {
-					if (dk === 'router' && !showSvc) return;
-					var o = devs[dk] || (devs[dk] = { k: dk, n: '', rx: 0, tx: 0, r: {} });
-					if (x.d[dk].n) o.n = x.d[dk].n;
-					var rr = x.d[dk].r || {};
-					Object.keys(rr).forEach(function(id) {
-						var v = rr[id] || [ 0, 0 ];
-						o.rx += v[0]; o.tx += v[1]; o.r[id] = (o.r[id] || 0) + v[0] + v[1];
-						if (!hDev || dk === hDev) { var q = routes[id] || (routes[id] = { id: id, rx: 0, tx: 0 }); q.rx += v[0]; q.tx += v[1]; }
-					});
-				});
-			});
-			return { days: days, routes: Object.keys(routes).map(function(k) { return routes[k]; }).sort(function(a, b) { return b.rx + b.tx - a.rx - a.tx; }),
-				devs: Object.keys(devs).map(function(k) { return devs[k]; }).sort(function(a, b) { return b.rx + b.tx - a.rx - a.tx; }) };
-		}
+		function dLong(d) { return d.getDate() + ' ' + MONS[d.getMonth()]; }
+		function hm(ts) { var d = new Date(ts * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+		function hKeep() { var k = +(hist && hist.keep) || 30; return k === 7 || k === 90 ? k : 30; }
+		function hPerEff() { return hPer === 'today' || +hPer <= hKeep() ? hPer : String(hKeep()); }
+		function perText(p) { return p === 'today' ? 'сегодня' : 'за ' + p + ' дней'; }
+		function isMac(k) { return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(k || ''); }
+		function hDevs() { return ((hist && hist.devs) || []).filter(function(dv) { return !dv.ex && (showSvc || dv.k !== 'router'); }); }
+		function hDevOf(k) { return ((hist && hist.devs) || []).filter(function(dv) { return dv.k === k; })[0]; }
 		function hName(dv) {
+			if (!dv) return '';
 			var cur = devByKey(dv.k);
-			return dv.k === 'router' ? 'Роутер' : (cur && cur.name) || dv.n || dv.k;
+			return dv.k === 'router' ? 'Роутер' : dv.n || (cur && cur.name) || dv.ip || dv.k;
+		}
+		function seenText(dv) {
+			if (dv.k === 'router') return 'собственный трафик роутера';
+			if (devByKey(dv.k)) return 'в сети';
+			if (!dv.t) return 'не в сети';
+			var now = (hist && hist.now) || Date.now() / 1000, d = new Date(dv.t * 1000), t = dOf(hist && hist.today);
+			if (now - dv.t < 3600) return 'был в сети ' + Math.max(1, Math.round((now - dv.t) / 60)) + ' мин назад';
+			if (t && kOf(d) === kOf(t)) return 'был в сети в ' + hm(dv.t);
+			return 'был в сети ' + dLong(d);
+		}
+		function ava(k, nm, col) {
+			return E('span', { 'class': 'zm-trf-ava', 'style': 'background:' + col, 'aria-hidden': 'true' }, k === 'router' ? '⌂' : String(nm).replace(/^[^A-Za-zА-Яа-яЁё0-9]+/, '').charAt(0).toUpperCase() || '•');
+		}
+		function topId(r) { var b = '', v = -1; Object.keys(r || {}).forEach(function(id) { if (r[id] > v) { v = r[id]; b = id; } }); return b; }
+		function rbar(r, max, cls) {
+			var bar = E('span', { 'class': cls || 'zm-trf-hbar' });
+			Object.keys(r || {}).sort(function(a, b) { return r[b] - r[a]; }).forEach(function(id) {
+				var p = max ? r[id] / max * 100 : 0;
+				if (p >= 0.3) bar.appendChild(E('span', { 'style': 'width:' + p.toFixed(2) + '%;background:' + colorOf(id), 'title': routeName(id) + ' — ' + vol(r[id]) }));
+			});
+			return bar;
+		}
+		function hCols(p) {
+			var out = [];
+			if (p === 'today') {
+				var now = new Date(), live = hist && kOf(now) === hist.today ? now.getHours() : 24;
+				((hist && hist.hours) || []).forEach(function(x, i) {
+					out.push({ lab: i % 3 ? '' : x.h + ':00', tip: x.h + ':00 – ' + ('0' + ((i + 1) % 24)).slice(-2) + ':00', r: x.r || {}, tot: x.tot || 0, w: x.w || 0, cur: i === live, fut: i > live });
+				});
+				return out;
+			}
+			var map = {}, end = dOf(hist && hist.today) || new Date(), n = +p;
+			((hist && hist.days) || []).forEach(function(x) { map[x.k] = x; });
+			for (var i = n - 1; i >= 0; i--) {
+				var d = new Date(end.getFullYear(), end.getMonth(), end.getDate() - i), x = map[kOf(d)], j = n - 1 - i;
+				var lab = n === 7 ? (i ? WDS[d.getDay()] + ' ' + d.getDate() : 'Сегодня') : !i ? 'сег.' : n === 30 ? (j % 5 === 0 ? String(d.getDate()) : '') : (d.getDate() === 1 ? dLong(d) : '');
+				out.push({ lab: lab, tip: (i ? WDS[d.getDay()] + ', ' : 'Сегодня, ') + dLong(d), r: (x && x.r) || {}, tot: (x && x.tot) || 0, w: x && x.w ? x.w[0] + x.w[1] : 0, wr: (x && x.w) || [ 0, 0 ], cur: !i });
+			}
+			return out;
 		}
 		function paintHist() {
 			histCard.innerHTML = '';
-			var on = !!(hist && hist.on);
-			var head = E('div', { 'class': 'zm-trf-cardhead' }, [ E('h3', {}, 'История по дням') ]);
+			var on = !!(hist && hist.on), p = hPerEff();
+			var sub = E('span', { 'class': 'zm-trf-sub' }, '');
+			var head = E('div', { 'class': 'zm-trf-cardhead' }, [ E('div', { 'class': 'zm-trf-hhead' }, [ E('h3', {}, 'История'), sub ]) ]);
 			histCard.appendChild(head);
+			histCard.classList.toggle('zm-trf-loading', hLoading);
 			if (!hist || !on) {
 				histCard.appendChild(E('div', { 'class': 'zm-trf-hoff' }, [
 					E('div', { 'class': 'zm-trf-hoff-art', 'aria-hidden': 'true' }, [ 34, 58, 44, 80, 62, 92, 70 ].map(function(h) { return E('i', { 'style': 'height:' + h + '%' }); })),
 					E('div', { 'class': 'zm-trf-hoff-t' }, [
-						E('b', {}, 'Сколько и через что ходило каждое устройство — по дням'),
-						E('p', { 'class': 'zm-hint' }, 'Роутер раз в минуту складывает трафик устройств по способам выхода: напрямую, Zapret, Steer, Forkozz и другие. Хранятся последние 35 дней; на флеш итоги пишутся раз в час и при смене дня, так что память роутера не изнашивается. Ничего никуда не отправляется.'),
-						E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': hBusy ? '' : null, 'click': function() { histSet('on'); } }, hBusy === 'on' ? 'Включаем…' : 'Вести историю') ])
+						E('b', {}, 'Сколько, куда и через что ходило каждое устройство'),
+						E('p', { 'class': 'zm-hint' }, 'Роутер раз в минуту складывает трафик устройств по сайтам и способам выхода: напрямую, Zapret, Steer, Forkozz и другие. Видно сегодняшний день по часам и последние 7, 30 или 90 дней. На флеш итоги пишутся раз в час, так что память роутера не изнашивается. Ничего никуда не отправляется.'),
+						hist && hist.first ? E('p', { 'class': 'zm-hint' }, 'Сохранённые дни остались — они снова будут видны после включения.') : E([]),
+						E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': hBusy ? '' : null, 'click': function() { histSet('on'); } }, hBusy === 'hist' ? 'Включаем…' : 'Вести историю') ])
 					])
 				]));
 				return;
 			}
-			var seg = E('div', { 'class': 'zm-seg zm-trf-hseg', 'role': 'tablist', 'aria-label': 'Период' }, [ 7, 30 ].map(function(n) {
-				return E('div', { 'class': 'zm-seg-item' + (hDays === n ? ' zm-active' : ''), 'role': 'tab', 'tabindex': '0', 'aria-selected': hDays === n ? 'true' : 'false',
-					'click': function() { if (hDays !== n) { hDays = n; pref.hdays = n; savePref(); paintHist(); } },
-					'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); hDays = n; pref.hdays = n; savePref(); paintHist(); } } }, n + ' дней');
+			var seg = E('div', { 'class': 'zm-seg zm-trf-hseg', 'role': 'tablist', 'aria-label': 'Период' }, PERS.filter(function(x) { return x[0] === 'today' || +x[0] <= hKeep(); }).map(function(x) {
+				var act = p === x[0];
+				function pick() { if (!act) { hPer = x[0]; hSitesAll = false; savePref(); loadHist(); } }
+				return E('div', { 'class': 'zm-seg-item' + (act ? ' zm-active' : ''), 'role': 'tab', 'tabindex': '0', 'aria-selected': act ? 'true' : 'false', 'click': pick,
+					'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } } }, x[1]);
 			}));
-			var list = dayList(), A = hAgg(list);
-			var sel = E('select', { 'class': 'zm-trf-hsel', 'aria-label': 'Устройство', 'change': function() { hDev = sel.value; paintHist(); } }, [ E('option', { 'value': '' }, 'Все устройства') ].concat(A.devs.map(function(dv) {
+			var dl = hDevs();
+			if (hDev && !dl.some(function(dv) { return dv.k === hDev; })) { var xd = hDevOf(hDev); if (xd) dl = dl.concat([ xd ]); }
+			var sel = E('select', { 'class': 'zm-trf-hsel', 'aria-label': 'Устройство', 'change': function() { pickHDev(sel.value); } }, [ E('option', { 'value': '' }, 'Все устройства') ].concat(dl.map(function(dv) {
 				return E('option', { 'value': dv.k, 'selected': hDev === dv.k ? '' : null }, hName(dv));
 			})));
 			head.appendChild(E('div', { 'class': 'zm-trf-tools' }, [ sel, seg ]));
-			var any = A.days.some(function(d) { return d.tot || d.w; });
-			if (!any) {
-				histCard.appendChild(E('p', { 'class': 'zm-hint' }, 'История только начала собираться — первые цифры появятся через пару минут.'));
+			var first = dOf(hist.first);
+			sub.textContent = [ first ? 'ведётся с ' + dLong(first) : '', 'хранится ' + hKeep() + ' дней', hist.store === 'ram' ? 'в памяти' : 'на флеше' ].filter(Boolean).join(' · ');
+			var cols = hCols(p);
+			if (hDev) histCard.appendChild(hDevHead(hDevOf(hDev) || { k: hDev }));
+			var sumT = 0, sumW = [ 0, 0 ], nd = 0, routes = hist.routes || [];
+			cols.forEach(function(c) { sumT += c.tot; if (c.tot) nd++; });
+			if (p === 'today') { var td = (hist.days || []).filter(function(x) { return x.k === hist.today; })[0]; if (td && td.w) sumW = td.w; }
+			else cols.forEach(function(c) { sumW[0] += c.wr[0]; sumW[1] += c.wr[1]; });
+			if (!sumT && !sumW[0] && !sumW[1]) {
+				histCard.appendChild(E('p', { 'class': 'zm-hint' }, hDev ? 'У этого устройства ' + perText(p) + ' трафика нет.' : first ? 'За этот период трафика нет.' : 'История только начала собираться — первые цифры появятся через пару минут.'));
 				histCard.appendChild(histFoot());
 				return;
 			}
-			var sumW = [ 0, 0 ], sumT = 0, nDays = 0, today = A.days[A.days.length - 1];
-			A.days.forEach(function(d) { sumW[0] += d.wr[0]; sumW[1] += d.wr[1]; sumT += d.tot; if (d.tot) nDays++; });
-			var topD = A.devs.filter(function(dv) { return dv.k !== 'router'; })[0], topR = A.routes[0];
-			var tiles = E('div', { 'class': 'zm-trf-htiles' }, [
-				tile(hDev ? 'Устройство за ' + hDays + ' дней' : 'Интернет за ' + hDays + ' дней', hDev ? vol(sumT) : vol(sumW[0] + sumW[1]), hDev ? hName(A.devs.filter(function(x) { return x.k === hDev; })[0] || { k: hDev }) : '↓ ' + vol(sumW[0]) + ' · ↑ ' + vol(sumW[1])),
-				tile('Сегодня', vol(hDev ? today.tot : today.w), hDev ? 'по соединениям устройства' : 'по счётчику интернета'),
-				hDev ? tile('В среднем за день', vol(nDays ? sumT / nDays : 0), nDays + ' ' + plural(nDays, 'день', 'дня', 'дней') + ' с данными') : tile('Больше всех', topD ? hName(topD) : '—', topD ? vol(topD.rx + topD.tx) : ''),
-				tile('Основной путь', topR ? routeName(topR.id) : '—', topR && sumT ? num((topR.rx + topR.tx) / sumT * 100, 0) + '% трафика' : '', topR ? colorOf(topR.id) : '')
-			]);
-			histCard.appendChild(tiles);
-			histCard.appendChild(hChart(A));
+			var topR = routes[0], dv = hDev ? hDevOf(hDev) : null, rx = 0, tx = 0;
+			routes.forEach(function(r) { rx += r.rx; tx += r.tx; });
+			var tiles;
+			if (hDev) {
+				var cur = devByKey(hDev);
+				tiles = [
+					tile('Скачано ' + perText(p), vol(rx), p !== 'today' && nd > 1 ? 'в среднем ' + vol(sumT / nd) + ' в день' : '↓ ' + num(sumT ? rx / sumT * 100 : 0, 0) + '% от всего'),
+					tile('Отдано ' + perText(p), vol(tx), sumT ? num(tx / sumT * 100, 0) + '% от всего' : ''),
+					tile('Сейчас', cur ? '↓ ' + spdT(cur.rrx) : '—', cur ? '↑ ' + spdT(cur.rtx) + ' · ' + cur.n + ' ' + plural(cur.n, 'соединение', 'соединения', 'соединений') : dv ? seenText(dv) : 'не в сети'),
+					tile('Основной путь', topR ? routeName(topR.id) : '—', topR && sumT ? num((topR.rx + topR.tx) / sumT * 100, 0) + '% трафика' : '', topR ? colorOf(topR.id) : '')
+				];
+			} else {
+				var act = dl.filter(function(x) { return x.k !== 'router' && x.rx + x.tx > 0; }), top = act[0];
+				tiles = [
+					tile('Интернет ' + perText(p), vol(sumW[0] + sumW[1] || sumT), sumW[0] + sumW[1] ? '↓ ' + vol(sumW[0]) + ' · ↑ ' + vol(sumW[1]) : 'по соединениям устройств'),
+					tile('Устройства ' + perText(p), vol(sumT), act.length + ' ' + plural(act.length, 'устройство', 'устройства', 'устройств') + (p !== 'today' && nd ? ' · ' + nd + ' ' + plural(nd, 'день', 'дня', 'дней') + ' с данными' : '')),
+					tile('Больше всех', top ? hName(top) : '—', top ? vol(top.rx + top.tx) : ''),
+					tile('Основной путь', topR ? routeName(topR.id) : '—', topR && sumT ? num((topR.rx + topR.tx) / sumT * 100, 0) + '% трафика' : '', topR ? colorOf(topR.id) : '')
+				];
+			}
+			histCard.appendChild(E('div', { 'class': 'zm-trf-htiles' }, tiles));
+			histCard.appendChild(hChart(cols, p));
 			var leg = E('div', { 'class': 'zm-trf-hleg' });
-			A.routes.slice(0, 10).forEach(function(r) {
-				leg.appendChild(E('span', { 'class': 'zm-trf-hleg-i' }, [ E('i', { 'style': 'background:' + colorOf(r.id) }), E('span', {}, routeName(r.id)), E('b', {}, vol(r.rx + r.tx)) ]));
+			routes.slice(0, 10).forEach(function(r) {
+				leg.appendChild(E('span', { 'class': 'zm-trf-hleg-i', 'title': (KINDS[kindOf(r.id)] || {}).d || '' }, [ E('i', { 'style': 'background:' + colorOf(r.id) }), E('span', {}, routeName(r.id)), E('b', {}, vol(r.rx + r.tx)) ]));
 			});
 			histCard.appendChild(leg);
-			if (!hDev) {
-				var dl = E('div', { 'class': 'zm-trf-hdevs' }), max = A.devs.length ? A.devs[0].rx + A.devs[0].tx : 1;
-				A.devs.slice(0, 12).forEach(function(dv) {
-					var tot = dv.rx + dv.tx, bar = E('span', { 'class': 'zm-trf-hbar' });
-					var ids = Object.keys(dv.r).sort(function(a, b) { return dv.r[b] - dv.r[a]; });
-					ids.forEach(function(id) { var p = tot ? dv.r[id] / max * 100 : 0; if (p >= 0.3) bar.appendChild(E('span', { 'style': 'width:' + p.toFixed(2) + '%;background:' + colorOf(id), 'title': routeName(id) + ' — ' + vol(dv.r[id]) })); });
-					dl.appendChild(E('button', { 'type': 'button', 'class': 'zm-trf-hdev', 'click': function() { hDev = dv.k; paintHist(); } }, [
-						E('span', { 'class': 'zm-trf-nname' }, [ E('b', {}, hName(dv)), E('small', {}, ids.length ? routeName(ids[0]) + (ids.length > 1 ? ' и ещё ' + (ids.length - 1) : '') : '') ]),
-						bar,
-						E('span', { 'class': 'zm-trf-r' }, [ E('b', {}, vol(tot)), E('small', {}, '↓ ' + vol(dv.rx) + ' · ↑ ' + vol(dv.tx)) ])
-					]));
-				});
-				histCard.appendChild(dl);
-			}
+			var grid = E('div', { 'class': 'zm-trf-hgrid2' + (hDev ? ' zm-trf-hgrid1' : '') });
+			if (!hDev) grid.appendChild(hDevList(dl));
+			grid.appendChild(hSites());
+			histCard.appendChild(grid);
 			histCard.appendChild(histFoot());
 		}
-		function tile(cap, big, sub, col) {
-			return E('div', { 'class': 'zm-trf-htile' }, [ E('span', { 'class': 'zm-trf-cap' }, [ col ? E('i', { 'class': 'zm-trf-hdot', 'style': 'background:' + col }) : E([]), cap ]), E('b', { 'title': big }, big), E('small', {}, sub || '') ]);
+		function hDevHead(dv) {
+			var nm = hName(dv), id = topId(dv.r), mac = isMac(dv.k);
+			return E('div', { 'class': 'zm-trf-hcard' }, [
+				E('button', { 'type': 'button', 'class': 'zm-trf-back', 'click': function() { pickHDev(''); } }, '← Все устройства'),
+				E('div', { 'class': 'zm-trf-hcard-m' }, [
+					ava(dv.k, nm, id ? colorOf(id) : KINDS.direct.c),
+					E('div', { 'class': 'zm-trf-hcard-t' }, [
+						E('b', {}, nm),
+						E('small', {}, [ dv.ip && dv.ip !== nm ? dv.ip : '', mac ? dv.k : '', seenText(dv) ].filter(Boolean).join(' · ') + (dv.ex ? ' · не считается' : ''))
+					]),
+					mac ? E('div', { 'class': 'zm-trf-hcard-b' }, [
+						E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() { renameDev(dv); } }, 'Переименовать'),
+						dv.ex ? E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() { exclDev(dv, false); } }, 'Снова считать')
+							: E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() { exclDev(dv, true); } }, 'Не считать')
+					]) : E([])
+				])
+			]);
 		}
-		function hChart(A) {
-			var mx = 0;
-			A.days.forEach(function(d) { mx = Math.max(mx, d.tot, hDev ? 0 : d.w); });
+		function hDevList(dl) {
+			var box = E('div', { 'class': 'zm-trf-hpart' }), act = dl.filter(function(x) { return x.rx + x.tx > 0; }), lim = hDevAll ? act.length : 8;
+			box.appendChild(E('h4', {}, [ 'Устройства', E('small', {}, act.length ? String(act.length) : '') ]));
+			if (!act.length) { box.appendChild(E('p', { 'class': 'zm-hint' }, 'За этот период трафика устройств нет.')); return box; }
+			var max = act[0].rx + act[0].tx, list = E('div', { 'class': 'zm-trf-hdevs' });
+			act.slice(0, lim).forEach(function(dv) {
+				var tot = dv.rx + dv.tx, nm = hName(dv), id = topId(dv.r), on = dv.k === 'router' || !!devByKey(dv.k);
+				list.appendChild(E('button', { 'type': 'button', 'class': 'zm-trf-hdev', 'title': 'Открыть ' + nm, 'click': function() { pickHDev(dv.k); } }, [
+					E('span', { 'class': 'zm-trf-hdev-who' }, [
+						ava(dv.k, nm, id ? colorOf(id) : KINDS.direct.c),
+						E('span', { 'class': 'zm-trf-nname' }, [ E('b', {}, nm), E('small', { 'class': on ? '' : 'zm-trf-off' }, seenText(dv)) ])
+					]),
+					rbar(dv.r, max),
+					E('span', { 'class': 'zm-trf-r' }, [ E('b', {}, vol(tot)), E('small', {}, '↓ ' + vol(dv.rx) + ' · ↑ ' + vol(dv.tx)) ])
+				]));
+			});
+			box.appendChild(list);
+			if (act.length > 8) box.appendChild(E('button', { 'class': 'cbi-button zm-trf-more', 'click': function() { hDevAll = !hDevAll; paintHist(); } }, hDevAll ? 'Свернуть' : 'Показать все (' + act.length + ')'));
+			return box;
+		}
+		function hSites() {
+			var box = E('div', { 'class': 'zm-trf-hpart' }), sl = (hist && hist.sites) || [], rest = (hist && hist.rest) || { b: 0, n: 0 };
+			var extra = (hist.nodom || 0) + (hist.other || 0) + (rest.b || 0);
+			box.appendChild(E('h4', {}, [ 'Сайты и сервисы', E('small', {}, 'по запросам DNS') ]));
+			if (!sl.length && !extra) {
+				box.appendChild(E('p', { 'class': 'zm-hint' }, snap && snap.names === false ? 'Чтобы видеть сайты, включите «Имена сайтов» в настройках монитора ниже — роутер узнает домены из запросов DNS.' : 'Сайтов за этот период пока нет.'));
+				return box;
+			}
+			var max = sl.length ? sl[0].b : 1, lim = hSitesAll ? sl.length : 10, list = E('div', { 'class': 'zm-trf-sites' });
+			sl.slice(0, lim).forEach(function(s) {
+				var dm = (s.dm || []).filter(function(d) { return d !== s.n; }), id = topId(s.r);
+				list.appendChild(E('div', { 'class': 'zm-trf-site' }, [
+					E('span', { 'class': 'zm-trf-nname' }, [ E('b', { 'title': s.n }, s.n), E('small', { 'title': (s.dm || []).join(', ') }, dm.length ? dm.join(', ') + (s.more ? ' и ещё ' + s.more : '') : '') ]),
+					rbar(s.r, max),
+					E('span', { 'class': 'zm-trf-r' }, [ E('b', {}, vol(s.b)), E('small', {}, id ? routeName(id) + (Object.keys(s.r || {}).length > 1 ? ' и др.' : '') : '') ])
+				]));
+			});
+			function line(t, b, hint) {
+				list.appendChild(E('div', { 'class': 'zm-trf-site zm-trf-site-x', 'title': hint || '' }, [ E('span', { 'class': 'zm-trf-nname' }, [ E('b', {}, t), hint ? E('small', {}, hint) : E([]) ]), E('span'), E('span', { 'class': 'zm-trf-r' }, [ E('b', {}, vol(b)) ]) ]));
+			}
+			if (hSitesAll || sl.length <= 10) {
+				if (rest.n) line('Ещё ' + rest.n + ' ' + plural(rest.n, 'сайт', 'сайта', 'сайтов'), rest.b, 'мелкие, в список не вошли');
+				if (hist.other) line('Прочие сайты', hist.other, 'редкие адреса устройства сложены вместе, чтобы история не разрасталась');
+			}
+			if (hist.nodom) line('Без имени сайта', hist.nodom, 'устройство само шифрует DNS или ходит по адресу — объём учтён, домен неизвестен');
+			box.appendChild(list);
+			if (sl.length > 10) box.appendChild(E('button', { 'class': 'cbi-button zm-trf-more', 'click': function() { hSitesAll = !hSitesAll; paintHist(); } }, hSitesAll ? 'Свернуть' : 'Показать все (' + (sl.length + (rest.n || 0)) + ')'));
+			return box;
+		}
+		function tile(cap, big, sub, col) {
+			return E('div', { 'class': 'zm-trf-htile' }, [ E('span', { 'class': 'zm-trf-cap' }, [ col ? E('i', { 'class': 'zm-trf-hdot', 'style': 'background:' + col }) : E([]), cap ]), E('b', { 'title': big }, big), E('small', { 'title': sub || '' }, sub || '') ]);
+		}
+		function hChart(A, p) {
+			var mx = 0, order = ((hist && hist.routes) || []).map(function(r) { return r.id; });
+			A.forEach(function(d) { mx = Math.max(mx, d.tot, hDev ? 0 : d.w); });
 			var steps = mx ? niceSteps(mx * 1.08) : [], top = mx ? mx * 1.08 : 1;
-			var order = A.routes.map(function(r) { return r.id; });
 			var grid = E('div', { 'class': 'zm-trf-hgrid', 'aria-hidden': 'true' }, steps.map(function(v) { return E('span', { 'style': 'bottom:' + (v / top * 100).toFixed(2) + '%' }, [ E('em', {}, vol(v)) ]); }));
 			var tip = E('div', { 'class': 'zm-trf-htip', 'hidden': '' });
-			var cols = E('div', { 'class': 'zm-trf-hcols' + (hDays > 7 ? ' zm-trf-hcols-m' : '') });
-			var last = A.days.length - 1;
-			A.days.forEach(function(d, i) {
+			var cols = E('div', { 'class': 'zm-trf-hcols' + (A.length > 60 ? ' zm-trf-hcols-xs' : A.length > 7 ? ' zm-trf-hcols-m' : ''), 'role': 'img', 'aria-label': p === 'today' ? 'Трафик сегодня по часам' : 'Трафик по дням' });
+			A.forEach(function(d, i) {
 				var stack = E('span', { 'class': 'zm-trf-hstack', 'style': 'height:' + (d.tot / top * 100).toFixed(2) + '%' });
 				order.slice().reverse().forEach(function(id) { var v = d.r[id] || 0; if (v > 0 && d.tot) stack.appendChild(E('span', { 'style': 'flex:' + v + ' 0 0;background:' + colorOf(id) })); });
 				var mark = !hDev && d.w ? E('span', { 'class': 'zm-trf-hw', 'style': 'bottom:' + (d.w / top * 100).toFixed(2) + '%' }) : E([]);
-				var lab = hDays > 7 ? (i === last ? 'сег.' : d.d.getDate() === 1 || i % 5 === 0 ? String(d.d.getDate()) : '') : (i === last ? 'Сегодня' : WDS[d.d.getDay()] + ' ' + d.d.getDate());
-				var col = E('div', { 'class': 'zm-trf-hcol' + (i === last ? ' zm-trf-today' : ''), 'tabindex': '0',
-					'mouseenter': function() { showTip(i); }, 'focus': function() { showTip(i); }, 'mouseleave': hideTip, 'blur': hideTip,
-					'click': function() { if (hTipI === i) hideTip(); else showTip(i); } }, [ E('span', { 'class': 'zm-trf-hbarbox' }, [ stack, mark ]), E('small', {}, lab) ]);
-				cols.appendChild(col);
+				cols.appendChild(E('div', { 'class': 'zm-trf-hcol' + (d.cur ? ' zm-trf-today' : '') + (d.fut ? ' zm-trf-fut' : ''), 'tabindex': d.fut ? null : '0',
+					'mouseenter': function() { if (!d.fut) showTip(i); }, 'focus': function() { showTip(i); }, 'mouseleave': hideTip, 'blur': hideTip,
+					'click': function() { if (d.fut) return; if (hTipI === i) hideTip(); else showTip(i); } }, [ E('span', { 'class': 'zm-trf-hbarbox' }, [ stack, mark ]), E('small', {}, d.lab) ]));
 			});
 			function showTip(i) {
-				var d = A.days[i], ids = Object.keys(d.r).sort(function(a, b) { return d.r[b] - d.r[a]; });
+				var d = A[i], ids = Object.keys(d.r).sort(function(a, b) { return d.r[b] - d.r[a]; });
 				hTipI = i;
 				tip.innerHTML = '';
-				tip.appendChild(E('b', {}, (i === last ? 'Сегодня, ' : WDS[d.d.getDay()] + ', ') + d.d.getDate() + ' ' + MONS[d.d.getMonth()]));
+				tip.appendChild(E('b', {}, d.tip));
 				if (!ids.length && !d.w) tip.appendChild(E('span', {}, 'нет данных'));
 				ids.slice(0, 8).forEach(function(id) { tip.appendChild(E('span', {}, [ E('i', { 'style': 'background:' + colorOf(id) }), routeName(id), E('b', {}, vol(d.r[id])) ])); });
 				if (ids.length > 8) tip.appendChild(E('span', { 'class': 'zm-trf-htip-m' }, 'и ещё ' + (ids.length - 8)));
@@ -61696,33 +62348,90 @@ return view.extend({
 			return box;
 		}
 		function histFoot() {
-			var ft = hist && hist.ft ? new Date(hist.ft * 1000) : null;
+			var ft = hist && hist.store !== 'ram' && hist.ft ? hm(hist.ft) : '';
 			return E('div', { 'class': 'zm-trf-hfoot' }, [
-				E('span', { 'class': 'zm-hint' }, 'Считается раз в минуту по соединениям устройств. Отметка над столбцом — весь интернет по счётчику провайдера: в нём есть и служебный трафик роутера, и туннели.' + (ft ? ' На флеш сохранено в ' + ('0' + ft.getHours()).slice(-2) + ':' + ('0' + ft.getMinutes()).slice(-2) + '.' : '')),
-				E('div', { 'class': 'zm-trf-hbtns' }, [
-					E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() {
-						zm.dialog({ title: 'Очистить историю?', danger: true, okText: 'Очистить', blocks: [ { type: 'note', text: 'Все сохранённые дни удалятся, запись начнётся заново.' } ] }).then(function(v) { if (v) histSet('clear'); });
-					} }, 'Очистить'),
-					E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() { histSet('off'); } }, hBusy === 'off' ? 'Выключаем…' : 'Не вести историю')
-				])
+				E('span', { 'class': 'zm-hint' }, 'Считается раз в минуту по соединениям устройств; сайты — по запросам DNS, что внутри страниц и видео, не видно. Отметка над столбцом — весь интернет по счётчику провайдера, в нём есть и служебный трафик роутера.' + (ft ? ' На флеш сохранено в ' + ft + '.' : hist && hist.store === 'ram' ? ' История хранится в памяти и обнулится после перезагрузки роутера.' : '')),
+				E('div', { 'class': 'zm-trf-hbtns' }, [ E('button', { 'class': 'cbi-button', 'click': function() { setCard.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 'Настройки истории') ])
 			]);
 		}
-		function histSet(a) {
-			hBusy = a; paintHist();
-			zm.trafficSet('hist', a).then(function(r) {
+		function pickHDev(k) {
+			hDev = k || ''; hSitesAll = false; hTipI = -1;
+			loadHist();
+			if (hDev) histCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+		function hAct(a, v, msg, after) {
+			hBusy = a; paintHist(); paintSet();
+			return zm.trafficSet(a, v).then(function(r) {
 				hBusy = '';
-				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); paintHist(); return; }
-				zm.toast(a === 'on' ? 'История включена — роутер начал считать трафик по дням' : a === 'off' ? 'История выключена, сохранённые дни остались' : 'История очищена', 'info');
-				loadHist();
-			}).catch(function() { hBusy = ''; zm.toast('Роутер не ответил', 'error'); paintHist(); });
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); paintHist(); paintSet(); return; }
+				if (msg) zm.toast(msg, 'info');
+				if (after) after(r);
+				loadHist(); pollSnap();
+			}, function() { hBusy = ''; zm.toast('Роутер не ответил', 'error'); paintHist(); paintSet(); });
+		}
+		function histSet(a) {
+			hAct('hist', a, a === 'on' ? 'История включена — роутер начал считать трафик' : a === 'off' ? 'История выключена, сохранённые дни остались' : 'История очищена');
+		}
+		function renameDev(dv) {
+			var nm = dv.n || '';
+			zm.dialog({ title: 'Имя устройства', okText: 'Сохранить', blocks: [ { type: 'input', id: 'n', value: nm, placeholder: 'например, Телевизор в гостиной', hint: 'Имя видно в мониторе и в разделе OpenWrt. Пустое поле — вернуть имя из DHCP.' } ] }).then(function(v) {
+				if (!v || typeof v !== 'object') return;
+				var n = String(v.n || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+				if (n === nm) return;
+				hAct('name', dv.k + '|' + n, n ? 'Имя сохранено' : 'Вернули имя из DHCP');
+			});
+		}
+		function exclDev(dv, on) {
+			if (!on) { hAct('excl', dv.k + '|0', 'Устройство снова считается'); return; }
+			zm.dialog({ title: 'Не считать «' + hName(dv) + '»?', okText: 'Не считать', intro: 'Роутер перестанет записывать трафик этого устройства в историю, а его прошлые цифры пропадут из итогов. В «Сейчас» оно останется видно. Вернуть можно в настройках монитора.' }).then(function(ok) {
+				if (ok) hAct('excl', dv.k + '|1', 'Устройство больше не считается', function() { hDev = ''; });
+			});
 		}
 		function loadHist() {
 			if (hTimer) { clearTimeout(hTimer); hTimer = 0; }
-			return zm.trafficHist().then(function(r) { if (r && !r.error) hist = r; }, function() {}).then(function() {
-				if (!alive) return;
-				if (hTipI < 0) paintHist();
+			var my = ++hSeq;
+			hLoading = true; histCard.classList.add('zm-trf-loading');
+			return zm.trafficHist(hPerEff(), hDev).then(function(r) { if (my === hSeq && r && !r.error) hist = r; }, function() {}).then(function() {
+				if (!alive || my !== hSeq) return;
+				hLoading = false;
+				if (hTipI < 0) paintHist(); else histCard.classList.remove('zm-trf-loading');
+				paintSet();
 				hTimer = setTimeout(function ht() { hTimer = 0; if (!alive) return; if (attached() && !document.hidden && !paused) loadHist(); else hTimer = setTimeout(ht, 60000); }, 60000);
 			});
+		}
+		function histSettings() {
+			var box = E('div', { 'class': 'zm-trf-hset' }), on = !!(hist && hist.on), keep = hKeep(), store = hist && hist.store === 'ram' ? 'ram' : 'flash';
+			box.appendChild(E('h4', {}, 'История'));
+			box.appendChild(zm.swRow(on, hBusy === 'hist' ? 'Вести историю — применяем…' : 'Вести историю',
+				'Раз в минуту роутер складывает трафик устройств по сайтам и способам выхода. Выключение останавливает запись, сохранённые дни остаются.',
+				function() { histSet(on ? 'off' : 'on'); }, !!hBusy));
+			if (!on) return box;
+			function segOf(list, cur, fn) {
+				return E('div', { 'class': 'zm-seg zm-trf-hseg' }, list.map(function(o) {
+					var act = String(cur) === String(o[0]);
+					function go() { if (!act && !hBusy) fn(o[0]); }
+					return E('div', { 'class': 'zm-seg-item' + (act ? ' zm-active' : ''), 'role': 'radio', 'tabindex': '0', 'aria-checked': act ? 'true' : 'false', 'click': go,
+						'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } } }, o[1]);
+				}));
+			}
+			function row(label, hint, ctl) { return E('div', { 'class': 'zm-trf-srow' }, [ E('span', { 'class': 'zm-trf-nname' }, [ E('b', {}, label), hint ? E('small', {}, hint) : E([]) ]), ctl ]); }
+			box.appendChild(row('Хранить', 'старые дни удаляются сами', segOf([ [ 7, '7 дней' ], [ 30, '30 дней' ], [ 90, '90 дней' ] ], keep, function(v) {
+				if (v >= keep) { hAct('days', String(v), 'История хранится ' + v + ' дней'); return; }
+				zm.dialog({ title: 'Хранить только ' + v + ' дней?', danger: true, okText: 'Сократить', intro: 'Дни старше ' + v + ' удалятся сразу.' }).then(function(ok) { if (ok) hAct('days', String(v), 'История хранится ' + v + ' дней'); });
+			})));
+			box.appendChild(row('Где хранить', store === 'flash' ? 'итоги пишутся на флеш раз в час — переживут перезагрузку' : 'только в памяти — после перезагрузки роутера история начнётся заново',
+				segOf([ [ 'flash', 'на флеше' ], [ 'ram', 'в памяти' ] ], store, function(v) { hAct('store', v, v === 'flash' ? 'История сохраняется на флеш раз в час' : 'История хранится только в памяти'); })));
+			var ex = (hist && hist.excl) || [];
+			box.appendChild(row('Не считать устройства', ex.length ? '' : 'например, рабочий ноутбук — кнопка «Не считать» есть в карточке устройства', ex.length ? E('span', { 'class': 'zm-trf-sub' }, ex.length + ' ' + plural(ex.length, 'устройство', 'устройства', 'устройств')) : E([])));
+			ex.forEach(function(m) {
+				var dv = hDevOf(m) || { k: m }, cur = devByKey(m), nm = dv.n || (cur && cur.name) || '';
+				box.appendChild(E('div', { 'class': 'zm-trf-srow zm-trf-srow-x' }, [ E('span', { 'class': 'zm-trf-nname' }, [ E('b', {}, nm || dv.ip || 'Без имени'), E('small', {}, m) ]),
+					E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() { exclDev({ k: m }, false); } }, 'Снова считать') ]));
+			});
+			box.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-remove', 'disabled': hBusy ? '' : null, 'click': function() {
+				zm.dialog({ title: 'Очистить историю?', danger: true, okText: 'Очистить', intro: 'Все сохранённые дни и сайты удалятся, запись продолжится с этой минуты.' }).then(function(v) { if (v) histSet('clear'); });
+			} }, 'Очистить историю') ]));
+			return box;
 		}
 
 		/* ---------- настройки и статистика за месяц ---------- */
@@ -61744,6 +62453,7 @@ return view.extend({
 			}
 			if (x.offload) setCard.appendChild(E('p', { 'class': 'zm-hint' }, (x.offload === 'hw' ? 'Включено аппаратное ускорение (flow offloading)' : 'Включено программное ускорение (flow offloading)') +
 				': пакеты ускоренных соединений идут мимо счётчиков, поэтому скорость устройств может быть ниже настоящей. Общая скорость интернета считается верно.'));
+			setCard.appendChild(histSettings());
 			setCard.appendChild(nlbwBlock());
 			setCard.appendChild(nlbwLog);
 		}
@@ -74536,6 +75246,7 @@ ZM_GET_EOF
 	chmod +x "/usr/bin/${_zm_c%% *}"
 done
 ( /opt/zapret-manager-luci/backend.sh zm_stats_hit ) >/dev/null 2>&1 </dev/null &
+/opt/zapret-manager-luci/backend.sh traffic_migrate >/dev/null 2>&1 || true
 _zm_login_restart() {
 	if [ -x /etc/init.d/rpcd ]; then
 		/etc/init.d/rpcd restart >/dev/null 2>&1 || true
