@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.057
+# Version: 5.058
 ZM_VERSION_EOF
 set -e
 
@@ -954,6 +954,16 @@ ui_net_get() {
 
 case "$1" in
 	system_info) system_info; exit ;;
+	traffic_collect)
+		_zt=/tmp/zapret-manager-luci/trf
+		if [ -f /opt/zapret-manager-luci/state/traffic.hist ] && [ -s "$_zt/ctx.json" ] && command -v ucode >/dev/null 2>&1; then
+			_t="$(date -r "$_zt/ctx.json" +%s 2>/dev/null || echo 0)"; _n="$(date +%s)"
+			if [ $((_n - _t)) -lt 300 ] && [ "$_t" -le "$_n" ] && mkdir "$_zt/.hlock" 2>/dev/null; then
+				ZM_TRF_RUN="$_zt" ZM_TRF_HDIR=/opt/zapret-manager-luci/state/traffic ucode /opt/zapret-manager-luci/traffic.uc collect "$(date +%Y-%m-%d)" >/dev/null 2>&1
+				rmdir "$_zt/.hlock" 2>/dev/null
+				exit 0
+			fi
+		fi ;;
 	ui_net_get)  ui_net_get; exit ;;
 	monitor)       monitor_snapshot; exit ;;
 	monitor_procs) monitor_procs; exit ;;
@@ -1435,6 +1445,8 @@ traffic_get() { _zmL traffic && traffic_get "$@"; }
 traffic_set() { _zmL traffic && traffic_set "$@"; }
 traffic_nlbw_get() { _zmL traffic && traffic_nlbw_get "$@"; }
 traffic_dns_tick() { _zmL traffic && traffic_dns_tick "$@"; }
+traffic_collect() { [ -f "$ZM_STATE_DIR/traffic.hist" ] || { _zmL traffic && _trf_hcron off; return 0; }; _zmL traffic && traffic_collect "$@"; }
+traffic_hist_get() { _zmL traffic && traffic_hist_get "$@"; }
 do_trf_nlbw() { _zmL traffic && do_trf_nlbw "$@"; }
 _trf_dns_plug() { _zmL traffic && _trf_dns_plug "$@"; }
 _trf_dns_unplug() { _zmL traffic && _trf_dns_unplug "$@"; }
@@ -8524,6 +8536,8 @@ case "$cmd" in
 	traffic_set)                          traffic_set "$1" "$2" ;;
 	traffic_nlbw_get)                     traffic_nlbw_get ;;
 	traffic_dns_tick)                     traffic_dns_tick ;;
+	traffic_collect)                      traffic_collect ;;
+	traffic_hist_get)                     traffic_hist_get ;;
 	steer_status)                         steer_status ;;
 	steer_action)                         steer_action "$1" "$2" ;;
 	bytetube_action)                      bytetube_action "$1" ;;
@@ -10234,7 +10248,7 @@ _zpg_used() {
 		awg) command -v awg >/dev/null 2>&1 ;;
 		tailscale) _tsc_installed ;;
 		terminal) _term_installed ;;
-		traffic) _trf_names_on ;;
+		traffic) _trf_names_on || [ -f "$ZM_STATE_DIR/traffic.hist" ] ;;
 		*) return 1 ;;
 	esac
 }
@@ -35162,6 +35176,9 @@ TRF_UC="/opt/zapret-manager-luci/traffic.uc"
 TRF_CRON="# zm-trfdns"
 TRF_SYSCTL="/etc/sysctl.d/12-zm-conntrack-acct.conf"
 TRF_NLBW_OWN="$ZM_STATE_DIR/nlbw.own"
+TRF_HIST="$ZM_STATE_DIR/traffic.hist"
+TRF_HDIR="$ZM_STATE_DIR/traffic"
+TRF_HCRON="# zm-trfhist"
 
 _trf_j() { printf '"%s"' "$(esc "$1")"; }
 _trf_kl() { printf '%s{"k":"%s","l":%s%s}' "$1" "$2" "$(_trf_j "$3")" "${4:+,\"svc\":$(_trf_j "$4")}"; }
@@ -35281,8 +35298,8 @@ _trf_ctx() {
 	printf '"zapret":{"on":%s,"tcp":%s,"udp":%s,"v6":%s,"list":%s,"lf":%s,"ef":%s},"names":%s,"hosts":{%s},' \
 		"$zon" "$(_trf_j "$tcp")" "$(_trf_j "$udp")" "$z6" "$zl" "$(_trf_j "$ZO_USER_FILE")" "$(_trf_j /opt/zapret/ipset/zapret-hosts-user-exclude.txt)" \
 		"$(_trf_names_on && echo true || echo false)" "$(_trf_hosts)"
-	printf '"x":{"offload":"%s","acct":"%s","nlbw":%s,"nlbw_own":%s,"ab_stats":%s,"fast":%s,"names_bad":%s}}\n' \
-		"$(_trf_offload)" "$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)" \
+	printf '"x":{"hist":%s,"offload":"%s","acct":"%s","nlbw":%s,"nlbw_own":%s,"ab_stats":%s,"fast":%s,"names_bad":%s}}\n' \
+		"$([ -f "$TRF_HIST" ] && echo true || echo false)" "$(_trf_offload)" "$(cat /proc/sys/net/netfilter/nf_conntrack_acct 2>/dev/null)" \
 		"$(command -v nlbw >/dev/null 2>&1 && echo true || echo false)" "$([ -f "$TRF_NLBW_OWN" ] && echo true || echo false)" "$ab" \
 		"$([ -f /usr/share/rpcd/ucode/zm-fast ] && echo true || echo false)" "$(_trf_json_err)"
 }
@@ -35290,15 +35307,11 @@ _trf_ctx() {
 _trf_json_err() { local e; e="$(cat "$TRF_RUN/names.err" 2>/dev/null)"; [ -n "$e" ] && _trf_j "$e" || echo '""'; }
 
 traffic_get() {
-	local c="$TRF_RUN/ctx.json" t now out
+	local out
 	command -v ucode >/dev/null 2>&1 || { echo '{"error":"Монитору нужен ucode — он есть в OpenWrt 22.03 и новее"}'; return 0; }
 	[ -f "$TRF_UC" ] || { echo '{"error":"Нет файла монитора — переустановите панель"}'; return 0; }
-	mkdir -p "$TRF_RUN"
-	now="$(date +%s)"; t="$(date -r "$c" +%s 2>/dev/null || echo 0)"
-	if [ ! -s "$c" ] || [ $((now - t)) -ge 15 ] || [ "$t" -gt "$now" ] || [ -n "$1" ]; then
-		_trf_ctx > "$c.$$" 2>/dev/null && [ -s "$c.$$" ] && mv -f "$c.$$" "$c"
-		rm -f "$c.$$"
-	fi
+	_trf_ctx_fresh 15
+	[ -f "$TRF_HIST" ] && ! grep -qF "$TRF_HCRON" "$CRON_FILE" 2>/dev/null && _trf_hcron on
 	out="$(ZM_TRF_RUN="$TRF_RUN" ZM_TRF_DNSLOG="$AB_STATS_LOG" _zm_tmo 25 ucode "$TRF_UC" snap 2>/dev/null)"
 	case "$out" in '{'*) printf '%s\n' "$out" ;; *) echo '{"error":"Монитор не ответил — попробуйте ещё раз"}' ;; esac
 }
@@ -35463,10 +35476,82 @@ do_trf_nlbw() {
 	esac
 }
 
+_trf_hcron() {
+	local line="* * * * * /opt/zapret-manager-luci/backend.sh traffic_collect >/dev/null 2>&1 $TRF_HCRON"
+	if [ "$1" = on ]; then
+		grep -qxF "$line" "$CRON_FILE" 2>/dev/null && return 0
+		mkdir -p "$(dirname "$CRON_FILE")"; touch "$CRON_FILE"
+		grep -vF "$TRF_HCRON" "$CRON_FILE" > "$CRON_FILE.zm" 2>/dev/null; cat "$CRON_FILE.zm" > "$CRON_FILE"; rm -f "$CRON_FILE.zm"
+		echo "$line" >> "$CRON_FILE"
+	else
+		grep -qF "$TRF_HCRON" "$CRON_FILE" 2>/dev/null || return 0
+		grep -vF "$TRF_HCRON" "$CRON_FILE" > "$CRON_FILE.zm" 2>/dev/null; cat "$CRON_FILE.zm" > "$CRON_FILE"; rm -f "$CRON_FILE.zm"
+	fi
+	/etc/init.d/cron restart >/dev/null 2>&1
+	return 0
+}
+
+_trf_ctx_fresh() {
+	local c="$TRF_RUN/ctx.json" t now
+	mkdir -p "$TRF_RUN"
+	now="$(date +%s)"; t="$(date -r "$c" +%s 2>/dev/null || echo 0)"
+	if [ ! -s "$c" ] || [ $((now - t)) -ge "$1" ] || [ "$t" -gt "$now" ]; then
+		_trf_ctx > "$c.$$" 2>/dev/null && [ -s "$c.$$" ] && mv -f "$c.$$" "$c"
+		rm -f "$c.$$"
+	fi
+}
+
+traffic_collect() {
+	local lk="$TRF_RUN/.hlock"
+	[ -f "$TRF_HIST" ] || { _trf_hcron off; return 0; }
+	command -v ucode >/dev/null 2>&1 && [ -f "$TRF_UC" ] || return 0
+	mkdir -p "$TRF_RUN"
+	if ! mkdir "$lk" 2>/dev/null; then
+		[ -n "$(find "$lk" -maxdepth 0 -mmin +3 2>/dev/null)" ] || return 0
+		rmdir "$lk" 2>/dev/null; mkdir "$lk" 2>/dev/null || return 0
+	fi
+	_trf_ctx_fresh 300
+	ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" _zm_tmo 50 ucode "$TRF_UC" collect "$(date +%Y-%m-%d)" "$1" >/dev/null 2>&1
+	rmdir "$lk" 2>/dev/null
+	return 0
+}
+
+traffic_hist_get() {
+	local h on=false
+	[ -f "$TRF_HIST" ] && on=true
+	command -v ucode >/dev/null 2>&1 && [ -f "$TRF_UC" ] || { printf '{"on":%s,"days":{}}\n' "$on"; return 0; }
+	h="$(ZM_TRF_RUN="$TRF_RUN" ZM_TRF_HDIR="$TRF_HDIR" _zm_tmo 20 ucode "$TRF_UC" hist 2>/dev/null)"
+	case "$h" in '{"ok":true'*) printf '{"on":%s,"today":"%s",%s\n' "$on" "$(date +%Y-%m-%d)" "${h#\{}" ;; *) printf '{"on":%s,"today":"%s","days":{}}\n' "$on" "$(date +%Y-%m-%d)" ;; esac
+}
+
+_trf_hist_set() {
+	mkdir -p "$ZM_STATE_DIR"
+	case "$1" in
+		on)
+			[ "$(date +%Y)" -ge 2024 ] 2>/dev/null || { echo '{"error":"Часы роутера ещё не выставлены — включите историю чуть позже"}'; return 1; }
+			: > "$TRF_HIST"
+			_trf_hcron on
+			traffic_collect 1
+			printf '{"ok":true,"hist":true}\n' ;;
+		off)
+			rm -f "$TRF_HIST"
+			_trf_hcron off
+			[ -f "$TRF_RUN/hist.json" ] && { mkdir -p "$TRF_HDIR"; cp -f "$TRF_RUN/hist.json" "$TRF_HDIR/hist.json.zm" && mv -f "$TRF_HDIR/hist.json.zm" "$TRF_HDIR/hist.json"; }
+			rm -f "$TRF_RUN/hprev" "$TRF_RUN/hist.json"
+			printf '{"ok":true,"hist":false}\n' ;;
+		clear)
+			rm -rf "$TRF_HDIR" "$TRF_RUN/hist.json" "$TRF_RUN/hprev"
+			[ -f "$TRF_HIST" ] && traffic_collect 1
+			printf '{"ok":true}\n' ;;
+		*) echo '{"error":"неизвестное действие"}'; return 1 ;;
+	esac
+}
+
 traffic_set() {
 	rm -f "$TRF_RUN/ctx.json"
 	case "$1" in
 		names) _trf_names_set "$2" ;;
+		hist) _trf_hist_set "$2" ;;
 		acct) _trf_acct_on ;;
 		nlbw)
 			case "$2" in
@@ -39645,6 +39730,24 @@ function v6hex(ip) {
 	}
 	return o;
 }
+function v6c(ip) {
+	let h = v6hex(ip);
+	if (h == null) return lc(s(ip));
+	let g = [], bs = -1, bl = 0, cs = -1, cl = 0;
+	for (let i = 0; i < 8; i++) {
+		let x = replace(substr(h, i * 4, 4), /^0+/, '');
+		push(g, x == '' ? '0' : x);
+	}
+	for (let i = 0; i < 8; i++) {
+		if (g[i] == '0') { if (cs < 0) { cs = i; cl = 0; } cl++; if (cl > bl) { bs = cs; bl = cl; } }
+		else cs = -1;
+	}
+	if (bl < 2) return join(':', g);
+	let a = [], b = [];
+	for (let i = 0; i < bs; i++) push(a, g[i]);
+	for (let i = bs + bl; i < 8; i++) push(b, g[i]);
+	return join(':', a) + '::' + join(':', b);
+}
 function pow2(k) { let r = 1; for (let i = 0; i < k; i++) r *= 2; return r; }
 function net_of(cidr) {
 	let m = match(s(cidr), /^([0-9a-fA-F.:]+)\/([0-9]+)$/);
@@ -39672,6 +39775,13 @@ function in_nets(ip, list) {
 	return null;
 }
 function is_loop(ip) { return index(ip, '127.') == 0 || ip == '::1'; }
+function is_mc(ip) {
+	if (index(ip, ':') >= 0) return index(ip, 'ff') == 0 || index(ip, 'fe80:') == 0;
+	let a = v4int(ip);
+	if (a == null) return false;
+	let o1 = int(a / 16777216);
+	return (o1 >= 224 && o1 <= 239) || ip == '255.255.255.255';
+}
 function is_priv4(ip) {
 	let a = v4int(ip);
 	if (a == null) return false;
@@ -39835,7 +39945,7 @@ function steer_devs(X) {
 	let st = fs.stat(STC), j = null, now = time();
 	if (st && now - st.mtime < 20 && now >= st.mtime) j = jparse(rd(STC));
 	if (type(j) != 'object') {
-		j = jparse(sh('steer status'));
+		j = jparse(sh('if command -v timeout >/dev/null 2>&1; then timeout 8 steer status; else steer status; fi'));
 		if (type(j) != 'object') return;
 		wr(STC, sprintf('%J', { outputs: j.outputs }));
 	}
@@ -39865,7 +39975,7 @@ function ctx_load() {
 	for (let i = 0; i < length(al); i++) {
 		let l = al[i], m = match(l, /^[0-9]+: ([^ ]+) +(inet6?) ([0-9a-fA-F.:]+)(\/([0-9]+))?/);
 		if (!m) continue;
-		let dev = replace(m[1], /@.*$/, ''), ip = lc(m[3]);
+		let dev = replace(m[1], /@.*$/, ''), ip = m[2] == 'inet6' ? v6c(m[3]) : m[3];
 		X.own[ip] = dev;
 		if (dev == 'lo' || X.wan[dev] || m[5] == null || index(ip, 'fe80:') == 0) continue;
 		let nt = net_of(ip + '/' + m[5]);
@@ -39879,7 +39989,7 @@ function ctx_load() {
 	let nl = lns(sh('ip neigh show'));
 	for (let i = 0; i < length(nl); i++) {
 		let l = nl[i], m = match(l, /^([0-9a-fA-F.:]+) dev ([^ ]+) lladdr ([0-9a-fA-F:]+)/);
-		if (m && index(l, 'FAILED') < 0) X.neigh[lc(m[1])] = lc(m[3]);
+		if (m && index(l, 'FAILED') < 0) X.neigh[index(m[1], ':') >= 0 ? v6c(m[1]) : m[1]] = lc(m[3]);
 	}
 	let ll = lns(rd(LEASES));
 	for (let i = 0; i < length(ll); i++) {
@@ -39930,6 +40040,7 @@ function ct_line(l) {
 		else if (k == 'mark') c.mark = n(v);
 	}
 	if (c.s == null || c.d == null || c.rs == null || c.rd == null) return null;
+	if (c.v6) { c.s = v6c(c.s); c.d = v6c(c.d); c.rs = v6c(c.rs); c.rd = v6c(c.rd); }
 	return c;
 }
 
@@ -39945,6 +40056,7 @@ function rname(k, l) { return (KL[k] || k) + (s(l) != '' ? ' · ' + l : ''); }
 
 function route_of(X, c) {
 	let own = X.own;
+	if (is_mc(c.d) || is_loop(c.d) || is_loop(c.s) || index(c.s, 'fe80:') == 0) return null;
 	if (own[c.s] != null) {
 		if (own[c.d] != null || is_loop(c.d)) return null;
 		let dev = own[c.s], r = X.ifl[dev];
@@ -39986,6 +40098,39 @@ function route_of(X, c) {
 	return { who: c.s, k: 'direct', l: '', dst: dst };
 }
 
+function ipn(v) { v = lc(s(v)); return index(v, ':') >= 0 ? v6c(v) : v; }
+function clash_maps(X) {
+	let sbl = X.ctx.sb ? clash_get(X.ctx.sb) : null, MX = {};
+	if (type(sbl) == 'array') {
+		X.sb = {}; X.sb_on = true;
+		for (let i = 0; i < length(sbl); i++) {
+			let k = sbl[i], m = type(k.metadata) == 'object' ? k.metadata : {}, ch = type(k.chains) == 'array' ? k.chains : [];
+			X.sb[ipn(m.sourceIP) + '|' + s(m.sourcePort)] = { l: fk_label(ch[length(ch) - 1], X.ctx.fk_labels), h: lc(s(m.host)) };
+		}
+	} else if (sbl === false) X.sb_on = true;
+	let mxl = X.ctx.mx ? clash_get(X.ctx.mx) : null;
+	if (type(mxl) == 'array') {
+		X.mx_on = true;
+		for (let i = 0; i < length(mxl); i++) {
+			let k = mxl[i], m = type(k.metadata) == 'object' ? k.metadata : {}, ch = type(k.chains) == 'array' ? k.chains : [];
+			let h = lc(s(m.host) != '' ? s(m.host) : s(m.sniffHost));
+			MX[ipn(m.destinationIP) + '|' + s(m.destinationPort)] = { l: s(ch[0]) == 'DIRECT' ? 'напрямую' : s(ch[0]), h: h };
+		}
+	} else if (mxl === false) X.mx_on = true;
+	return { MX: MX, sb: sbl == null ? null : type(sbl) == 'array', mx: mxl == null ? null : type(mxl) == 'array' };
+}
+
+function resolve(X, c, r, MX, DNS) {
+	let dp = r.dp != null ? r.dp : c.dp, host = s(r.host);
+	if (r.k == 'mixomo') {
+		let mm = MX[r.dst + '|' + dp];
+		if (mm) { if (r.l == '') r.l = mm.l; if (host == '') host = mm.h; }
+	}
+	if (host == '' && DNS[r.dst]) host = DNS[r.dst];
+	if (r.k == 'direct' && zp_hit(X, c, host)) r.k = 'zapret';
+	return { dp: dp, host: host, rid: r.k + (r.l != '' ? ':' + r.l : '') };
+}
+
 function snap() {
 	let X = ctx_load(), now = uptime();
 	let res = { ok: true, t: now, ct: false, acct: false, wan: X.ctx.wan || [], ifl: X.ifl, names: !!X.ctx.names, x: type(X.ctx.x) == 'object' ? X.ctx.x : {} };
@@ -39995,25 +40140,8 @@ function snap() {
 	if (raw == null) { res.devs = []; res.routes = []; res.flows = []; out(res); return; }
 	res.ct = true;
 
-	let sbl = X.ctx.sb ? clash_get(X.ctx.sb) : null;
-	if (type(sbl) == 'array') {
-		X.sb = {}; X.sb_on = true;
-		for (let i = 0; i < length(sbl); i++) {
-			let k = sbl[i], m = type(k.metadata) == 'object' ? k.metadata : {}, ch = type(k.chains) == 'array' ? k.chains : [];
-			X.sb[lc(s(m.sourceIP)) + '|' + s(m.sourcePort)] = { l: fk_label(ch[length(ch) - 1], X.ctx.fk_labels), h: lc(s(m.host)) };
-		}
-	} else if (sbl === false) X.sb_on = true;
-	res.sb = sbl == null ? null : type(sbl) == 'array';
-	let mxl = X.ctx.mx ? clash_get(X.ctx.mx) : null, MX = {};
-	if (type(mxl) == 'array') {
-		X.mx_on = true;
-		for (let i = 0; i < length(mxl); i++) {
-			let k = mxl[i], m = type(k.metadata) == 'object' ? k.metadata : {}, ch = type(k.chains) == 'array' ? k.chains : [];
-			let h = lc(s(m.host) != '' ? s(m.host) : s(m.sniffHost));
-			MX[lc(s(m.destinationIP)) + '|' + s(m.destinationPort)] = { l: s(ch[0]) == 'DIRECT' ? 'напрямую' : s(ch[0]), h: h };
-		}
-	} else if (mxl === false) X.mx_on = true;
-	res.mx = mxl == null ? null : type(mxl) == 'array';
+	let cm = clash_maps(X), MX = cm.MX;
+	res.sb = cm.sb; res.mx = cm.mx;
 
 	let DNS = {};
 	if (X.ctx.names) { dns_live(); DNS = dns_load(); }
@@ -40048,14 +40176,7 @@ function snap() {
 			if (dtx > 0) rtx = dtx / dt;
 			if (drx > 0) rrx = drx / dt;
 		}
-		let dp = r.dp != null ? r.dp : c.dp, host = s(r.host);
-		if (r.k == 'mixomo') {
-			let mm = MX[r.dst + '|' + dp];
-			if (mm) { if (r.l == '') r.l = mm.l; if (host == '') host = mm.h; }
-		}
-		if (host == '' && DNS[r.dst]) host = DNS[r.dst];
-		if (r.k == 'direct' && zp_hit(X, c, host)) r.k = 'zapret';
-		let rid = r.k + (r.l != '' ? ':' + r.l : '');
+		let z = resolve(X, c, r, MX, DNS), dp = z.dp, host = z.host, rid = z.rid;
 		let who = r.who == 'router' ? 'router' : devkey(X, r.who);
 		let d = devs[who];
 		if (!d) {
@@ -40065,8 +40186,8 @@ function snap() {
 		if (r.who != 'router' && index(d.ip, r.who) < 0 && length(d.ip) < 4) push(d.ip, r.who);
 		d.tx += tb; d.rx += rb; d.rtx += rtx; d.rrx += rrx; d.n++;
 		let dr = d.r[rid];
-		if (!dr) dr = d.r[rid] = [ 0, 0 ];
-		dr[0] += rtx + rrx; dr[1] += tb + rb;
+		if (!dr) dr = d.r[rid] = [ 0, 0, 0, 0, 0, 0, 0 ];
+		dr[0] += rtx + rrx; dr[1] += tb + rb; dr[2] += rtx; dr[3] += rrx; dr[4] += tb; dr[5] += rb; dr[6]++;
 		let ro = routes[rid];
 		if (!ro) ro = routes[rid] = { id: rid, k: r.k, l: r.l, tx: 0, rx: 0, rtx: 0, rrx: 0, n: 0 };
 		ro.tx += tb; ro.rx += rb; ro.rtx += rtx; ro.rrx += rrx; ro.n++;
@@ -40082,7 +40203,7 @@ function snap() {
 	let dl = [], rl = [], fl = [];
 	for (let k in devs) {
 		let d = devs[k], rr = [];
-		for (let id in d.r) push(rr, [ id, int(d.r[id][0]), d.r[id][1] ]);
+		for (let id in d.r) { let q = d.r[id]; push(rr, [ id, int(q[0]), q[1], int(q[2]), int(q[3]), q[4], q[5], q[6] ]); }
 		d.r = sort(rr, (a, b) => (b[1] - a[1]) || (b[2] - a[2]));
 		d.rtx = int(d.rtx); d.rrx = int(d.rrx);
 		push(dl, d);
@@ -40097,6 +40218,92 @@ function snap() {
 	out(res);
 }
 
+
+const HPREV = RUN + '/hprev', HRAM = RUN + '/hist.json';
+const HDIR = getenv('ZM_TRF_HDIR') || '/opt/zapret-manager-luci/state/traffic';
+const HFILE = HDIR + '/hist.json', HKEEP = 35;
+const NETDEV = getenv('ZM_TRF_NETDEV') || '/proc/net/dev';
+
+function hist_load() {
+	let h = jparse(rd(HRAM));
+	if (type(h) != 'object' || type(h.days) != 'object') h = jparse(rd(HFILE));
+	if (type(h) != 'object' || type(h.days) != 'object') h = { v: 1, days: {} };
+	return h;
+}
+function dev_bytes(list) {
+	let rows = lns(rd(NETDEV)), o = {};
+	for (let i = 2; i < length(rows); i++) {
+		let m = match(rows[i], /^ *([^ :]+): *([0-9]+) +[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+ +([0-9]+)/);
+		if (m) o[m[1]] = [ int(m[2]), int(m[3]) ];
+	}
+	for (let i = 0; i < length(list); i++) if (o[list[i]]) return [ list[i], o[list[i]][0], o[list[i]][1] ];
+	return null;
+}
+
+function collect(date, force) {
+	if (!match(s(date), /^20[2-9][0-9]-[01][0-9]-[0-3][0-9]$/)) { out({ error: 'часы роутера ещё не выставлены' }); return; }
+	let X = ctx_load(), now = uptime(), h = hist_load();
+	let raw = fs.readfile(CTF, 16777216);
+	let MX = clash_maps(X).MX, DNS = X.ctx.names ? dns_load() : {};
+	let prev = {}, pt = 0, pw = null, pl = lns(rd(HPREV));
+	for (let i = 0; i < length(pl); i++) {
+		let f = split(pl[i], ' ');
+		if (f[0] == 't' && length(f) == 2) pt = +f[1];
+		else if (f[0] == 'w' && length(f) == 4) pw = [ f[1], n(f[2]), n(f[3]) ];
+		else if (length(f) == 3) prev[f[0]] = [ n(f[1]), n(f[2]) ];
+	}
+	let valid = pt > 0 && now > pt && now - pt < 600;
+	let day = h.days[date];
+	if (type(day) != 'object') day = h.days[date] = { w: [ 0, 0 ], d: {} };
+	let save = [ 't ' + now ], added = 0;
+	let wb = dev_bytes(type(X.ctx.wan) == 'array' ? X.ctx.wan : []);
+	if (wb) {
+		push(save, 'w ' + wb[0] + ' ' + wb[1] + ' ' + wb[2]);
+		if (valid && pw && pw[0] == wb[0] && wb[1] >= pw[1] && wb[2] >= pw[2]) { day.w[0] += wb[1] - pw[1]; day.w[1] += wb[2] - pw[2]; }
+	}
+	let cl = raw == null ? [] : split(raw, '\n');
+	for (let li = 0; li < length(cl) && li < MAXL; li++) {
+		let c = ct_line(cl[li]);
+		if (!c || c.tb == null) continue;
+		let r = route_of(X, c);
+		if (!r || r.k == 'local') continue;
+		let key = c.p + '|' + c.s + '|' + c.sp + '|' + c.d + '|' + c.dp;
+		push(save, key + ' ' + c.tb + ' ' + c.rb);
+		if (!valid) continue;
+		let pv = prev[key], dtx = pv ? c.tb - pv[0] : c.tb, drx = pv ? c.rb - pv[1] : c.rb;
+		if (dtx < 0) dtx = 0;
+		if (drx < 0) drx = 0;
+		if (dtx + drx <= 0) continue;
+		let z = resolve(X, c, r, MX, DNS);
+		let who = r.who == 'router' ? 'router' : devkey(X, r.who);
+		let d = day.d[who];
+		if (type(d) != 'object') d = day.d[who] = { n: '', r: {} };
+		let mac = who != 'router' && length(who) == 17 && match(who, /^[0-9a-f:]+$/) ? who : '';
+		let nm = who == 'router' ? 'Роутер' : s(X.hosts[mac] || X.lname[mac]);
+		if (nm != '') d.n = nm;
+		else if (d.n == '' && who != 'router' && !mac) d.n = r.who;
+		let q = d.r[z.rid];
+		if (type(q) != 'array') q = d.r[z.rid] = [ 0, 0 ];
+		q[0] += drx; q[1] += dtx;
+		added += drx + dtx;
+	}
+	let ks = sort(keys(h.days));
+	for (let i = 0; i < length(ks) - HKEEP; i++) delete h.days[ks[i]];
+	let ft = int(h.ft || 0), tnow = time();
+	let flush = force || h.fd != date || tnow - ft >= 3600 || tnow < ft;
+	if (flush) { h.fd = date; h.ft = tnow; }
+	wr(HPREV, join('\n', save) + '\n');
+	let js = sprintf('%J', h);
+	wr(HRAM, js);
+	if (flush) { fs.mkdir(HDIR); wr(HFILE, js); }
+	out({ ok: true, valid: valid, added: added, flushed: !!flush });
+}
+
+function hist() {
+	let h = hist_load();
+	out({ ok: true, days: h.days, fd: h.fd || '', ft: h.ft || 0 });
+}
+
 function feed(path) {
 	let rows = [];
 	dns_lines(rd(path), {}, rows);
@@ -40108,6 +40315,8 @@ let mode = ARGV[0] || '';
 fs.mkdir(RUN);
 if (mode == 'snap') snap();
 else if (mode == 'dnsfeed') feed(ARGV[1]);
+else if (mode == 'collect') collect(ARGV[1], ARGV[2] == '1');
+else if (mode == 'hist') hist();
 else { out({ error: 'неизвестная команда' }); exit(1); }
 ZM_INSTALLER_EOF
 chmod 0644 '/opt/zapret-manager-luci/traffic.uc'
@@ -40304,6 +40513,7 @@ list_methods() {
 	json_add_object "traffic_get";            json_close_object
 	json_add_object "traffic_set";            json_add_string "action" "string"; json_add_string "value" "string"; json_close_object
 	json_add_object "traffic_nlbw_get";       json_close_object
+	json_add_object "traffic_hist_get";       json_close_object
 	json_add_object "monitor_procs";          json_close_object
 	json_add_object "monitor_action";         json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "watch_status";           json_close_object
@@ -40476,6 +40686,7 @@ call_method() {
 		traffic_get)             "$BACKEND" traffic_get ;;
 		traffic_set)             json_get_var action action; json_get_var value value; "$BACKEND" traffic_set "$action" "$value" ;;
 		traffic_nlbw_get)        "$BACKEND" traffic_nlbw_get ;;
+		traffic_hist_get)        "$BACKEND" traffic_hist_get ;;
 		monitor_procs)           "$BACKEND" monitor_procs ;;
 		monitor_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" monitor_action "$action" @stdin ;;
 		watch_status)            "$BACKEND" watch_status ;;
@@ -40586,6 +40797,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"ui_net_get",
 					"traffic_get",
 					"traffic_nlbw_get",
+					"traffic_hist_get",
 					"zsec2_status",
 					"watch_status",
 					"term_status",
@@ -40940,6 +41152,7 @@ var callMonitorAction = zmDeclare({ object: 'zapret-manager', method: 'monitor_a
 var callTrafficGet = zmDeclare({ object: 'zapret-manager', method: 'traffic_get', expect: {} });
 var callTrafficSet = zmDeclare({ object: 'zapret-manager', method: 'traffic_set', params: ['action', 'value'], expect: {} });
 var callTrafficNlbw = zmDeclare({ object: 'zapret-manager', method: 'traffic_nlbw_get', expect: {} });
+var callTrafficHist = zmDeclare({ object: 'zapret-manager', method: 'traffic_hist_get', expect: {} });
 var callFastNet = rpc.declare({ object: 'zm-fast', method: 'net', expect: {} });
 var callDevStatus = rpc.declare({ object: 'network.device', method: 'status', expect: {} });
 var callUiNet = zmDeclare({ object: 'zapret-manager', method: 'ui_net_get', expect: {} });
@@ -43676,6 +43889,7 @@ return baseclass.extend({
 	trafficGet: callTrafficGet,
 	trafficSet: callTrafficSet,
 	trafficNlbw: callTrafficNlbw,
+	trafficHist: callTrafficHist,
 	netFeed: netFeed,
 	monitorProcs: callMonitorProcs,
 	monitorAction: callMonitorAction,
@@ -57621,6 +57835,65 @@ html.zm-theme-dark .zm-trf-warn { color: #fbbf24; }
 .zm-trf-nbar span { display: block; height: 100%; background: var(--zm-trf-rx); border-radius: 999px; }
 .zm-trf-err .zm-refresh-banner { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .zm-trf-bar span, .zm-trf-mini span { transition: none; } }
+.zm-trf-hoff { display: flex; align-items: center; gap: 22px; }
+.zm-trf-hoff-art { flex: none; width: 120px; height: 84px; display: flex; align-items: flex-end; gap: 6px; padding: 0 4px; border-bottom: 2px solid rgba(127,127,127,.25); }
+.zm-trf-hoff-art i { flex: 1; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, var(--zm-trf-rx), rgba(124,92,255,.75)); opacity: .55; }
+.zm-trf-hoff-t { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.zm-trf-hoff-t b { font-size: 14px; }
+.zm-trf-hoff-t .zm-hint { margin: 0; }
+.zm-trf-hoff-t .zm-actions { margin: 4px 0 0; }
+@media (max-width: 600px) { .zm-trf-hoff { flex-direction: column; align-items: flex-start; } }
+.zm-trf-hsel { padding: 6px 30px 6px 12px; border-radius: 9px; border: 1px solid rgba(127,127,127,.3); background-color: transparent; color: inherit; font: inherit; font-size: 13px; max-width: 220px; }
+html.zm-theme-dark .zm-trf-hsel option { background: #1c2128; }
+.zm-trf-hseg .zm-seg-item { padding: 5px 12px; }
+.zm-trf-htiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.zm-trf-htile { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(127,127,127,.18); background: rgba(127,127,127,.05); min-width: 0; }
+.zm-trf-htile > b { font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.zm-trf-htile > small { font-size: 12px; opacity: .62; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zm-trf-hdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+@media (max-width: 900px) { .zm-trf-htiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.zm-trf-hchart { position: relative; height: 210px; padding-left: 64px; }
+.zm-trf-hgrid { position: absolute; left: 0; right: 0; top: 0; bottom: 22px; pointer-events: none; }
+.zm-trf-hgrid span { position: absolute; left: 64px; right: 0; border-top: 1px dashed rgba(127,127,127,.22); }
+.zm-trf-hgrid em { position: absolute; left: -64px; width: 58px; text-align: right; transform: translateY(-50%); font-style: normal; font-size: 11px; opacity: .6; font-variant-numeric: tabular-nums; }
+.zm-trf-hcols { position: relative; display: flex; align-items: stretch; gap: 10px; height: 100%; }
+.zm-trf-hcols-m { gap: 3px; }
+.zm-trf-hcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; cursor: default; outline: none; }
+.zm-trf-hbarbox { position: relative; flex: 1 1 auto; display: flex; align-items: flex-end; justify-content: center; }
+.zm-trf-hstack { width: 100%; max-width: 46px; display: flex; flex-direction: column; border-radius: 6px 6px 2px 2px; overflow: hidden; min-height: 0; transition: height .5s ease, filter .15s; }
+.zm-trf-hcols-m .zm-trf-hstack { border-radius: 3px 3px 1px 1px; }
+.zm-trf-hstack span { min-height: 1px; }
+.zm-trf-hw { position: absolute; left: 50%; width: min(100%, 46px); transform: translate(-50%, 50%); height: 0; border-top: 2px solid currentColor; opacity: .38; border-radius: 2px; }
+.zm-trf-hcol small { height: 22px; line-height: 22px; text-align: center; font-size: 11px; opacity: .6; white-space: nowrap; overflow: visible; }
+.zm-trf-hcol.zm-trf-today small { opacity: 1; font-weight: 700; }
+.zm-trf-hcol:hover .zm-trf-hstack, .zm-trf-hcol:focus-visible .zm-trf-hstack, .zm-trf-hsel-c .zm-trf-hstack { filter: brightness(1.12) saturate(1.1); box-shadow: 0 0 0 2px rgba(127,127,127,.25); }
+.zm-trf-htip { position: absolute; top: 0; z-index: 3; min-width: 190px; max-width: 280px; padding: 10px 12px; border-radius: 11px; font-size: 12.5px; line-height: 1.55; display: flex; flex-direction: column; gap: 1px; pointer-events: none;
+	background: var(--background-color-high, #fff); border: 1px solid rgba(127,127,127,.25); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+html.zm-theme-dark .zm-trf-htip { background: #22272e; }
+.zm-trf-htip > b { margin-bottom: 3px; font-weight: 700; }
+.zm-trf-htip span { display: flex; align-items: center; gap: 7px; }
+.zm-trf-htip span i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.zm-trf-htip span b { margin-left: auto; padding-left: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.zm-trf-htip-m { opacity: .6; }
+.zm-trf-htip-w { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(127,127,127,.2); opacity: .8; }
+.zm-trf-hleg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 14px 0 4px; font-size: 12.5px; }
+.zm-trf-hleg-i { display: inline-flex; align-items: center; gap: 6px; }
+.zm-trf-hleg-i i { width: 9px; height: 9px; border-radius: 3px; }
+.zm-trf-hleg-i b { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .8; }
+.zm-trf-hdevs { display: flex; flex-direction: column; margin-top: 12px; }
+.zm-trf-hdev { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(80px, 2fr) 150px; gap: 14px; align-items: center; padding: 8px 10px; margin: 0 -10px; border-radius: 10px; cursor: pointer; font-size: 13px; border-top: 1px solid rgba(127,127,127,.12); }
+.zm-trf-hdev:first-child { border-top: 0; }
+.zm-trf-hdev:hover { background: rgba(127,127,127,.08); }
+.zm-trf-hdev:focus-visible { outline: 2px solid var(--a1, #7c5cff); outline-offset: -2px; }
+.zm-trf-hdev .zm-trf-r { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.zm-trf-hdev .zm-trf-r small, .zm-trf-hdev .zm-trf-nname small { font-size: 11.5px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zm-trf-hbar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(127,127,127,.1); }
+.zm-trf-hbar span { height: 100%; }
+@media (max-width: 600px) { .zm-trf-hdev { grid-template-columns: minmax(0, 1fr) auto; } .zm-trf-hbar { grid-column: 1 / -1; grid-row: 2; } .zm-trf-hchart { padding-left: 50px; height: 180px; } .zm-trf-hgrid span { left: 50px; } .zm-trf-hgrid em { left: -50px; width: 46px; } }
+.zm-trf-hfoot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(127,127,127,.14); }
+.zm-trf-hfoot .zm-hint { margin: 0; flex: 1 1 320px; }
+.zm-trf-hbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.zm-trf-hbtns .cbi-button { margin: 0; }
 ZM_INSTALLER_EOF
 chmod 0644 '/www/luci-static/resources/view/zapret-manager/style.css'
 
@@ -60935,21 +61208,23 @@ return view.extend({
 		zm.injectCss();
 		return Promise.all([
 			zm.trafficGet().catch(function(e) { return { error: 'Роутер не ответил: ' + ((e && e.message) || e) }; }),
-			zm.trafficNlbw().catch(function() { return null; })
+			zm.trafficNlbw().catch(function() { return null; }),
+			zm.trafficHist().catch(function() { return null; })
 		]);
 	},
 
 	render: function(init) {
 		var root = E('div', { 'class': 'zm-wrap zm-trf' });
-		var snap = init[0] || {}, nlbw = init[1], pref = prefGet();
+		var snap = init[0] || {}, nlbw = init[1], hist = init[2], pref = prefGet();
 		var paused = false, sTimer = 0, nTimer = 0, raf = 0, unsub = null, busy = false, fails = 0, seen = false, alive = true;
 		var selDev = pref.dev || '', selRoute = '', query = '', showSvc = !!pref.svc, devAll = false, legAll = false, flowMore = 0, setBusy = '';
-		var colors = {}, hist = [], live = { rx: 0, tx: 0, trx: 0, ttx: 0, at: 0, t: 0, r: {}, src: '' }, yMax = 1e6;
+		var colors = {}, pts = [], live = { rx: 0, tx: 0, trx: 0, ttx: 0, at: 0, t: 0, r: {}, src: '' }, yMax = 1e6;
 
 		function stop() {
 			alive = false;
 			if (sTimer) clearTimeout(sTimer);
 			if (nTimer) clearTimeout(nTimer);
+			if (hTimer) clearTimeout(hTimer);
 			if (raf) cancelAnimationFrame(raf);
 			if (unsub) unsub();
 			sTimer = nTimer = raf = 0; unsub = null;
@@ -60966,7 +61241,7 @@ return view.extend({
 		var pauseBtn = E('button', { 'class': 'cbi-button', 'click': function() {
 			paused = !paused; paintLive();
 			if (paused) { if (unsub) { unsub(); unsub = null; } }
-			else { hist = []; live.trx = live.ttx = 0; if (!unsub) unsub = zm.netFeed.sub(onFeed); pollSnap(); }
+			else { pts = []; live.trx = live.ttx = 0; if (!unsub) unsub = zm.netFeed.sub(onFeed); pollSnap(); }
 		} }, 'Пауза');
 		var head = E('div', { 'class': 'zm-card zm-trf-head' }, [
 			E('div', { 'class': 'zm-trf-head-l' }, [ E('h3', {}, 'Монитор трафика'), devEl ]),
@@ -61028,8 +61303,8 @@ return view.extend({
 			live.src = s.src; live.r = s.r; live.dev = w;
 			if (!v) return;
 			live.trx = v[0]; live.ttx = v[1]; live.at = performance.now();
-			hist.push({ t: s.t, rx: v[0], tx: v[1] });
-			while (hist.length && s.t - hist[0].t > WIN + 2) hist.shift();
+			pts.push({ t: s.t, rx: v[0], tx: v[1] });
+			while (pts.length && s.t - pts[0].t > WIN + 2) pts.shift();
 			paintChips();
 			if (!raf) raf = requestAnimationFrame(frame);
 		}
@@ -61049,7 +61324,7 @@ return view.extend({
 			bigRx.textContent = a[0]; unitRx.textContent = a[1];
 			bigTx.textContent = b[0]; unitTx.textContent = b[1];
 			draw();
-			if (Math.abs(live.trx - live.rx) > 1 || Math.abs(live.ttx - live.tx) > 1 || hist.length > 1) raf = requestAnimationFrame(frame);
+			if (Math.abs(live.trx - live.rx) > 1 || Math.abs(live.ttx - live.tx) > 1 || pts.length > 1) raf = requestAnimationFrame(frame);
 		}
 		function draw() {
 			var dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
@@ -61059,10 +61334,10 @@ return view.extend({
 			var c = canvas.getContext('2d');
 			c.setTransform(dpr, 0, 0, dpr, 0, 0);
 			c.clearRect(0, 0, w, h);
-			if (hist.length < 2) return;
-			var last = hist[hist.length - 1], el = Math.min(1.2, (performance.now() - live.at) / zm.netFeed.interval());
+			if (pts.length < 2) return;
+			var last = pts[pts.length - 1], el = Math.min(1.2, (performance.now() - live.at) / zm.netFeed.interval());
 			var tEnd = last.t + el * zm.netFeed.interval() / 1000 - 0.6, tBeg = tEnd - WIN, mx = 0, i;
-			for (i = 0; i < hist.length; i++) if (hist[i].t >= tBeg - 1) mx = Math.max(mx, hist[i].rx, hist[i].tx);
+			for (i = 0; i < pts.length; i++) if (pts[i].t >= tBeg - 1) mx = Math.max(mx, pts[i].rx, pts[i].tx);
 			var want = Math.max(125000, mx * 1.15);
 			yMax += (want - yMax) * (want > yMax ? 0.35 : 0.04);
 			var steps = niceSteps(yMax);
@@ -61077,26 +61352,26 @@ return view.extend({
 			function X(t) { return (t - tBeg) / WIN * w; }
 			function Y(v) { return h - 4 - (h - 18) * Math.min(v, yMax * 1.05) / yMax; }
 			function series(key, col) {
-				var pts = hist.filter(function(p) { return p.t >= tBeg - 2; });
-				if (pts.length < 2) return;
+				var pp = pts.filter(function(p) { return p.t >= tBeg - 2; });
+				if (pp.length < 2) return;
 				c.beginPath();
-				pts.forEach(function(p, j) {
+				pp.forEach(function(p, j) {
 					var x = X(p.t), y = Y(p[key]);
 					if (!j) c.moveTo(x, y);
-					else { var q = pts[j - 1], mx2 = (X(q.t) + x) / 2; c.bezierCurveTo(mx2, Y(q[key]), mx2, y, x, y); }
+					else { var q = pp[j - 1], mx2 = (X(q.t) + x) / 2; c.bezierCurveTo(mx2, Y(q[key]), mx2, y, x, y); }
 				});
-				var lx = X(pts[pts.length - 1].t);
+				var lx = X(pp[pp.length - 1].t);
 				c.strokeStyle = col; c.lineWidth = 2; c.lineJoin = 'round'; c.stroke();
-				c.lineTo(lx, h); c.lineTo(X(pts[0].t), h); c.closePath();
+				c.lineTo(lx, h); c.lineTo(X(pp[0].t), h); c.closePath();
 				var g = c.createLinearGradient(0, 0, 0, h);
 				g.addColorStop(0, col.replace(/rgb\(([^)]+)\)/, 'rgba($1,.28)')); g.addColorStop(1, col.replace(/rgb\(([^)]+)\)/, 'rgba($1,0)'));
 				c.fillStyle = g; c.fill();
-				c.beginPath(); c.arc(lx, Y(pts[pts.length - 1][key]), 3.2, 0, Math.PI * 2); c.fillStyle = col; c.fill();
+				c.beginPath(); c.arc(lx, Y(pp[pp.length - 1][key]), 3.2, 0, Math.PI * 2); c.fillStyle = col; c.fill();
 			}
 			series('tx', colors.tx);
 			series('rx', colors.rx);
 			var pk = { rx: 0, tx: 0 };
-			hist.forEach(function(p) { if (p.t >= last.t - WIN) { pk.rx = Math.max(pk.rx, p.rx); pk.tx = Math.max(pk.tx, p.tx); } });
+			pts.forEach(function(p) { if (p.t >= last.t - WIN) { pk.rx = Math.max(pk.rx, p.rx); pk.tx = Math.max(pk.tx, p.tx); } });
 			var ptxt = 'Пик за минуту: ↓ ' + spdT(pk.rx) + ' · ↑ ' + spdT(pk.tx);
 			if (peakEl.textContent !== ptxt) peakEl.textContent = ptxt;
 		}
@@ -61175,7 +61450,14 @@ return view.extend({
 		var devCard = E('div', { 'class': 'zm-card zm-trf-devs' });
 		function devName(d) { return d ? (d.name || (d.ip && d.ip[0]) || d.k) : ''; }
 		function devByKey(k) { return ((snap && snap.devs) || []).filter(function(d) { return d.k === k; })[0]; }
-		function visDevs() { return ((snap && snap.devs) || []).filter(function(d) { return showSvc || d.k !== 'router'; }); }
+		function visDevs() {
+			return ((snap && snap.devs) || []).filter(function(d) { return showSvc || d.k !== 'router'; }).map(function(d) {
+				if (showSvc || !d.r.some(function(x) { return SERVICE[kindOf(x[0])]; })) return d;
+				var o = { k: d.k, mac: d.mac, ip: d.ip, name: d.name, tx: 0, rx: 0, rtx: 0, rrx: 0, n: 0, r: d.r.filter(function(x) { return !SERVICE[kindOf(x[0])]; }) };
+				o.r.forEach(function(x) { o.rtx += x[3] || 0; o.rrx += x[4] || 0; o.tx += x[5] || 0; o.rx += x[6] || 0; o.n += x[7] || 0; });
+				return o;
+			}).filter(function(d) { return d.r.length; }).sort(function(a, b) { return (b.rtx + b.rrx - a.rtx - a.rrx) || (b.tx + b.rx - a.tx - a.rx); });
+		}
 		function paintDevs() {
 			devCard.innerHTML = '';
 			var ds = visDevs();
@@ -61259,7 +61541,189 @@ return view.extend({
 		function fchip(t, x, col) {
 			return E('span', { 'class': 'zm-trf-fchip' }, [ col ? E('i', { 'style': 'background:' + col }) : E([]), t, E('button', { 'type': 'button', 'aria-label': 'Убрать фильтр', 'click': x }, '×') ]);
 		}
-		function savePref() { prefPut({ dev: selDev, svc: showSvc }); }
+		function savePref() { prefPut({ dev: selDev, svc: showSvc, hdays: hDays }); }
+
+		/* ---------- история по дням ---------- */
+		var histCard = E('div', { 'class': 'zm-card zm-trf-hist' });
+		var hDays = pref.hdays === 30 ? 30 : 7, hDev = '', hBusy = '', hTimer = 0, hTipI = -1;
+		var MONS = [ 'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек' ], WDS = [ 'Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб' ];
+		function dOf(k) { var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(k || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+		function kOf(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+		function dayList() {
+			var end = dOf(hist && hist.today) || new Date(), out = [];
+			for (var i = hDays - 1; i >= 0; i--) { var d = new Date(end.getFullYear(), end.getMonth(), end.getDate() - i); out.push({ k: kOf(d), d: d }); }
+			return out;
+		}
+		function hDay(k) { var x = hist && hist.days && hist.days[k]; return x && typeof x === 'object' ? x : null; }
+		function hAgg(list) {
+			var days = list.map(function(it) {
+				var x = hDay(it.k), r = {}, tot = 0;
+				if (x && x.d) Object.keys(x.d).forEach(function(dk) {
+					if (dk === 'router' && !showSvc) return;
+					if (hDev && dk !== hDev) return;
+					var rr = x.d[dk].r || {};
+					Object.keys(rr).forEach(function(id) { var v = rr[id] || [ 0, 0 ]; r[id] = (r[id] || 0) + v[0] + v[1]; tot += v[0] + v[1]; });
+				});
+				return { k: it.k, d: it.d, r: r, tot: tot, w: x && x.w ? x.w[0] + x.w[1] : 0, wr: x && x.w ? x.w : [ 0, 0 ] };
+			});
+			var routes = {}, devs = {};
+			list.forEach(function(it) {
+				var x = hDay(it.k);
+				if (!x || !x.d) return;
+				Object.keys(x.d).forEach(function(dk) {
+					if (dk === 'router' && !showSvc) return;
+					var o = devs[dk] || (devs[dk] = { k: dk, n: '', rx: 0, tx: 0, r: {} });
+					if (x.d[dk].n) o.n = x.d[dk].n;
+					var rr = x.d[dk].r || {};
+					Object.keys(rr).forEach(function(id) {
+						var v = rr[id] || [ 0, 0 ];
+						o.rx += v[0]; o.tx += v[1]; o.r[id] = (o.r[id] || 0) + v[0] + v[1];
+						if (!hDev || dk === hDev) { var q = routes[id] || (routes[id] = { id: id, rx: 0, tx: 0 }); q.rx += v[0]; q.tx += v[1]; }
+					});
+				});
+			});
+			return { days: days, routes: Object.keys(routes).map(function(k) { return routes[k]; }).sort(function(a, b) { return b.rx + b.tx - a.rx - a.tx; }),
+				devs: Object.keys(devs).map(function(k) { return devs[k]; }).sort(function(a, b) { return b.rx + b.tx - a.rx - a.tx; }) };
+		}
+		function hName(dv) {
+			var cur = devByKey(dv.k);
+			return dv.k === 'router' ? 'Роутер' : (cur && cur.name) || dv.n || dv.k;
+		}
+		function paintHist() {
+			histCard.innerHTML = '';
+			var on = !!(hist && hist.on);
+			var head = E('div', { 'class': 'zm-trf-cardhead' }, [ E('h3', {}, 'История по дням') ]);
+			histCard.appendChild(head);
+			if (!hist || !on) {
+				histCard.appendChild(E('div', { 'class': 'zm-trf-hoff' }, [
+					E('div', { 'class': 'zm-trf-hoff-art', 'aria-hidden': 'true' }, [ 34, 58, 44, 80, 62, 92, 70 ].map(function(h) { return E('i', { 'style': 'height:' + h + '%' }); })),
+					E('div', { 'class': 'zm-trf-hoff-t' }, [
+						E('b', {}, 'Сколько и через что ходило каждое устройство — по дням'),
+						E('p', { 'class': 'zm-hint' }, 'Роутер раз в минуту складывает трафик устройств по способам выхода: напрямую, Zapret, Steer, Forkozz и другие. Хранятся последние 35 дней; на флеш итоги пишутся раз в час и при смене дня, так что память роутера не изнашивается. Ничего никуда не отправляется.'),
+						E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': hBusy ? '' : null, 'click': function() { histSet('on'); } }, hBusy === 'on' ? 'Включаем…' : 'Вести историю') ])
+					])
+				]));
+				return;
+			}
+			var seg = E('div', { 'class': 'zm-seg zm-trf-hseg', 'role': 'tablist', 'aria-label': 'Период' }, [ 7, 30 ].map(function(n) {
+				return E('div', { 'class': 'zm-seg-item' + (hDays === n ? ' zm-active' : ''), 'role': 'tab', 'tabindex': '0', 'aria-selected': hDays === n ? 'true' : 'false',
+					'click': function() { if (hDays !== n) { hDays = n; pref.hdays = n; savePref(); paintHist(); } },
+					'keydown': function(ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); hDays = n; pref.hdays = n; savePref(); paintHist(); } } }, n + ' дней');
+			}));
+			var list = dayList(), A = hAgg(list);
+			var sel = E('select', { 'class': 'zm-trf-hsel', 'aria-label': 'Устройство', 'change': function() { hDev = sel.value; paintHist(); } }, [ E('option', { 'value': '' }, 'Все устройства') ].concat(A.devs.map(function(dv) {
+				return E('option', { 'value': dv.k, 'selected': hDev === dv.k ? '' : null }, hName(dv));
+			})));
+			head.appendChild(E('div', { 'class': 'zm-trf-tools' }, [ sel, seg ]));
+			var any = A.days.some(function(d) { return d.tot || d.w; });
+			if (!any) {
+				histCard.appendChild(E('p', { 'class': 'zm-hint' }, 'История только начала собираться — первые цифры появятся через пару минут.'));
+				histCard.appendChild(histFoot());
+				return;
+			}
+			var sumW = [ 0, 0 ], sumT = 0, nDays = 0, today = A.days[A.days.length - 1];
+			A.days.forEach(function(d) { sumW[0] += d.wr[0]; sumW[1] += d.wr[1]; sumT += d.tot; if (d.tot) nDays++; });
+			var topD = A.devs.filter(function(dv) { return dv.k !== 'router'; })[0], topR = A.routes[0];
+			var tiles = E('div', { 'class': 'zm-trf-htiles' }, [
+				tile(hDev ? 'Устройство за ' + hDays + ' дней' : 'Интернет за ' + hDays + ' дней', hDev ? vol(sumT) : vol(sumW[0] + sumW[1]), hDev ? hName(A.devs.filter(function(x) { return x.k === hDev; })[0] || { k: hDev }) : '↓ ' + vol(sumW[0]) + ' · ↑ ' + vol(sumW[1])),
+				tile('Сегодня', vol(hDev ? today.tot : today.w), hDev ? 'по соединениям устройства' : 'по счётчику интернета'),
+				hDev ? tile('В среднем за день', vol(nDays ? sumT / nDays : 0), nDays + ' ' + plural(nDays, 'день', 'дня', 'дней') + ' с данными') : tile('Больше всех', topD ? hName(topD) : '—', topD ? vol(topD.rx + topD.tx) : ''),
+				tile('Основной путь', topR ? routeName(topR.id) : '—', topR && sumT ? num((topR.rx + topR.tx) / sumT * 100, 0) + '% трафика' : '', topR ? colorOf(topR.id) : '')
+			]);
+			histCard.appendChild(tiles);
+			histCard.appendChild(hChart(A));
+			var leg = E('div', { 'class': 'zm-trf-hleg' });
+			A.routes.slice(0, 10).forEach(function(r) {
+				leg.appendChild(E('span', { 'class': 'zm-trf-hleg-i' }, [ E('i', { 'style': 'background:' + colorOf(r.id) }), E('span', {}, routeName(r.id)), E('b', {}, vol(r.rx + r.tx)) ]));
+			});
+			histCard.appendChild(leg);
+			if (!hDev) {
+				var dl = E('div', { 'class': 'zm-trf-hdevs' }), max = A.devs.length ? A.devs[0].rx + A.devs[0].tx : 1;
+				A.devs.slice(0, 12).forEach(function(dv) {
+					var tot = dv.rx + dv.tx, bar = E('span', { 'class': 'zm-trf-hbar' });
+					var ids = Object.keys(dv.r).sort(function(a, b) { return dv.r[b] - dv.r[a]; });
+					ids.forEach(function(id) { var p = tot ? dv.r[id] / max * 100 : 0; if (p >= 0.3) bar.appendChild(E('span', { 'style': 'width:' + p.toFixed(2) + '%;background:' + colorOf(id), 'title': routeName(id) + ' — ' + vol(dv.r[id]) })); });
+					dl.appendChild(E('button', { 'type': 'button', 'class': 'zm-trf-hdev', 'click': function() { hDev = dv.k; paintHist(); } }, [
+						E('span', { 'class': 'zm-trf-nname' }, [ E('b', {}, hName(dv)), E('small', {}, ids.length ? routeName(ids[0]) + (ids.length > 1 ? ' и ещё ' + (ids.length - 1) : '') : '') ]),
+						bar,
+						E('span', { 'class': 'zm-trf-r' }, [ E('b', {}, vol(tot)), E('small', {}, '↓ ' + vol(dv.rx) + ' · ↑ ' + vol(dv.tx)) ])
+					]));
+				});
+				histCard.appendChild(dl);
+			}
+			histCard.appendChild(histFoot());
+		}
+		function tile(cap, big, sub, col) {
+			return E('div', { 'class': 'zm-trf-htile' }, [ E('span', { 'class': 'zm-trf-cap' }, [ col ? E('i', { 'class': 'zm-trf-hdot', 'style': 'background:' + col }) : E([]), cap ]), E('b', { 'title': big }, big), E('small', {}, sub || '') ]);
+		}
+		function hChart(A) {
+			var mx = 0;
+			A.days.forEach(function(d) { mx = Math.max(mx, d.tot, hDev ? 0 : d.w); });
+			var steps = mx ? niceSteps(mx * 1.08) : [], top = mx ? mx * 1.08 : 1;
+			var order = A.routes.map(function(r) { return r.id; });
+			var grid = E('div', { 'class': 'zm-trf-hgrid', 'aria-hidden': 'true' }, steps.map(function(v) { return E('span', { 'style': 'bottom:' + (v / top * 100).toFixed(2) + '%' }, [ E('em', {}, vol(v)) ]); }));
+			var tip = E('div', { 'class': 'zm-trf-htip', 'hidden': '' });
+			var cols = E('div', { 'class': 'zm-trf-hcols' + (hDays > 7 ? ' zm-trf-hcols-m' : '') });
+			var last = A.days.length - 1;
+			A.days.forEach(function(d, i) {
+				var stack = E('span', { 'class': 'zm-trf-hstack', 'style': 'height:' + (d.tot / top * 100).toFixed(2) + '%' });
+				order.slice().reverse().forEach(function(id) { var v = d.r[id] || 0; if (v > 0 && d.tot) stack.appendChild(E('span', { 'style': 'flex:' + v + ' 0 0;background:' + colorOf(id) })); });
+				var mark = !hDev && d.w ? E('span', { 'class': 'zm-trf-hw', 'style': 'bottom:' + (d.w / top * 100).toFixed(2) + '%' }) : E([]);
+				var lab = hDays > 7 ? (i === last ? 'сег.' : d.d.getDate() === 1 || i % 5 === 0 ? String(d.d.getDate()) : '') : (i === last ? 'Сегодня' : WDS[d.d.getDay()] + ' ' + d.d.getDate());
+				var col = E('div', { 'class': 'zm-trf-hcol' + (i === last ? ' zm-trf-today' : ''), 'tabindex': '0',
+					'mouseenter': function() { showTip(i); }, 'focus': function() { showTip(i); }, 'mouseleave': hideTip, 'blur': hideTip,
+					'click': function() { if (hTipI === i) hideTip(); else showTip(i); } }, [ E('span', { 'class': 'zm-trf-hbarbox' }, [ stack, mark ]), E('small', {}, lab) ]);
+				cols.appendChild(col);
+			});
+			function showTip(i) {
+				var d = A.days[i], ids = Object.keys(d.r).sort(function(a, b) { return d.r[b] - d.r[a]; });
+				hTipI = i;
+				tip.innerHTML = '';
+				tip.appendChild(E('b', {}, (i === last ? 'Сегодня, ' : WDS[d.d.getDay()] + ', ') + d.d.getDate() + ' ' + MONS[d.d.getMonth()]));
+				if (!ids.length && !d.w) tip.appendChild(E('span', {}, 'нет данных'));
+				ids.slice(0, 8).forEach(function(id) { tip.appendChild(E('span', {}, [ E('i', { 'style': 'background:' + colorOf(id) }), routeName(id), E('b', {}, vol(d.r[id])) ])); });
+				if (ids.length > 8) tip.appendChild(E('span', { 'class': 'zm-trf-htip-m' }, 'и ещё ' + (ids.length - 8)));
+				if (!hDev && d.w) tip.appendChild(E('span', { 'class': 'zm-trf-htip-w' }, [ 'По счётчику интернета', E('b', {}, vol(d.w)) ]));
+				var c = cols.children[i];
+				tip.hidden = false;
+				var bx = box.getBoundingClientRect(), cr = c.getBoundingClientRect(), W = box.clientWidth, tw = tip.offsetWidth;
+				var right = cr.right - bx.left + 10, left = cr.left - bx.left - tw - 10;
+				tip.style.left = (right + tw <= W ? right : left >= 0 ? left : Math.max(0, W - tw)) + 'px';
+				Array.prototype.forEach.call(cols.children, function(el, j) { el.classList.toggle('zm-trf-hsel-c', j === i); });
+			}
+			function hideTip() { hTipI = -1; tip.hidden = true; Array.prototype.forEach.call(cols.children, function(el) { el.classList.remove('zm-trf-hsel-c'); }); }
+			var box = E('div', { 'class': 'zm-trf-hchart' }, [ grid, cols, tip ]);
+			return box;
+		}
+		function histFoot() {
+			var ft = hist && hist.ft ? new Date(hist.ft * 1000) : null;
+			return E('div', { 'class': 'zm-trf-hfoot' }, [
+				E('span', { 'class': 'zm-hint' }, 'Считается раз в минуту по соединениям устройств. Отметка над столбцом — весь интернет по счётчику провайдера: в нём есть и служебный трафик роутера, и туннели.' + (ft ? ' На флеш сохранено в ' + ('0' + ft.getHours()).slice(-2) + ':' + ('0' + ft.getMinutes()).slice(-2) + '.' : '')),
+				E('div', { 'class': 'zm-trf-hbtns' }, [
+					E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() {
+						zm.dialog({ title: 'Очистить историю?', danger: true, okText: 'Очистить', blocks: [ { type: 'note', text: 'Все сохранённые дни удалятся, запись начнётся заново.' } ] }).then(function(v) { if (v) histSet('clear'); });
+					} }, 'Очистить'),
+					E('button', { 'class': 'cbi-button', 'disabled': hBusy ? '' : null, 'click': function() { histSet('off'); } }, hBusy === 'off' ? 'Выключаем…' : 'Не вести историю')
+				])
+			]);
+		}
+		function histSet(a) {
+			hBusy = a; paintHist();
+			zm.trafficSet('hist', a).then(function(r) {
+				hBusy = '';
+				if (!r || r.error) { zm.toast((r && r.error) || 'Роутер не ответил', 'error'); paintHist(); return; }
+				zm.toast(a === 'on' ? 'История включена — роутер начал считать трафик по дням' : a === 'off' ? 'История выключена, сохранённые дни остались' : 'История очищена', 'info');
+				loadHist();
+			}).catch(function() { hBusy = ''; zm.toast('Роутер не ответил', 'error'); paintHist(); });
+		}
+		function loadHist() {
+			if (hTimer) { clearTimeout(hTimer); hTimer = 0; }
+			return zm.trafficHist().then(function(r) { if (r && !r.error) hist = r; }, function() {}).then(function() {
+				if (!alive) return;
+				if (hTipI < 0) paintHist();
+				hTimer = setTimeout(function ht() { hTimer = 0; if (!alive) return; if (attached() && !document.hidden && !paused) loadHist(); else hTimer = setTimeout(ht, 60000); }, 60000);
+			});
+		}
 
 		/* ---------- настройки и статистика за месяц ---------- */
 		var setCard = E('div', { 'class': 'zm-card zm-trf-set' });
@@ -61365,7 +61829,7 @@ return view.extend({
 
 		/* ---------- ошибки и опрос ---------- */
 		var errCard = E('div', { 'class': 'zm-card zm-trf-err', 'hidden': '' });
-		var body = E('div', { 'class': 'zm-trf-body' }, [ routeCard, devCard, flowCard ]);
+		var body = E('div', { 'class': 'zm-trf-body' }, [ routeCard, devCard ]);
 		function paintHead() {
 			var parts = [];
 			var w = (snap && snap.wan && snap.wan[0]) || live.dev || '';
@@ -61378,8 +61842,9 @@ return view.extend({
 			errCard.hidden = !err;
 			errCard.innerHTML = '';
 			if (err) errCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show' }, err));
-			body.hidden = !!(snap && snap.error);
+			body.hidden = flowCard.hidden = !!(snap && snap.error);
 			paintHead(); paintRoutes(); paintDevs(); paintFlows(); paintSet(); paintChips();
+			if (hTipI < 0) paintHist();
 		}
 		function pollSnap() {
 			if (sTimer) { clearTimeout(sTimer); sTimer = 0; }
@@ -61403,11 +61868,14 @@ return view.extend({
 		root.appendChild(liveCard);
 		root.appendChild(errCard);
 		root.appendChild(body);
+		root.appendChild(histCard);
+		root.appendChild(flowCard);
 		root.appendChild(setCard);
 		paintAll();
 		unsub = zm.netFeed.sub(onFeed);
 		sTimer = setTimeout(pollSnap, SNAP_MS);
 		nTimer = setTimeout(loadNlbw, 60000);
+		hTimer = setTimeout(loadHist, 60000);
 		document.addEventListener('visibilitychange', function vis() {
 			if (!alive) { document.removeEventListener('visibilitychange', vis); return; }
 			if (!document.hidden && !raf) raf = requestAnimationFrame(frame);
