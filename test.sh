@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.068
+# Version: 5.069
 ZM_VERSION_EOF
 set -e
 
@@ -1631,8 +1631,8 @@ _zm_px_foreign() {
 }
 _apk_ver() {
 	local v=""
-	[ -f /lib/apk/db/installed ] && v="$(awk -v p="$1" '/^P:/ { x = (substr($0, 3) == p) } x && /^V:/ { print substr($0, 3); exit }' /lib/apk/db/installed)"
-	[ -n "$v" ] || v="$(apk info -v 2>/dev/null | sed -n "s/^$1-\([0-9][^ ]*\)\$/\1/p" | head -n1)"
+	if [ -s /lib/apk/db/installed ]; then v="$(awk -v p="$1" '/^P:/ { x = (substr($0, 3) == p) } x && /^V:/ { print substr($0, 3); exit }' /lib/apk/db/installed)"
+	else v="$(apk info -v 2>/dev/null | sed -n "s/^$1-\([0-9][^ ]*\)\$/\1/p" | head -n1)"; fi
 	[ -n "$v" ] && printf '%s\n' "$v"
 }
 _kv_last() {
