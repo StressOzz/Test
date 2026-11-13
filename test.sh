@@ -1,11 +1,23 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.070
+# Version: 5.071
 ZM_VERSION_EOF
 set -e
 
 ZM_INST_MODE="${1:-}"
 GREEN="\033[1;32m"; CYAN="\033[1;36m"; YELLOW="\033[1;33m"; MAGENTA="\033[1;35m"; NC="\033[0m"
+# Где держать панель: flash — на флеше; light — страницы в памяти, на флеше сжатый архив; ram — всё в памяти до перезагрузки.
+# Без слова — как стояла (после «ram» — снова на флеш). Проверяем заранее, пока на роутере ничего не тронуто
+case "$ZM_INST_MODE" in
+	''|flash) ;;
+	ram|light)
+		_zmi_e=""
+		[ "$(df -kP /tmp 2>/dev/null | awk 'NR == 2 { print $4 + 0 }')" -ge 12288 ] 2>/dev/null || _zmi_e="нужно хотя бы 12 МБ свободной оперативной памяти в /tmp"
+		for _zmi_s in main zmweb; do [ "$(uci -q get "uhttpd.$_zmi_s.no_symlinks" 2>/dev/null)" = 1 ] && _zmi_e="веб-сервер uhttpd настроен не открывать файлы по ссылкам (no_symlinks) — из памяти панель не откроется"; done
+		[ "$ZM_INST_MODE" = light ] && { command -v tar >/dev/null 2>&1 && command -v gzip >/dev/null 2>&1 || _zmi_e="на роутере нет tar или gzip — без них архив страниц не собрать"; }
+		if [ -n "$_zmi_e" ]; then echo -e "${YELLOW}Панель в оперативную память не поставить: $_zmi_e.${NC}"; echo -e "${YELLOW}Запустите установщик без «$ZM_INST_MODE» — панель встанет на флеш.${NC}"; exit 1; fi ;;
+	*) echo -e "${YELLOW}Не понял «$ZM_INST_MODE». Можно: flash — на флеш, light — в память с архивом на флеше, ram — в память до перезагрузки${NC}"; exit 1 ;;
+esac
 
 _zmi_say() { echo -e "${CYAN}==>${NC} $*"; }
 _zmi_ok() { echo -e "   ${GREEN}✓${NC} $*"; }
@@ -85,11 +97,23 @@ _zmi_uim=""
 [ -f /opt/zapret-manager-luci/state/ui.ram ] && read -r _zmi_uim < /opt/zapret-manager-luci/state/ui.ram || true
 case "$_zmi_uim" in light|tmp) ;; *) _zmi_uim="" ;; esac
 if [ "$ZM_INST_MODE" = ram ]; then
-	if [ "$(_zmi_free /tmp)" -lt 12288 ]; then
-		echo -e "${YELLOW}Для установки в оперативную память нужно хотя бы 12 МБ свободной памяти в /tmp, сейчас $(( $(_zmi_free /tmp) / 1024 )) МБ${NC}"
-		exit 1
-	fi
 	_zmi_uim=tmp
+elif [ "$ZM_INST_MODE" = light ]; then
+	if [ "$_zmi_uim" = tmp ]; then
+		_zmi_step "Панель была в памяти до перезагрузки — теперь страницы в памяти, а основа и архив на флеше"
+		for _zm_p in /opt/zapret-manager-luci/backend.sh /opt/zapret-manager-luci/netshift.uc; do [ -L "$_zm_p" ] && rm -f "$_zm_p"; done
+		rm -f "$_zmi_ui/.ok"
+	fi
+	mkdir -p /opt/zapret-manager-luci/state
+	echo light > /opt/zapret-manager-luci/state/ui.ram
+	_zmi_uim=light
+elif [ "$ZM_INST_MODE" = flash ] && [ -n "$_zmi_uim" ]; then
+	_zmi_step "Панель была в оперативной памяти — ставим её обычно, на флеш"
+	for _zm_p in $_zmi_uip /opt/zapret-manager-luci/backend.sh /opt/zapret-manager-luci/netshift.uc; do [ -L "$_zm_p" ] && rm -f "$_zm_p"; done
+	[ -x /etc/init.d/zm-ui ] && /etc/init.d/zm-ui disable >/dev/null 2>&1 || true
+	rm -f /opt/zapret-manager-luci/state/ui.ram /opt/zapret-manager-luci/ui.tgz /etc/init.d/zm-ui /etc/rc.d/S11zm-ui
+	rm -rf "$_zmi_ui"
+	_zmi_uim=""
 elif [ "$_zmi_uim" = tmp ]; then
 	_zmi_step "Панель была в оперативной памяти — ставим её обычно, на флеш"
 	for _zm_p in $_zmi_uip /opt/zapret-manager-luci/backend.sh /opt/zapret-manager-luci/netshift.uc; do [ -L "$_zm_p" ] && rm -f "$_zm_p"; done
@@ -17573,7 +17597,8 @@ zm_alloff() {
 						adblock) echo "Блокировка рекламы" ;; doh) echo "DNS over HTTPS" ;; esac
 				done | awk '!s[$0]++')"
 			else names="$(_zao_active | awk '!s[$0]++')"; fi
-			printf '{"on":%s,"job":%s,"list":[' "$(_zm_alloff_on && echo true || echo false)" "$(_job_running alloff && echo true || echo false)"
+			a=0; _zm_alloff_on && a="$(date -r "$ZM_ALLOFF/on" +%s 2>/dev/null)"
+			printf '{"on":%s,"job":%s,"at":%s,"list":[' "$(_zm_alloff_on && echo true || echo false)" "$(_job_running alloff && echo true || echo false)" "${a:-0}"
 			printf '%s\n' "$names" | while IFS= read -r a; do [ -n "$a" ] && { printf '%s"%s"' "$sep" "$(esc "$a")"; sep=","; }; done
 			printf ']}\n' ;;
 		on|off)
@@ -45525,6 +45550,50 @@ return view.extend({
 				healthData && +healthData.zmw > 0 ? E('a', { 'href': 'http://' + window.location.hostname + ':' + healthData.zmw + '/', 'target': '_blank', 'rel': 'noreferrer', 'class': 'zm-webui-link' }, 'Web UI ↗') : E([])
 			])
 		]));
+		var aoBar = E('div', { 'class': 'zm-ao-bar-wrap' }), aoBarLog = E('pre', { 'class': 'zm-log' }), aoBarD = null, aoBarBusy = false;
+		function aoBarWhen(t) {
+			var d = new Date(t * 1000), n = new Date(), p = function(v) { return ('0' + v).slice(-2); };
+			var hm = p(d.getHours()) + ':' + p(d.getMinutes());
+			return d.toDateString() === n.toDateString() ? hm : p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + hm;
+		}
+		function aoBarDraw() {
+			aoBar.innerHTML = '';
+			if (!aoBarD || !aoBarD.on) return;
+			var list = aoBarD.list || [], busy = aoBarBusy || !!aoBarD.job;
+			aoBar.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-ao-bar', 'role': 'alert' }, [
+				E('span', {}, [ E('b', {}, 'Включено «Всё напрямую»'), E('br'),
+					'Обходы, VPN и фильтры панели выключены' + (+aoBarD.at > 0 ? ' с ' + aoBarWhen(+aoBarD.at) : '') + ' — весь трафик идёт напрямую.' + (list.length ? ' Вернутся: ' + list.join(', ') + '.' : '') ]),
+				E('span', { 'class': 'zm-banner-acts' }, [
+					E('button', { 'class': 'cbi-button cbi-button-positive', 'disabled': busy ? '' : null, 'click': aoBarOff }, busy ? 'Возвращаем…' : 'Вернуть всё')
+				])
+			]));
+		}
+		function aoBarLoad() {
+			if (!zm.allOff) return Promise.resolve();
+			return zm.allOff('status').then(function(r) {
+				if (r && !r.error) aoBarD = r;
+				aoBarDraw();
+			}).catch(function() {});
+		}
+		function aoBarOff() {
+			if (aoBarBusy) return;
+			aoBarBusy = true;
+			aoBarDraw();
+			zm.allOff('off').then(function(r) {
+				if (!r || r.error) { aoBarBusy = false; aoBarDraw(); zm.toast((r && r.error) || 'Роутер не ответил', 'error'); return; }
+				zm.pollJob('alloff', aoBarLog, function(ok) {
+					aoBarBusy = false;
+					aoBarLoad().then(function() {
+						if (typeof refreshOverview === 'function') refreshOverview();
+						zm.toast(ok ? 'Всё работает как раньше' : 'Не всё вернулось — подробности в журнале', ok ? 'info' : 'warning');
+					});
+				});
+			}).catch(function() { aoBarBusy = false; aoBarDraw(); zm.toast('Роутер не ответил', 'error'); });
+		}
+		window.addEventListener('zm:changed', function() { if (!aoBarBusy && document.body.contains(aoBar)) aoBarLoad(); });
+		wrap.appendChild(aoBar);
+		wrap.appendChild(aoBarLog);
+		aoBarLoad();
 		wrap.appendChild(overviewEl);
 		wrap.appendChild(cards);
 		var evCard = zm.eventsCard ? zm.eventsCard() : null;
@@ -58044,17 +58113,16 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-svc.zm-svc-inc { opacity: .78; border-style: dashed; }
 .zm-svc.zm-svc-taken { opacity: .5; cursor: not-allowed; }
 .zm-switch.zm-switch-inc { opacity: .55; }
-.zm-ao { margin: 2px 0 12px; }
-.zm-ao-btn { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; margin: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(110,118,129,.28); background: rgba(110,118,129,.06); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background .15s, border-color .15s; }
-.zm-ao-btn:hover:not([disabled]) { border-color: rgba(26,163,255,.6); }
-.zm-ao-btn:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 2px; }
-.zm-ao-btn[disabled] { cursor: progress; }
-.zm-ao-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.zm-ao-text > b { font-size: 14.5px; }
-.zm-ao-text > span { font-size: 12.5px; line-height: 1.4; opacity: .75; }
-.zm-ao-on .zm-ao-btn { border-color: rgba(212,167,44,.65); background: rgba(212,167,44,.13); }
-.zm-ao-on .zm-switch.zm-switch-on { background: #d4a72c; }
-.zm-ao .zm-find-spin, .zm-ur .zm-find-spin { flex-shrink: 0; }
+.zm-ur .zm-find-spin { flex-shrink: 0; }
+.zm-ao-card .zm-ao-warn { margin: 0 0 12px; padding: 10px 14px; font-size: 13.5px; }
+.zm-ao-list { flex-wrap: wrap; gap: 8px; }
+.zm-ao-sw { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid rgba(127,127,127,.18); align-items: center; }
+.zm-ao-sw:focus-visible { outline: 2px solid #1aa3ff; outline-offset: 4px; border-radius: 6px; }
+.zm-ao-sw .zm-find-spin { margin: 0 12px 0 4px; }
+.zm-ao-sw.zm-ao-on .zm-switch.zm-switch-on, html #zmw-view .zm-ao-sw.zm-ao-on .zm-switch.zm-switch-on { background: #d4a72c; }
+.zm-ao-bar { margin: 0 0 14px; font-size: 14px; font-weight: 400; }
+.zm-ao-bar b { font-weight: 600; font-size: 15px; }
+.zm-ao-bar-wrap:empty { display: none; }
 .zm-ur { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(110,118,129,.18); }
 .zm-ur .zm-log { margin-top: 10px; }
 .zm-ri-note { margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(26,163,255,.08); border: 1px solid rgba(26,163,255,.3); font-size: 13px; line-height: 1.45; }
@@ -59950,29 +60018,43 @@ return view.extend({
 		renderGh();
 		put('ghmirror', ghCard);
 
-		var aoEl = E('div', { 'class': 'zm-ao', 'style': 'display:none' }), aoLog = E('pre', { 'class': 'zm-log' }), aoD = null, aoBusy = '';
+		var aoCard = E('div', { 'class': 'zm-card zm-ao-card', 'id': 'zm-alloff' }), aoLog = E('pre', { 'class': 'zm-log' }), aoD = null, aoBusy = '';
+		function aoWhen(t) {
+			var d = new Date(t * 1000), n = new Date(), p = function(v) { return ('0' + v).slice(-2); };
+			var hm = p(d.getHours()) + ':' + p(d.getMinutes());
+			return d.toDateString() === n.toDateString() ? hm : p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + hm;
+		}
 		function aoDraw() {
-			aoEl.innerHTML = '';
-			if (!aoD) { aoEl.style.display = 'none'; return; }
-			var on = !!aoD.on, list = aoD.list || [];
-			if (!on && !list.length && !aoBusy) { aoEl.style.display = 'none'; return; }
-			aoEl.style.display = '';
-			aoEl.className = 'zm-ao' + (on ? ' zm-ao-on' : '') + (aoBusy ? ' zm-ao-busy' : '');
-			var sub = aoBusy ? (aoBusy === 'on' ? 'Выключаем обходы, VPN и фильтры…' : aoBusy === 'off' ? 'Возвращаем всё, что работало…' : 'Переключаем…')
-				: on ? 'Весь трафик идёт без обходов, VPN и фильтров' + (list.length ? '. Выключите — вернутся: ' + list.join(', ') : '')
-				: 'Одним нажатием всё пойдёт без обходов, VPN и фильтров. Сейчас работают: ' + list.join(', ');
-			aoEl.appendChild(E('button', { 'type': 'button', 'class': 'zm-ao-btn', 'role': 'switch', 'aria-checked': on ? 'true' : 'false', 'disabled': aoBusy ? '' : null,
-				'title': on ? 'Вернуть всё, как было' : 'Пустить весь трафик напрямую', 'click': aoToggle }, [
-				E('span', { 'class': 'zm-ao-text' }, [ E('b', {}, 'Всё напрямую'), E('span', {}, sub) ]),
-				aoBusy ? E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }) : E('span', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') }, [ E('span') ])
+			aoCard.innerHTML = '';
+			aoCard.appendChild(E('h3', {}, 'Всё напрямую'));
+			aoCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Одним нажатием весь трафик идёт без обходов, VPN и фильтров панели — удобно, чтобы быстро проверить, не панель ли мешает. Вторым нажатием всё возвращается, как было.'));
+			if (!aoD) { aoCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем…')); return; }
+			var on = !!aoD.on, list = aoD.list || [], none = !on && !list.length && !aoBusy;
+			if (on) aoCard.appendChild(E('div', { 'class': 'zm-refresh-banner zm-show zm-ao-warn', 'role': 'note' }, [
+				E('span', {}, 'Включено' + (+aoD.at > 0 ? ' с ' + aoWhen(+aoD.at) : '') + ' — весь трафик идёт напрямую. Сайты, которые блокирует провайдер, сейчас не откроются.')
 			]));
+			aoCard.appendChild(E('div', { 'class': 'zm-row zm-ao-list' }, [ E('span', { 'class': 'zm-label' }, on ? 'Выключены' : 'Сейчас работают') ].concat(list.length
+				? list.map(function(n) { return E('span', { 'class': 'zm-badge ' + (on ? 'zm-off' : 'zm-ok') }, [ E('span', { 'class': 'zm-dot' }), n ]); })
+				: [ E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, on ? 'ничего' : 'ничего — выключать пока нечего') ])));
+			var hint = aoBusy ? (aoBusy === 'on' ? 'Выключаем обходы, VPN и фильтры…' : aoBusy === 'off' ? 'Возвращаем всё, что работало…' : 'Переключаем…')
+				: on ? (list.length ? 'Выключите — вернутся: ' + list.join(', ') : 'Выключите, чтобы панель снова управляла трафиком')
+				: none ? 'Выключать пока нечего' : 'Выключит: ' + list.join(', ');
+			var lock = !!aoBusy || none;
+			aoCard.appendChild(E('div', { 'class': 'zm-swrow zm-ao-sw' + (on ? ' zm-ao-on' : '') + (lock ? ' zm-swrow-off' : ''), 'role': 'switch', 'tabindex': lock ? '-1' : '0',
+				'aria-checked': on ? 'true' : 'false', 'aria-disabled': lock ? 'true' : 'false',
+				'click': function() { if (!lock) aoToggle(); },
+				'keydown': function(ev) { if (!lock && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); aoToggle(); } } }, [
+				aoBusy ? E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }) : E('div', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') }, [ E('span') ]),
+				E('div', { 'class': 'zm-swrow-text' }, [ E('div', { 'class': 'zm-swrow-label' }, 'Пустить всё напрямую'), E('div', { 'class': 'zm-hint' }, hint) ])
+			]));
+			aoCard.appendChild(aoLog);
 		}
 		function aoLoad() {
 			if (!zm.allOff) return Promise.resolve();
 			return zm.allOff('status').then(function(r) {
 				if (r && !r.error) aoD = r;
 				if (aoD && aoD.job && !aoBusy) aoFollow(); else aoDraw();
-			}).catch(function() {});
+			}).catch(function() { aoDraw(); });
 		}
 		function aoFollow() {
 			aoBusy = aoBusy || 'run';
@@ -59994,9 +60076,10 @@ return view.extend({
 				aoFollow();
 			}).catch(function() { aoBusy = ''; aoDraw(); zm.toast('Роутер не ответил', 'error'); });
 		}
-		window.addEventListener('zm:changed', function(ev) { if (!aoBusy && document.body.contains(aoEl) && !(ev && ev.detail && ev.detail.job === 'alloff')) aoLoad(); });
-		if (on('alloff')) {
-			put('alloff', E('div', {}, [ aoEl, aoLog ]));
+		window.addEventListener('zm:changed', function(ev) { if (!aoBusy && document.body.contains(aoCard) && !(ev && ev.detail && ev.detail.job === 'alloff')) aoLoad(); });
+		if (on('alloff') && zm.allOff) {
+			aoDraw();
+			put('alloff', aoCard);
 			aoLoad();
 		}
 
@@ -74157,10 +74240,6 @@ html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: 
 .zm-find .zm-switch.zm-switch-on { background: var(--grad, #1aa3ff); }
 .zm-find .cbi-button { border-radius: 12px; }
 .zm-find .cbi-button-action { background: var(--grad); border-color: transparent; color: #fff; }
-.zm-ao-btn { border-color: var(--border-2, var(--border)); background: var(--surface-2); color: var(--text); }
-.zm-ao-btn:hover:not([disabled]) { border-color: var(--a1, #1aa3ff); }
-.zm-ao-text > span { color: var(--muted); opacity: 1; }
-.zm-ao-on .zm-ao-btn { border-color: rgba(212,167,44,.65); background: rgba(212,167,44,.14); }
 .zm-ur { border-top-color: var(--border); }
 .zm-find-scope { border-bottom-color: var(--border, rgba(110,118,129,.14)); }
 .zm-find-scope-k, .zm-find-scope-hint, .zm-find-card-t > span, .zm-find-run-hint { color: var(--muted); opacity: 1; }
@@ -75410,6 +75489,8 @@ echo -e "\n${GREEN}Готово: Zapret Manager для LuCI и Web $ZM_NEW_VER �
 if [ "$_zmi_uim" = tmp ]; then
 	echo -e "${YELLOW}Панель стоит в оперативной памяти: после перезагрузки роутера её не будет.${NC}"
 	echo -e "${YELLOW}Zapret, Steer и остальное продолжат работать, настройки панели сохранены. Вернуть панель: sh <этот файл> ram${NC}\n"
+elif [ "$_zmi_uim" = light ]; then
+	echo -e "${CYAN}Страницы панели работают из оперативной памяти, на флеше — их сжатый архив. Вернуть на флеш: sh <этот файл> flash${NC}\n"
 fi
 echo -e "${CYAN}LuCI:   ${NC}Службы → Zapret Manager"
 [ "$ZMW_OK" = 1 ] && echo -e "${CYAN}Web UI: ${NC}http://${ZMW_IP}:${ZMW_PORT:-7788}"
