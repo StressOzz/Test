@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.071
+# Version: 5.184
 ZM_VERSION_EOF
 set -e
 
@@ -1020,8 +1020,9 @@ monitor_procs() {
 }
 
 ui_net_get() {
-	local d
-	d="$(_mon_dev wan)"
+	local d=""
+	case "$1" in ''|*[!A-Za-z0-9._@-]*) ;; *) grep -q "^[[:space:]]*$1:" /proc/net/dev 2>/dev/null && d="$1" ;; esac
+	[ -n "$d" ] || d="$(_mon_dev wan)"
 	[ -n "$d" ] || d="$(awk 'NR > 1 && $2 == "00000000" { print $1; exit }' /proc/net/route 2>/dev/null)"
 	awk -v d="$d" '
 		FILENAME == "/proc/uptime" { t = $1 + 0 }
@@ -1034,7 +1035,7 @@ ui_net_get() {
 
 case "$1" in
 	system_info) system_info; exit ;;
-	ui_net_get)  ui_net_get; exit ;;
+	ui_net_get)  ui_net_get "$2"; exit ;;
 	monitor)       monitor_snapshot; exit ;;
 	monitor_procs) monitor_procs; exit ;;
 	job_status)  job_status "$2"; exit ;;
@@ -8067,7 +8068,7 @@ AWF_LOG="$ZM_STATE_DIR/awgfix.log"
 AWF_TAG="# zm-awgfix"
 AWF_TRIES=4
 
-_awf_min() { case "$(cat "$AWF_MODE" 2>/dev/null)" in 30) echo 30 ;; 60) echo 60 ;; 180) echo 180 ;; esac; }
+_awf_min() { case "$(cat "$AWF_MODE" 2>/dev/null)" in 5) echo 5 ;; 15) echo 15 ;; 30|60|180) echo 30 ;; esac; }
 
 AWG_API1="https://api.cloudflareclient.com/v0a4005/reg"
 AWG_API2="https://api.cloudflareclient.com/v0i1909051800/reg"
@@ -9096,7 +9097,7 @@ case "$cmd" in
 	tsc_watch)                            tsc_watch ;;
 	tsc_lan_ip)                           _zm_lan_ip ;;
 	monitor)                              monitor_snapshot ;;
-	ui_net_get)                           ui_net_get ;;
+	ui_net_get)                           ui_net_get "$2" ;;
 	monitor_procs)                        monitor_procs ;;
 	monitor_action)                       monitor_action "$1" "$2" ;;
 	htop_gone)                            htop_gone ;;
@@ -34030,7 +34031,7 @@ _awf_ep() { local p; p="$(_awg_peer_sec "$1")"; printf '%s:%s' "$(uci -q get "ne
 
 _awf_cron() {
 	local want=""
-	[ -n "$(_awf_min)" ] && want="*/10 * * * * /opt/zapret-manager-luci/backend.sh awg_action fix_tick x >/dev/null 2>&1 $AWF_TAG"
+	[ -n "$(_awf_min)" ] && want="*/5 * * * * /opt/zapret-manager-luci/backend.sh awg_action fix_tick x >/dev/null 2>&1 $AWF_TAG"
 	if [ -n "$want" ]; then
 		[ "$(grep -cF "$AWF_TAG" "$CRON_FILE" 2>/dev/null)" = 1 ] && grep -qxF "$want" "$CRON_FILE" && return 0
 	else
@@ -34046,7 +34047,7 @@ _awf_cron() {
 _awf_set() {
 	case "$1" in
 		off) rm -f "$AWF_MODE" "$AWF_STATE" "$AWG_RUN/fix.last" "$AWG_RUN/fix.nonet" ;;
-		30|60|180) mkdir -p "$ZM_STATE_DIR"; echo "$1" > "$AWF_MODE" ;;
+		5|15|30) mkdir -p "$ZM_STATE_DIR"; echo "$1" > "$AWF_MODE" ;;
 		*) echo '{"error":"неверный интервал"}'; return 1 ;;
 	esac
 	_awf_cron
@@ -34069,6 +34070,7 @@ _awf_tick() {
 	local lim now i since tries last all=1 any=0 pick="" age why
 	lim="$(_awf_min)"
 	[ -n "$lim" ] || return 0
+	_awf_cron
 	_awg_installed || return 0
 	_job_alive awg && return 0
 	_job_alive steer && return 0
@@ -40349,12 +40351,43 @@ function api_proxies(ep) {
 }
 
 function guard_alive(ep, tag, url) {
-	let tries = [ [ url, 3000 ], [ "http://cp.cloudflare.com/generate_204", 4000 ] ];
+	let tries = [ [ url, 5000 ], [ "http://cp.cloudflare.com/generate_204", 5000 ] ];
 	for (let t in tries) {
 		let j = api_get(ep, "/proxies/" + urlenc(tag) + "/delay", int(t[1] / 1000) + 2, { url: t[0], timeout: t[1] });
 		if (j && int(j.delay || 0) > 0) return true;
 	}
 	return false;
+}
+
+// Сколько байт уже пришло через сервер по каждому открытому соединению: если число растёт — сервер жив, трафик идёт
+function guard_bytes(ep, tag) {
+	let j = api_get(ep, "/connections", 6), r = {};
+	if (!j || type(j.connections) != "array") return null;
+	for (let cn in j.connections) if (type(cn.chains) == "array" && index(cn.chains, tag) >= 0) r[s(cn.id)] = int(cn.download || 0);
+	return r;
+}
+
+function guard_flow(a, b) {
+	if (!a || !b) return false;
+	for (let id in keys(b)) if (a[id] != null && b[id] > a[id]) return true;
+	return false;
+}
+
+// Последний замер сервера в истории sing-box: > 0 — сервер ответил
+function guard_hist(px, tag) {
+	let h = px && px[tag] ? px[tag].history : null;
+	return type(h) == "array" && length(h) ? int(h[length(h) - 1].delay || 0) : 0;
+}
+
+function guard_strike(sec, leaf, n) {
+	let f = "/tmp/zm-fk-guard." + sec;
+	if (n == null) {
+		let l = split(trim(s(fs.readfile(f))), "\n");
+		return s(l[0]) == leaf ? int(l[1] || 0) : 0;
+	}
+	if (n > 0) { try { fs.writefile(f, leaf + "\n" + n + "\n"); } catch (e) {} }
+	else fs.unlink(f);
+	return n;
 }
 
 function cmd_guard() {
@@ -40373,9 +40406,18 @@ function cmd_guard() {
 		let leaf = proxy_now(px, auto);
 		if (leaf == "" || leaf == auto) continue;
 		let url = sec_ext(x).ut_url;
-		if (guard_alive(ep, leaf, url)) continue;
+		if (guard_alive(ep, leaf, url)) { guard_strike(sec, leaf, 0); continue; }
+		// Один неудачный замер — ещё не отказ: перепроверяем дольше и смотрим, идёт ли через сервер трафик прямо сейчас
+		let b0 = guard_bytes(ep, leaf);
+		if (probe_ms(leaf, 6000, 2) > 0) { guard_strike(sec, leaf, 0); continue; }
+		if (guard_flow(b0, guard_bytes(ep, leaf))) { guard_strike(sec, leaf, 0); continue; }
+		// Отказ должен повториться и на следующем круге сторожа (через 20 с)
+		if (guard_strike(sec, leaf, guard_strike(sec, leaf) + 1) < 2) continue;
+		guard_strike(sec, leaf, 0);
 		api_get(ep, "/group/" + urlenc(auto) + "/delay", 14, { url, timeout: 5000 });
 		let px2 = api_proxies(ep), to = px2 ? proxy_now(px2, auto) : leaf, names = sec_names(c, sec);
+		// Автовыбор перемерил всех и оставил этот же сервер с ответом — значит, он жив
+		if (to == leaf && guard_hist(px2, leaf) > 0) continue;
 		let nm = (t) => s(names[t] || (px[t] && px[t].name) || t), label = trim(s(x.zm_label)) || sec;
 		let ev = { sec, label, from: nm(leaf), to: to != leaf && to != auto ? nm(to) : "" };
 		push(events, ev);
@@ -41547,7 +41589,7 @@ list_methods() {
 	json_add_object "ui_radio_set";           json_add_string "mode" "string"; json_close_object
 	json_add_object "ui_radio_now";           json_add_string "mode" "string"; json_close_object
 	json_add_object "monitor";                json_close_object
-	json_add_object "ui_net_get";             json_close_object
+	json_add_object "ui_net_get";             json_add_string "dev" "string"; json_close_object
 	json_add_object "monitor_procs";          json_close_object
 	json_add_object "monitor_action";         json_add_string "action" "string"; json_add_string "mode" "string"; json_close_object
 	json_add_object "watch_status";           json_close_object
@@ -41718,7 +41760,7 @@ call_method() {
 		tsc_status)              "$BACKEND" tsc_status ;;
 		tsc_action)              json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" tsc_action "$action" @stdin ;;
 		monitor)                 "$BACKEND" monitor ;;
-		ui_net_get)              "$BACKEND" ui_net_get ;;
+		ui_net_get)              json_get_var dev dev; "$BACKEND" ui_net_get "$dev" ;;
 		monitor_procs)           "$BACKEND" monitor_procs ;;
 		monitor_action)          json_get_var action action; json_get_var mode mode; printf '%s' "$mode" | "$BACKEND" monitor_action "$action" @stdin ;;
 		watch_status)            "$BACKEND" watch_status ;;
@@ -42160,6 +42202,7 @@ var callTermAction = zmDeclare({ object: 'zapret-manager', method: 'term_action'
 var callTscStatus = zmDeclare({ object: 'zapret-manager', method: 'tsc_status', expect: {} });
 var callTscAction = zmDeclare({ object: 'zapret-manager', method: 'tsc_action', params: ['action', 'mode'], expect: {} });
 var callMonitor = zmDeclare({ object: 'zapret-manager', method: 'monitor', expect: {} });
+var callNetNow = zmDeclare({ object: 'zapret-manager', method: 'ui_net_get', params: ['dev'], expect: {} });
 var callMonitorProcs = zmDeclare({ object: 'zapret-manager', method: 'monitor_procs', expect: {} });
 var callMonitorAction = zmDeclare({ object: 'zapret-manager', method: 'monitor_action', params: ['action', 'mode'], expect: {} });
 var callWatchStatus = zmDeclare({ object: 'zapret-manager', method: 'watch_status', expect: {} });
@@ -45156,6 +45199,7 @@ return baseclass.extend({
 	tscStatus: callTscStatus,
 	tscAction: bigArg2(callTscAction),
 	monitor: callMonitor,
+	netNow: callNetNow,
 	monitorProcs: callMonitorProcs,
 	monitorAction: callMonitorAction,
 	watchStatus: callWatchStatus,
@@ -47020,7 +47064,7 @@ return view.extend({
 			list.forEach(function(f) { ifCard.appendChild(ifBlock(f)); });
 		}
 
-		var FIX_MODES = [ { id: 'off', label: 'Выключено' }, { id: '30', label: '30 минут' }, { id: '60', label: '1 час' }, { id: '180', label: '3 часа' } ];
+		var FIX_MODES = [ { id: 'off', label: 'Выключено' }, { id: '5', label: '5 минут' }, { id: '15', label: '15 минут' }, { id: '30', label: '30 минут' } ];
 		function fixAct(action, mode, okText) {
 			return zm.awgAction(action, mode).then(function(res) {
 				if (!res || res.error) { zm.toast((res && res.error) || 'Роутер не ответил', 'error'); return; }
@@ -47041,11 +47085,11 @@ return view.extend({
 			(w.dead || []).forEach(function(d) { dead[d.name] = d; });
 			function dur(sec) { var m = Math.max(1, Math.round(sec / 60)); return m >= 60 ? Math.floor(m / 60) + ' ч' + (m % 60 ? ' ' + (m % 60) + ' мин' : '') : m + ' мин'; }
 			function clock(t) { var d = new Date(t * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
-			function tickAt(t) { return Math.ceil(Math.max(t, now + 1) / 600) * 600; }
+			function tickAt(t) { return Math.ceil(Math.max(t, now + 1) / 300) * 300; }
 
-			var AFTER = { '30': '30 минут', '60': 'часа', '180': '3 часов' };
+			var AFTER = { '5': '5 минут', '15': '15 минут', '30': '30 минут' };
 			fixCard.appendChild(E('h3', {}, [ 'Автопочинка WARP ', on ? badge('zm-ok', 'включена') : E([]) ]));
-			fixCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Раз в 10 минут роутер проверяет отмеченные туннели WARP. Если туннель не работает или попал на российский узел Cloudflare (DME и др. — через них блокировки не обходятся) дольше выбранного времени, роутер подбирает ему зарубежную точку входа, а с третьей попытки — и новые ключи. Новая настройка остаётся, только если стало лучше, иначе возвращается прежняя. Рабочие туннели не трогаются.'));
+			fixCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Раз в 5 минут роутер проверяет отмеченные туннели WARP. Если туннель не работает или попал на российский узел Cloudflare (DME и др. — через них блокировки не обходятся) дольше выбранного времени, роутер подбирает ему зарубежную точку входа, а с третьей попытки — и новые ключи. Новая настройка остаётся, только если стало лучше, иначе возвращается прежняя. Рабочие туннели не трогаются.'));
 
 			var rows = E('div', { 'class': 'zm-afix-list' });
 			list.forEach(function(f) {
@@ -62230,9 +62274,12 @@ return view.extend({
 			var l = (s && s.net && s.net.ifs) || [];
 			return l.filter(function(x) { return x.n === netPick; })[0] || l.filter(function(x) { return x.i; })[0] || l.filter(function(x) { return x.n === 'wan'; })[0] || l[0] || null;
 		}
+		// Выбранная сеть опрашивается отдельно раз в секунду, а график плавно едет и цифры плавно меняются — как трафик на живом фоне
+		var netFast = { dev: '', prev: null, fail: 0, busy: false, timer: null, base: null, est: 0, raf: 0, last: 0, mx: 1, rx: 0, tx: 0, cur: null, legRx: null, legTx: null, pkRx: null, pkTx: null };
 		function netTrack(s, p) {
 			var l = (s.net && s.net.ifs) || [], pl = (p && p.net && p.net.ifs) || [], dt = p ? s.t - p.t : 0;
 			l.forEach(function(x) {
+				if (netFast.dev && x.d === netFast.dev && netFast.fail < 3) return;
 				var o = pl.filter(function(y) { return y.d === x.d; })[0], h = netHist[x.d] || (netHist[x.d] = []);
 				if (!o || dt <= 0 || dt > 30) return;
 				h.push({ t: s.t, rx: Math.max(0, (x.c[0] - o.c[0]) / dt), tx: Math.max(0, (x.c[1] - o.c[1]) / dt) });
@@ -62241,9 +62288,66 @@ return view.extend({
 		}
 		function netArea(h, k, mx, tl) {
 			if (h.length < 2) return '';
-			var pts = h.map(function(q) { return [ NW * (1 - (tl - q.t) / NET_WIN), NH - 2 - (NH - 6) * q[k] / mx ]; });
+			var pts = h.map(function(q) { return [ NW * (1 - (tl - q.t) / NET_WIN), NH - 2 - (NH - 6) * Math.min(q[k], mx) / mx ]; });
 			return 'M' + pts.map(function(q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L') +
 				' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + NH + ' L' + pts[0][0].toFixed(1) + ' ' + NH + ' Z';
+		}
+		function netFastOn() { return alive() && !paused && mode === 'over' && !document.hidden && !!netFast.dev && netFast.fail < 3; }
+		function netPoll() {
+			clearTimeout(netFast.timer);
+			if (!alive()) return;
+			netFast.timer = setTimeout(netPoll, 1000);
+			if (!netFastOn() || netFast.busy || !zm.netNow) return;
+			var dev = netFast.dev;
+			netFast.busy = true;
+			zm.netNow(dev).then(function(d) {
+				netFast.busy = false;
+				if (!d || d.dev !== dev || typeof d.rx !== 'number' || typeof d.t !== 'number') { netFast.fail++; return; }
+				netFast.fail = 0;
+				var p = netFast.prev, h = netHist[dev] || (netHist[dev] = []);
+				netFast.prev = d;
+				var est = d.t + 0.15;
+				if (!netFast.base || Math.abs(netEst() - est) > 1.5) netFast.base = { rt: est, pt: performance.now() };
+				if (!p || p.dev !== d.dev || d.t <= p.t || d.t - p.t > 10 || d.rx < p.rx || d.tx < p.tx) return;
+				h.push({ t: d.t, rx: (d.rx - p.rx) / (d.t - p.t), tx: (d.tx - p.tx) / (d.t - p.t) });
+				while (h.length && d.t - h[0].t > NET_WIN + 4) h.shift();
+				netAnim();
+			}, function() { netFast.busy = false; netFast.fail++; });
+		}
+		function netEst() { return netFast.base ? netFast.base.rt + (performance.now() - netFast.base.pt) / 1000 : 0; }
+		function netDraw(dt) {
+			var cur = netFast.cur, h = cur ? (netHist[cur.d] || []) : [];
+			if (!h.length) { pRx.setAttribute('d', ''); pTx.setAttribute('d', ''); return; }
+			var last = h[h.length - 1], mx = 1, pk = { rx: 0, tx: 0 };
+			h.forEach(function(q) { mx = Math.max(mx, q.rx, q.tx); pk.rx = Math.max(pk.rx, q.rx); pk.tx = Math.max(pk.tx, q.tx); });
+			var smooth = dt > 0, kf = smooth ? Math.min(1, dt * 4) : 1;
+			netFast.mx += (mx * 1.1 - netFast.mx) * (smooth ? Math.min(1, dt * 3) : 1);
+			netFast.rx += (last.rx - netFast.rx) * kf;
+			netFast.tx += (last.tx - netFast.tx) * kf;
+			var tl = last.t;
+			if (smooth && netFast.base) tl = Math.max(last.t - 1, Math.min(netEst() - 1, last.t + 1));
+			var hh = h.slice();
+			if (hh[hh.length - 1].t < tl) hh.push({ t: tl, rx: last.rx, tx: last.tx });
+			pRx.setAttribute('d', netArea(hh, 'rx', Math.max(1, netFast.mx), tl));
+			pTx.setAttribute('d', netArea(hh, 'tx', Math.max(1, netFast.mx), tl));
+			if (netFast.legRx) {
+				netFast.legRx.textContent = rate(netFast.rx).join(' ');
+				netFast.legTx.textContent = rate(netFast.tx).join(' ');
+				netFast.pkRx.textContent = h.length > 2 ? 'пик ' + rate(pk.rx).join(' ') : '';
+				netFast.pkTx.textContent = h.length > 2 ? 'пик ' + rate(pk.tx).join(' ') : '';
+			}
+		}
+		function netAnim() {
+			if (netFast.raf || !netFastOn() || !window.requestAnimationFrame) { if (!netFast.raf) netDraw(0); return; }
+			netFast.last = 0;
+			netFast.raf = requestAnimationFrame(function step(ts) {
+				netFast.raf = 0;
+				if (!netFastOn()) { netDraw(0); return; }
+				var dt = netFast.last ? Math.min(0.25, (ts - netFast.last) / 1000) : 0;
+				netFast.last = ts;
+				netDraw(dt || 0.016);
+				netFast.raf = requestAnimationFrame(step);
+			});
 		}
 		function renderNet(s) {
 			var l = (s.net && s.net.ifs) || [], cur = netCur(s);
@@ -62254,21 +62358,20 @@ return view.extend({
 			}
 			netSel.style.display = l.length > 1 ? '' : 'none';
 			if (cur) { netSel.value = cur.n; netSel.title = cur.n + ' (' + cur.d + ')'; }
-			var h = cur ? (netHist[cur.d] || []) : [], last = h[h.length - 1], mx = 1;
-			h.forEach(function(q) { mx = Math.max(mx, q.rx, q.tx); });
-			var tl = last ? last.t : 0;
-			pRx.setAttribute('d', netArea(h, 'rx', mx * 1.1, tl));
-			pTx.setAttribute('d', netArea(h, 'tx', mx * 1.1, tl));
 			nChart.style.display = cur ? '' : 'none';
-			nLeg.innerHTML = '';
-			if (!cur) { nLeg.appendChild(E('span', { 'class': 'zm-mon-sub' }, 'Роутер не сообщил сетевые интерфейсы')); return; }
-			function side(cls, arrow, k) {
-				var v = last ? rate(last[k]) : [ '…', '' ], pk = 0;
-				h.forEach(function(q) { pk = Math.max(pk, q[k]); });
-				return E('span', {}, [ E('i', { 'class': cls }), arrow + ' ', E('b', {}, v[0] + ' ' + v[1]), h.length > 2 ? E('small', {}, 'пик ' + rate(pk).join(' ')) : '' ]);
+			var was = netFast.cur ? netFast.cur.d : '';
+			netFast.cur = cur;
+			if (!cur) { netFast.legRx = null; nLeg.innerHTML = ''; nLeg.appendChild(E('span', { 'class': 'zm-mon-sub' }, 'Роутер не сообщил сетевые интерфейсы')); return; }
+			if (cur.d !== netFast.dev) { netFast.dev = cur.d; netFast.prev = null; netFast.fail = 0; }
+			if (!netFast.legRx || cur.d !== was) {
+				var h = netHist[cur.d] || [], lst = h[h.length - 1];
+				netFast.rx = lst ? lst.rx : 0; netFast.tx = lst ? lst.tx : 0; netFast.mx = 1;
+				netFast.legRx = E('b', {}, '…'); netFast.legTx = E('b', {}, '…'); netFast.pkRx = E('small', {}); netFast.pkTx = E('small', {});
+				nLeg.innerHTML = '';
+				nLeg.appendChild(E('span', {}, [ E('i', { 'class': 'zm-mon-nrx' }), '↓ ', netFast.legRx, netFast.pkRx ]));
+				nLeg.appendChild(E('span', {}, [ E('i', { 'class': 'zm-mon-ntx' }), '↑ ', netFast.legTx, netFast.pkTx ]));
 			}
-			nLeg.appendChild(side('zm-mon-nrx', '↓', 'rx'));
-			nLeg.appendChild(side('zm-mon-ntx', '↑', 'tx'));
+			if (netFastOn()) netAnim(); else netDraw(0);
 		}
 		function fanIcon() {
 			return svg('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'aria-hidden': 'true' }, [
@@ -62693,7 +62796,7 @@ return view.extend({
 				title: 'Как работает монитор',
 				lead: 'Монитор работает, только пока эта страница открыта. Закрыли её — роутер ничего не собирает и не тратит на это ресурсы.',
 				items: [
-					[ 'Раз в 2 секунды', 'роутер отдаёт счётчики, а проценты и графики считает браузер', '↻' ],
+					[ 'Раз в 2 секунды, сеть — каждую секунду', 'роутер отдаёт счётчики, а проценты и графики считает браузер', '↻' ],
 					[ 'График за 5 минут', 'хранится в браузере: после перезагрузки страницы он начнётся заново', '∿' ],
 					[ 'Вкладку можно не держать на экране', 'график продолжит писаться, даже если переключиться на другую', '⇄' ],
 					[ 'Пауза', 'кнопка «Пауза» или вкладка «htop» останавливают опрос', '‖' ],
@@ -62710,7 +62813,8 @@ return view.extend({
 			clock.onmessage = function() { tick(); };
 		} catch (e) { clock = null; }
 		function stop() {
-			clearTimeout(timer); clearTimeout(ptimer);
+			clearTimeout(timer); clearTimeout(ptimer); clearTimeout(netFast.timer);
+			if (netFast.raf && window.cancelAnimationFrame) { cancelAnimationFrame(netFast.raf); netFast.raf = 0; }
 			if (clock) { try { clock.terminate(); } catch (e) {} clock = null; }
 			if (procsView) procsView.close();
 			htopStop();
@@ -62737,6 +62841,7 @@ return view.extend({
 		renderSnap(); renderTop(); renderMem(); renderLive();
 		setTimeout(tick, 1000);
 		setTimeout(ptick, 1500);
+		setTimeout(netPoll, 1200);
 		setTimeout(function() { if (alive()) zm.warnOnce('info_monitor', monInfo); }, 600);
 		return root;
 	}
@@ -65275,7 +65380,7 @@ return view.extend({
 					: am === 'ping'
 					? 'Forkozz замеряет пинг серверов и включает самый быстрый. Пока сервер отвечает, Forkozz остаётся на нём и раз в 15 минут проверяет, нет ли заметно быстрее (см. «Порог смены» ниже). Сервер оборвался — за 20–40 секунд Forkozz переходит на самый быстрый из рабочих. Выбор сервера вручную выключает режим до нажатия «Авто».'
 					: am === 'guard'
-					? 'Как «По задержке», но текущий сервер ещё проверяется каждые 20 секунд. Не ответил дважды подряд — Forkozz сразу переходит на самый быстрый из рабочих. Обрыв замечается примерно за полминуты.'
+					? 'Как «По задержке», но текущий сервер ещё проверяется каждые 20 секунд. Если он не ответил на двух проверках подряд и трафик через него не идёт — Forkozz переходит на самый быстрый из рабочих. Обрыв замечается примерно за минуту.'
 					: 'Раз в ' + ivl + ' Forkozz проверяет все серверы и включает самый быстрый из ответивших. Если сервер оборвётся между проверками, замена будет при следующей — в течение ' + ivl + '. Чтобы не ждать, выберите «быструю замену».', 0));
 				if (!prio && am !== 'ping') box.appendChild(row('Плановая проверка', seg(UT_IV, draft.ut_iv, function(v) { set('ut_iv', v); })));
 				box.appendChild(row('Порог смены', inp('ut_tol', '50', 80, 'мс')));
