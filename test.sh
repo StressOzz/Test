@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.184
+# Version: 5.194
 ZM_VERSION_EOF
 set -e
 
@@ -58993,6 +58993,9 @@ html.zm-theme-dark .zm-mon-xtip { background: #1c2128; }
 .zm-mon-ntx { stroke: var(--zm-c-mem); fill: var(--zm-c-mem); }
 .zm-mon-nleg { display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; margin: 0 0 14px; }
 .zm-mon-nleg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.zm-mon-nchart { overflow: hidden; }
+.zm-mon-nchart .zm-mon-narea { stroke: none; }
+.zm-mon-nchart .zm-mon-nline { fill: none; }
 .zm-mon-nleg i.zm-mon-nrx { background: var(--zm-acc2); } .zm-mon-nleg i.zm-mon-ntx { background: var(--zm-c-mem); }
 .zm-mon-nleg small { opacity: .6; margin-left: 6px; }
 .zm-mon-netsel { font-size: 12.5px; padding: 3px 8px; height: auto; max-width: 60%; }
@@ -62266,8 +62269,9 @@ return view.extend({
 			try { localStorage.setItem(NET_KEY, netPick); } catch (e) {}
 			renderSnap();
 		} });
-		var pRx = svg('path', { 'class': 'zm-mon-nrx' }), pTx = svg('path', { 'class': 'zm-mon-ntx' });
-		var nChart = svg('svg', { viewBox: '0 0 ' + NW + ' ' + NH, preserveAspectRatio: 'none', 'class': 'zm-mon-nchart', role: 'img', 'aria-label': 'Загрузка и отдача за 2 минуты' }, [ pRx, pTx ]);
+		var pRx = svg('path', { 'class': 'zm-mon-nrx zm-mon-narea' }), pTx = svg('path', { 'class': 'zm-mon-ntx zm-mon-narea' });
+		var lRx = svg('path', { 'class': 'zm-mon-nrx zm-mon-nline' }), lTx = svg('path', { 'class': 'zm-mon-ntx zm-mon-nline' });
+		var nChart = svg('svg', { viewBox: '0 0 ' + NW + ' ' + NH, preserveAspectRatio: 'none', 'class': 'zm-mon-nchart', role: 'img', 'aria-label': 'Загрузка и отдача за 2 минуты' }, [ pRx, pTx, lRx, lTx ]);
 		var nLeg = E('div', { 'class': 'zm-mon-nleg' });
 		var netCard = E('div', { 'class': 'zm-card' }, [ E('div', { 'class': 'zm-mon-cardhead' }, [ E('h3', { 'style': 'margin:0' }, 'Сеть сейчас'), netSel ]), nChart, nLeg, netBox ]);
 		function netCur(s) {
@@ -62286,11 +62290,13 @@ return view.extend({
 				while (h.length && s.t - h[0].t > NET_WIN + 4) h.shift();
 			});
 		}
-		function netArea(h, k, mx, tl) {
-			if (h.length < 2) return '';
+		// Линия графика и заливка под ней — отдельно: у заливки нет обводки, поэтому её края не рисуют «падение» к нулю
+		function netPaths(h, k, mx, tl, a, l) {
+			if (h.length < 2) { a.setAttribute('d', ''); l.setAttribute('d', ''); return; }
 			var pts = h.map(function(q) { return [ NW * (1 - (tl - q.t) / NET_WIN), NH - 2 - (NH - 6) * Math.min(q[k], mx) / mx ]; });
-			return 'M' + pts.map(function(q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L') +
-				' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + NH + ' L' + pts[0][0].toFixed(1) + ' ' + NH + ' Z';
+			var line = 'M' + pts.map(function(q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L');
+			l.setAttribute('d', line);
+			a.setAttribute('d', line + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + (NH + 2) + ' L' + pts[0][0].toFixed(1) + ' ' + (NH + 2) + ' Z');
 		}
 		function netFastOn() { return alive() && !paused && mode === 'over' && !document.hidden && !!netFast.dev && netFast.fail < 3; }
 		function netPoll() {
@@ -62317,7 +62323,7 @@ return view.extend({
 		function netEst() { return netFast.base ? netFast.base.rt + (performance.now() - netFast.base.pt) / 1000 : 0; }
 		function netDraw(dt) {
 			var cur = netFast.cur, h = cur ? (netHist[cur.d] || []) : [];
-			if (!h.length) { pRx.setAttribute('d', ''); pTx.setAttribute('d', ''); return; }
+			if (!h.length) { [ pRx, pTx, lRx, lTx ].forEach(function(p) { p.setAttribute('d', ''); }); return; }
 			var last = h[h.length - 1], mx = 1, pk = { rx: 0, tx: 0 };
 			h.forEach(function(q) { mx = Math.max(mx, q.rx, q.tx); pk.rx = Math.max(pk.rx, q.rx); pk.tx = Math.max(pk.tx, q.tx); });
 			var smooth = dt > 0, kf = smooth ? Math.min(1, dt * 4) : 1;
@@ -62327,9 +62333,9 @@ return view.extend({
 			var tl = last.t;
 			if (smooth && netFast.base) tl = Math.max(last.t - 1, Math.min(netEst() - 1, last.t + 1));
 			var hh = h.slice();
-			if (hh[hh.length - 1].t < tl) hh.push({ t: tl, rx: last.rx, tx: last.tx });
-			pRx.setAttribute('d', netArea(hh, 'rx', Math.max(1, netFast.mx), tl));
-			pTx.setAttribute('d', netArea(hh, 'tx', Math.max(1, netFast.mx), tl));
+			if (hh[hh.length - 1].t < tl + NET_WIN / NW * 4) hh.push({ t: tl + NET_WIN / NW * 4, rx: last.rx, tx: last.tx });
+			netPaths(hh, 'rx', Math.max(1, netFast.mx), tl, pRx, lRx);
+			netPaths(hh, 'tx', Math.max(1, netFast.mx), tl, pTx, lTx);
 			if (netFast.legRx) {
 				netFast.legRx.textContent = rate(netFast.rx).join(' ');
 				netFast.legTx.textContent = rate(netFast.tx).join(' ');
