@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.124
+# Version: 5.070
 ZM_VERSION_EOF
 set -e
 
@@ -2033,6 +2033,7 @@ _fk_home_sec() (
 
 _fk_heal_sec() {
 	local sec="$1" f="$JOBS_DIR/fk.heal$2" r n=0 name to
+	_fk_warm && { rm -f "$f"; return 0; }
 	r="$(_fk_uc heal "$sec" 2>/dev/null)"
 	[ "$(printf '%s' "$r" | jsonfilter -e '@.dead' 2>/dev/null)" = true ] || { rm -f "$f" "$f.hold"; return 0; }
 	if [ "$(printf '%s' "$r" | jsonfilter -e '@.hold' 2>/dev/null)" = true ]; then
@@ -7433,6 +7434,7 @@ _st_diag_node() {
 }
 
 ST_SUB_TAG="# zm-subupd"
+ST_SUB_AUTO_OFF="$ZM_STATE_DIR/st.subauto.off"
 
 ST_SUB_PICK="$ST_DIR/sub.pick"
 ST_LAT_MODE="$ST_DIR/lat.mode"
@@ -7701,7 +7703,9 @@ steer_action() {
 			;;
 		sub_status) steer_sub_status ;;
 		explain) steer_explain "$mode" ;;
-		sub_auto) _st_sub_auto_set "$mode" ;;
+		sub_auto)
+			_st_sub_auto_set "$mode" || return 1
+			if [ "$mode" = off ]; then mkdir -p "$ZM_STATE_DIR"; : > "$ST_SUB_AUTO_OFF"; else rm -f "$ST_SUB_AUTO_OFF"; fi ;;
 		sub_refresh)
 			_st_running && return 0
 			[ -s "$ST_SUB_URL" ] || [ -n "$(_st_secs_url)" ] || return 0
@@ -8281,6 +8285,21 @@ _fk_version() { sed -n 's/^NETSHIFT_VERSION="\([^"]*\)".*/\1/p' /usr/lib/netshif
 _fk_enabled() { ls /etc/rc.d/S*netshift >/dev/null 2>&1; }
 FK_SB_PROCS="sing-box sing-box-core"
 _fk_sb_alive() { pidof $FK_SB_PROCS >/dev/null 2>&1; }
+# После (пере)запуска sing-box пару минут серверы могут не отвечать на проверку, пока качаются наборы правил:
+# в это окно сторож не уводит выбранный сервер на «Авто», а выбор пользователя возвращается без проверки
+FK_WARM="/tmp/zm-fk-warm"
+_fk_warm_mark() { echo $(( $(date +%s) + ${1:-300} )) > "$FK_WARM"; }
+_fk_warm() { local t; t="$(cat "$FK_WARM" 2>/dev/null)"; case "$t" in ''|*[!0-9]*) return 1 ;; esac; [ "$t" -gt "$(date +%s)" ]; }
+_fk_sb_newpid() {
+	local p o f="$JOBS_DIR/fk.sbpid"
+	p="$(pidof $FK_SB_PROCS 2>/dev/null | awk '{ print $1 }')"
+	[ -n "$p" ] || return 0
+	o="$(cat "$f" 2>/dev/null)"
+	[ "$p" = "$o" ] && return 0
+	mkdir -p "$JOBS_DIR"; echo "$p" > "$f"
+	[ -n "$o" ] && _fk_warm_mark 300
+	return 0
+}
 _fk_nft_on() { nft list chain inet "$FK_NFT" mangle >/dev/null 2>&1 || nft list table inet "$FK_NFT" >/dev/null 2>&1; }
 _fk_up() { _fk_sb_alive && _fk_nft_on; }
 FK_SERIAL_DIR="/var/run/netshift-zm-serial"
@@ -8606,6 +8625,7 @@ _fk_service0() {
 	: > "$JOBS_DIR/forkop-svc.out"
 	_fk_settle 180 "Forkozz ещё заканчивает прошлую операцию (запуск или применение подписки) — ждём её" ||
 		_rb_warn "Прошлая операция Forkozz не закончилась за 3 минуты — продолжаем, движок выполнит нашу следом"
+	_fk_warm_mark 900
 	if [ "$a" = apply ] && _fk_up && _fk_fip_stale; then
 		_fk_say "Пул Fake IP теперь $(_fk_fip_file) — перезапускаем Forkozz полностью"
 		a=start
@@ -8643,6 +8663,9 @@ _fk_service0() {
 	if _fk_up; then
 		_fk_say "Проверяем, что всё работает"
 		_fk_check_live
+		_fk_warm_mark 300
+		_fk_sb_newpid
+		_fk_grp_keep
 		_fk_sub_wait 90
 		_fk_ext_auto all "$lx"
 		_fk_lists_wait 240 || _rb_warn "Списки ещё скачиваются — числа ниже могут быть неполными. Они догрузятся сами; позже нажмите «Обновить списки сейчас», чтобы увидеть итог"
@@ -8685,6 +8708,8 @@ _fk_service0() {
 			[ "$(uci -q get netshift."$ps".zm_sub_priority)" = 1 ] && _fk_fallback_sec "$ps" >/dev/null 2>&1 &
 		done
 		_fk_fwd_sync
+		_fk_warm_mark 300
+		_fk_sb_newpid
 		_fk_grp_keep
 		_fk_say "Готово: Forkozz работает"
 		_fk_guard
@@ -12805,6 +12830,7 @@ _fk_watch() {
 	_fk_engine_busy && return 0
 	if _fk_up; then
 		rm -f "$f"
+		_fk_sb_newpid
 		_job_running forkop || _fk_heal
 		_job_running forkop || _fk_grp_keep
 		_job_running forkop || _fk_zash_ensure quiet
@@ -15728,6 +15754,8 @@ do_fk_subs() {
 	_fk_say "Ищем в подписке группы АВТО"
 	_fk_autogrp_sync
 	_fk_ext_auto all "$lx"
+	_fk_sb_newpid
+	_fk_grp_keep
 	_fk_say "Готово: подписки обновлены"
 }
 
@@ -27052,15 +27080,6 @@ stl_engine_install() {
 		[ "$p" = steer-core ] && STL_CORE_ARCH="$pa"
 		files="$files $f"
 	done
-	local needk freek
-	needk=$(( $(cat $files 2>/dev/null | wc -c) * 3 / 1024 ))
-	freek="$(df -k /usr 2>/dev/null | awk 'END { print $(NF-2) }')"
-	case "$freek" in ''|*[!0-9]*) freek="" ;; esac
-	if [ -n "$freek" ] && [ "$freek" -lt "$needk" ]; then
-		rm -f $files
-		echo "ОШИБКА: на роутере мало места для ядра steer $ver — нужно около $(( needk / 1024 + 1 )) МБ, свободно $(( freek / 1024 )) МБ. Ядро не трогали: освободите место и повторите"
-		return 1
-	fi
 	stl_enabled && was_on=1
 	case " $pkgs " in *" steer-core "*) _stl_say "Ставим ядро steer $ver: $(echo $pkgs | sed 's/ /, /g')" ;; *) _stl_say "Ставим к ядру steer $ver: $(echo $pkgs | sed 's/ /, /g')" ;; esac
 	$UPDATE >&2
@@ -27079,7 +27098,7 @@ stl_engine_install() {
 			$INSTALL $files >&2; rc=$?
 			[ "$rc" = 0 ] || { $INSTALL $files >&2; rc=$?; }
 		else
-			$INSTALL --force-reinstall $files >&2; rc=$?
+			$INSTALL --force-reinstall --force-space $files >&2; rc=$?
 		fi
 	elif [ "$PKG" = apk ]; then
 		_stl_world_unban
@@ -27114,10 +27133,10 @@ stl_engine_install() {
 			"$STL_INIT" stop >/dev/null 2>&1
 			$DELETE $legacy >&2
 		fi
-		$INSTALL $files >&2; rc=$?
+		$INSTALL --force-space $files >&2; rc=$?
 		if [ "$rc" != 0 ] && [ -n "$legacy" ]; then
 			_stl_say "Новое ядро не встало — возвращаем прежнее ядро steer $old"
-			$INSTALL $back >&2
+			$INSTALL --force-space $back >&2
 		fi
 		[ -n "$legacy" ] && rm -f $back
 	fi
@@ -31982,6 +32001,9 @@ do_steer_sub_set() {
 			_rb_say "Скачиваем подписку"
 			_st_sub_fetch "$(printf '%s' "$in" | tr -d ' \r\n\t')" || return 1
 			[ -n "$old" ] && [ "$old" = "$(head -n1 "$ST_SUB_URL" 2>/dev/null)" ] && keep=1
+			if [ -z "$old" ] && [ ! -f "$ST_SUB_AUTO_OFF" ] && [ "$(_st_sub_auto_get)" = off ]; then
+				_st_sub_auto_set 3 >/dev/null && _rb_say "Подписка будет обновляться каждые 3 часа — изменить можно в «Обновлять подписку»"
+			fi
 			;;
 		*)
 			printf '%s\n' "$in" | _st_links_split > "$ST_SUB.raw"
@@ -39127,7 +39149,7 @@ function cmd_get(want) {
 		links: sec_links(m),
 		sub: length(subs) ? subs[0] : "",
 		subs,
-		sub_interval: s(m.subscription_update_interval || "1h"),
+		sub_interval: s(m.subscription_update_interval || "3h"),
 		iface: s(m.interface),
 		fastest: true,
 		exclude: s(m.zm_exclude),
@@ -39297,7 +39319,7 @@ function cmd_set() {
 			c.set(CFG, sec, "proxy_config_type", "subscription");
 			c.set(CFG, sec, "subscription_url", subs);
 			let iv = s(d.sub_interval);
-			if (index(SUB_IVS, iv) < 0) iv = "1h";
+			if (index(SUB_IVS, iv) < 0) iv = "3h";
 			c.set(CFG, sec, "subscription_update_interval", iv);
 			c.delete(CFG, sec, "zm_links");
 		}
@@ -40476,19 +40498,29 @@ function do_select(sec, tag) {
 	if (gn != null || leaf) try { fs.mkdir(STATE); } catch (e) {}
 	if (gn != null) { try { fs.writefile(grp_path(sec), gn + "\n"); } catch (e) {} }
 	else try { fs.unlink(grp_path(sec)); } catch (e) {}
-	if (leaf) { try { fs.writefile(pin_path(sec), s(tag) + "\n"); } catch (e) {} }
+	if (leaf) { try { fs.writefile(pin_path(sec), s(tag) + "\n" + s(sec_names(cursor(), sec)[tag] || "") + "\n"); } catch (e) {} }
 	else if (px || gn != null) pin_drop(sec);
 	return "";
 }
 
 function cmd_grpkeep() {
-	let c = cursor(), p = pick(c), px = null, done = [];
+	let c = cursor(), p = pick(c), px = null, done = [], warm = int(trim(s(fs.readfile("/tmp/zm-fk-warm")))) > time();
 	for (let sec in [ p.sec, ...p.conns ]) {
-		let want = "", pin = "";
+		let want = "", pin = "", pname = "", moved = "";
 		try { want = trim(s(fs.readfile(grp_path(sec)))); } catch (e) { want = ""; }
-		try { pin = trim(s(fs.readfile(pin_path(sec)))); } catch (e) { pin = ""; }
+		try { let pl = split(s(fs.readfile(pin_path(sec))), "\n"); pin = trim(s(pl[0])); pname = trim(s(pl[1])); } catch (e) { pin = ""; }
 		if (want == "" && pin == "") continue;
 		let m = c.get_all(CFG, sec) || {}, label = trim(s(m.zm_label));
+		if (pin != "" && pname != "" && sec_mode(m) == "links" && match(pin, /-[0-9]+-out$/)) {
+			let nm0 = sec_names(c, sec);
+			if (s(nm0[pin]) != pname) {
+				let hit = null;
+				for (let t in keys(nm0)) if (nm0[t] == pname && match(t, /-[0-9]+-out$/)) { hit = t; break; }
+				if (!hit) { pin_drop(sec); continue; }
+				moved = pin; pin = hit;
+				try { fs.writefile(pin_path(sec), pin + "\n" + pname + "\n"); } catch (e) {}
+			}
+		}
 		let say = (t) => system("logger -t zapret-manager " + q("Forkozz" + (label != "" ? " («" + label + "»)" : "") + ": " + t));
 		if (s(m.connection_type) != "proxy" || flag(m.disabled)) { try { fs.unlink(grp_path(sec)); } catch (e) {} pin_drop(sec); continue; }
 		if (want != "" && s(m.zm_autogrp) != "1") { try { fs.unlink(grp_path(sec)); } catch (e) {} want = ""; if (pin == "") continue; }
@@ -40510,10 +40542,10 @@ function cmd_grpkeep() {
 			if (length(filter(g.all, (t) => px[t] && type(px[t].all) != "array" && grp_name(t) == null))) pin_drop(sec);
 			continue;
 		}
-		if (s(g.now) == pin || s(g.now) != s(auto_tag(sec, px, g)) || home_read(sec)) continue;
+		if (s(g.now) == pin || (s(g.now) != s(auto_tag(sec, px, g)) && !(moved != "" && s(g.now) == moved)) || home_read(sec)) continue;
 		let nm = s(sec_names(c, sec)[pin] || pin), pol = node_pol();
 		let tf = "/tmp/zm-fk-pintry." + sec;
-		if (pol != "hold" && !proxy_alive(pin)) {
+		if (pol != "hold" && !warm && !proxy_alive(pin)) {
 			let n = int(trim(s(fs.readfile(tf)))) || 0;
 			if (n + 1 < 3) { fs.writefile(tf, sprintf("%d\n", n + 1)); continue; }
 			try { fs.unlink(tf); } catch (e) {}
@@ -45259,52 +45291,6 @@ return view.extend({
 			if (!c.length) return E([]);
 			return E('div', { 'class': 'zm-sysline' }, [ E('span', { 'class': 'zm-label' }, 'Система') ].concat(c));
 		}
-		var aoEl = E('div', { 'class': 'zm-ao', 'style': 'display:none' }), aoLog = E('pre', { 'class': 'zm-log' }), aoD = null, aoBusy = '';
-		function aoDraw() {
-			aoEl.innerHTML = '';
-			if (!aoD) { aoEl.style.display = 'none'; return; }
-			var on = !!aoD.on, list = aoD.list || [];
-			if (!on && !list.length && !aoBusy) { aoEl.style.display = 'none'; return; }
-			aoEl.style.display = '';
-			aoEl.className = 'zm-ao' + (on ? ' zm-ao-on' : '') + (aoBusy ? ' zm-ao-busy' : '');
-			var sub = aoBusy ? (aoBusy === 'on' ? 'Выключаем обходы, VPN и фильтры…' : aoBusy === 'off' ? 'Возвращаем всё, что работало…' : 'Переключаем…')
-				: on ? 'Весь трафик идёт без обходов, VPN и фильтров' + (list.length ? '. Выключите — вернутся: ' + list.join(', ') : '')
-				: 'Одним нажатием всё пойдёт без обходов, VPN и фильтров. Сейчас работают: ' + list.join(', ');
-			aoEl.appendChild(E('button', { 'type': 'button', 'class': 'zm-ao-btn', 'role': 'switch', 'aria-checked': on ? 'true' : 'false', 'disabled': aoBusy ? '' : null,
-				'title': on ? 'Вернуть всё, как было' : 'Пустить весь трафик напрямую', 'click': aoToggle }, [
-				E('span', { 'class': 'zm-ao-text' }, [ E('b', {}, 'Всё напрямую'), E('span', {}, sub) ]),
-				aoBusy ? E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }) : E('span', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') }, [ E('span') ])
-			]));
-		}
-		function aoLoad() {
-			if (!zm.allOff) return Promise.resolve();
-			return zm.allOff('status').then(function(r) {
-				if (r && !r.error) aoD = r;
-				if (aoD && aoD.job && !aoBusy) aoFollow(); else aoDraw();
-			}).catch(function() {});
-		}
-		function aoFollow() {
-			aoBusy = aoBusy || 'run';
-			aoDraw();
-			zm.pollJob('alloff', aoLog, function(ok) {
-				var was = aoBusy;
-				aoBusy = '';
-				aoLoad().then(function() {
-					if (typeof refreshOverview === 'function') refreshOverview();
-					zm.toast(!ok ? 'Не всё переключилось — подробности в журнале' : was === 'on' ? 'Весь трафик идёт напрямую' : was === 'off' ? 'Всё работает как раньше' : 'Готово', ok ? 'info' : 'warning');
-				});
-			});
-		}
-		function aoToggle() {
-			if (aoBusy || !aoD) return;
-			aoBusy = aoD.on ? 'off' : 'on';
-			aoDraw();
-			zm.allOff(aoBusy).then(function(r) {
-				if (!r || r.error) { aoBusy = ''; aoDraw(); zm.toast((r && r.error) || 'Роутер не ответил', 'error'); return; }
-				aoFollow();
-			}).catch(function() { aoBusy = ''; aoDraw(); zm.toast('Роутер не ответил', 'error'); });
-		}
-		window.addEventListener('zm:changed', function(ev) { if (!aoBusy && document.body.contains(aoEl) && !(ev && ev.detail && ev.detail.job === 'alloff')) aoLoad(); });
 		function renderOverview(d, doh, hosts, sys, h, bk) {
 			var hostsAi = (hosts.items || []).filter(function(it) { return /^ai_/.test(it.id); });
 			var hostsOther = (hosts.items || []).filter(function(it) { return !/^ai_/.test(it.id); });
@@ -45375,7 +45361,6 @@ return view.extend({
 
 			return E('div', { 'class': 'zm-card', 'style': 'margin-bottom:4px' }, [
 				E('h3', {}, 'Компоненты'),
-				aoEl, aoLog,
 				items.length ? E('div', { 'class': 'bt-cols' }, [
 					E('div', { 'class': 'bt-col' }, items.slice(0, half)),
 					E('div', { 'class': 'bt-col' }, items.slice(half))
@@ -45525,7 +45510,6 @@ return view.extend({
 		}
 
 		overviewEl.appendChild(renderOverview(data, dohData, hostsData, sysData, healthData, bkData));
-		aoLoad();
 		renderCards();
 		var updateEl = E('div', {});
 		var updateLog = E('pre', { 'class': 'zm-log' });
@@ -59233,7 +59217,7 @@ return view.extend({
 	render: function(data) {
 		var sysData = data[0];
 		var wrap = E('div', { 'class': 'zm-wrap' });
-		var part = this.zmPart || '', SYS_MAIN = { status: 1, priv: 1, net: 1, zram: 1, ver: 1, ghmirror: 1, changelog: 1, terms: 1 };
+		var part = this.zmPart || '', SYS_MAIN = { status: 1, priv: 1, net: 1, zram: 1, ver: 1, ghmirror: 1, alloff: 1, changelog: 1, terms: 1 };
 		function on(k) { return !part || (part === 'main' ? !!SYS_MAIN[k] : part === k); }
 		function put(k, el) { if (on(k)) wrap.appendChild(el); }
 		var netEl = E('div', {}, [ E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить», чтобы протестировать IPv4/IPv6') ]);
@@ -59965,6 +59949,56 @@ return view.extend({
 		if (on('ghmirror')) zm.ghProxy('get', '').then(function(r) { ghD = r && !r.error ? r : { mode: 'off' }; renderGh(); }).catch(function() { ghD = { mode: 'off' }; renderGh(); });
 		renderGh();
 		put('ghmirror', ghCard);
+
+		var aoEl = E('div', { 'class': 'zm-ao', 'style': 'display:none' }), aoLog = E('pre', { 'class': 'zm-log' }), aoD = null, aoBusy = '';
+		function aoDraw() {
+			aoEl.innerHTML = '';
+			if (!aoD) { aoEl.style.display = 'none'; return; }
+			var on = !!aoD.on, list = aoD.list || [];
+			if (!on && !list.length && !aoBusy) { aoEl.style.display = 'none'; return; }
+			aoEl.style.display = '';
+			aoEl.className = 'zm-ao' + (on ? ' zm-ao-on' : '') + (aoBusy ? ' zm-ao-busy' : '');
+			var sub = aoBusy ? (aoBusy === 'on' ? 'Выключаем обходы, VPN и фильтры…' : aoBusy === 'off' ? 'Возвращаем всё, что работало…' : 'Переключаем…')
+				: on ? 'Весь трафик идёт без обходов, VPN и фильтров' + (list.length ? '. Выключите — вернутся: ' + list.join(', ') : '')
+				: 'Одним нажатием всё пойдёт без обходов, VPN и фильтров. Сейчас работают: ' + list.join(', ');
+			aoEl.appendChild(E('button', { 'type': 'button', 'class': 'zm-ao-btn', 'role': 'switch', 'aria-checked': on ? 'true' : 'false', 'disabled': aoBusy ? '' : null,
+				'title': on ? 'Вернуть всё, как было' : 'Пустить весь трафик напрямую', 'click': aoToggle }, [
+				E('span', { 'class': 'zm-ao-text' }, [ E('b', {}, 'Всё напрямую'), E('span', {}, sub) ]),
+				aoBusy ? E('span', { 'class': 'zm-find-spin', 'aria-hidden': 'true' }) : E('span', { 'class': 'zm-switch' + (on ? ' zm-switch-on' : '') }, [ E('span') ])
+			]));
+		}
+		function aoLoad() {
+			if (!zm.allOff) return Promise.resolve();
+			return zm.allOff('status').then(function(r) {
+				if (r && !r.error) aoD = r;
+				if (aoD && aoD.job && !aoBusy) aoFollow(); else aoDraw();
+			}).catch(function() {});
+		}
+		function aoFollow() {
+			aoBusy = aoBusy || 'run';
+			aoDraw();
+			zm.pollJob('alloff', aoLog, function(ok) {
+				var was = aoBusy;
+				aoBusy = '';
+				aoLoad().then(function() {
+					zm.toast(!ok ? 'Не всё переключилось — подробности в журнале' : was === 'on' ? 'Весь трафик идёт напрямую' : was === 'off' ? 'Всё работает как раньше' : 'Готово', ok ? 'info' : 'warning');
+				});
+			});
+		}
+		function aoToggle() {
+			if (aoBusy || !aoD) return;
+			aoBusy = aoD.on ? 'off' : 'on';
+			aoDraw();
+			zm.allOff(aoBusy).then(function(r) {
+				if (!r || r.error) { aoBusy = ''; aoDraw(); zm.toast((r && r.error) || 'Роутер не ответил', 'error'); return; }
+				aoFollow();
+			}).catch(function() { aoBusy = ''; aoDraw(); zm.toast('Роутер не ответил', 'error'); });
+		}
+		window.addEventListener('zm:changed', function(ev) { if (!aoBusy && document.body.contains(aoEl) && !(ev && ev.detail && ev.detail.job === 'alloff')) aoLoad(); });
+		if (on('alloff')) {
+			put('alloff', E('div', {}, [ aoEl, aoLog ]));
+			aoLoad();
+		}
 
 		var zwCard = E('div', { 'class': 'zm-card' }), zwD = null, zwBusy = false, zwErr = '';
 		var zwPort = E('input', { 'class': 'cbi-input-text', 'type': 'text', 'inputmode': 'numeric', 'maxlength': '5', 'aria-label': 'Порт Web UI', 'style': 'width:96px;min-width:0' });
@@ -63913,7 +63947,7 @@ var SB_VARS = [
 	{ id: 'stable', label: 'Обычный', hint: 'Полный sing-box из репозитория OpenWrt. Нужно больше места.', warn: '' }
 ];
 var SB_NAMES = { tiny: 'Облегчённый', stable: 'Обычный', extended: 'Расширенный', lite: 'Расширенный облегчённый', compact: 'Расширенный компактный' };
-var SUB_IV = [ { id: '1h', label: '1 ч' }, { id: '6h', label: '6 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' } ];
+var SUB_IV = [ { id: '1h', label: '1 ч' }, { id: '3h', label: '3 ч' }, { id: '6h', label: '6 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' } ];
 var LIST_IV = [ { id: '3h', label: '3 ч' }, { id: '12h', label: '12 ч' }, { id: '1d', label: '24 ч' }, { id: '3d', label: '3 дня' } ];
 var LINK_RE = /^(vless|vmess|trojan|ss|socks4a?|socks5|hysteria2|hy2):\/\/\S+$/i;
 var NAIVE_RE = /^naive\+(https|quic):\/\/[^\s@]+@\S+$/i;
@@ -64015,7 +64049,7 @@ function fromCfg(c) {
 		sec: c.sec || 'main', isMain: c.is_main !== false, label: c.label || '', enabled: c.enabled !== false,
 		byDomains: ((c.bypass && c.bypass.domains) || []).join('\n'), bySubnets: ((c.bypass && c.bypass.subnets) || []).join('\n'),
 		mode: c.mode || 'links', links: (c.links || []).join('\n'), sub: (c.subs && c.subs.length ? c.subs : c.sub ? [ c.sub ] : []).join('\n'),
-		sub_interval: c.sub_interval || '12h', iface: c.iface || '', fastest: true, exclude: c.exclude || '',
+		sub_interval: c.sub_interval || '3h', iface: c.iface || '', fastest: true, exclude: c.exclude || '',
 		items: pick.items, sel: pick.sel, own_on: c.own_on !== false && ((c.domains || []).length + (c.subnets || []).length + pick.lists.length) > 0, domains: (c.domains || []).join('\n'), subnets: (c.subnets || []).join('\n'),
 		lists: pick.lists.join('\n'), full: (c.full || []).slice(), all: (c.all || []).slice(), excl: (c.excl || []).slice(),
 		dns: { type: dns.type || (dns.server ? 'udp' : 'dot'), servers: (dns.servers && dns.servers.length ? dns.servers : [ dns.server || '9.9.9.9' ]).slice(),
@@ -64111,7 +64145,7 @@ function newCfg(c) {
 	var warp = tl.filter(function(t) { return t.steer || /^zmwarp/.test(t.name); })[0] || tl[0];
 	var n = ((c && c.sections) || []).length + 1;
 	x.sec = 'new'; x.is_main = false; x.exists = false; x.enabled = true; x.label = warp && /^zmwarp/.test(warp.name) && !((c && c.sections) || []).some(function(s) { return s.label === 'WARP'; }) ? 'WARP' : 'Секция ' + n;
-	x.mode = 'iface'; x.iface = warp ? warp.name : ''; x.links = []; x.sub = ''; x.sub_interval = '12h'; x.exclude = ''; x.hide_names = [];
+	x.mode = 'iface'; x.iface = warp ? warp.name : ''; x.links = []; x.sub = ''; x.sub_interval = '3h'; x.exclude = ''; x.hide_names = [];
 	x.refs = { c: [], s: [], r: [], n: [] }; x.own_on = false; x.domains = []; x.subnets = []; x.lists = []; x.subs = []; x.x = {};
 	x.full = [];
 	x.all = [];
