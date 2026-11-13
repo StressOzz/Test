@@ -2132,7 +2132,7 @@ ui_nav_set() {
 	local id out="" n=0
 	for id in $(printf '%s' "$1" | tr ',' ' '); do
 		printf '%s' "$id" | grep -qE '^[a-z0-9_]{1,32}$' || { echo '{"error":"неверный раздел"}'; return 1; }
-		case "$id" in dashboard|pages|thanks) continue ;; esac
+		case "$id" in dashboard|thanks) continue ;; esac
 		case " $out " in *" $id "*) continue ;; esac
 		out="$out $id"; n=$((n + 1))
 		[ "$n" -le 64 ] || { echo '{"error":"слишком много разделов"}'; return 1; }
@@ -57138,7 +57138,19 @@ html.zm-theme-dark body:not(.zmw-body) .zm-meter-bar { background: rgba(255,255,
 .zm-kv-free { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 999px; background: #e9f8ef; color: #166534; font-size: 13.5px; font-weight: 700; white-space: nowrap; }
 .zm-kv-free-i, .zm-kv-i { line-height: 0; }
 .zm-kv-lead { margin: 0; font-size: 15px; line-height: 1.6; opacity: .9; max-width: 720px; }
-.zm-kvn .zm-kv-btns { margin-top: 0; }
+.zm-kv-cta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.zm-kv-go { box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 12px 18px; border-radius: 14px; border: 1px solid transparent; font-size: 15.5px; font-weight: 700; line-height: 1.2; text-align: center; text-decoration: none !important; transition: background .15s, border-color .15s, box-shadow .15s, transform .15s; }
+.zm-kv-go:hover { transform: translateY(-1px); }
+.zm-kv-go:active { transform: none; }
+.zm-kv-go:focus-visible { outline: 2px solid #229ed9; outline-offset: 2px; }
+.zm-kv-go-i { flex: none; line-height: 0; }
+.zm-kv-go small { font-size: 13.5px; font-weight: 500; opacity: .7; }
+.zm-kv-tg { background: #229ed9; border-color: #229ed9; color: #ffffff !important; box-shadow: 0 8px 20px -10px rgba(34,158,217,.8); }
+.zm-kv-tg:hover { background: #1c8cc2; border-color: #1c8cc2; box-shadow: 0 10px 22px -10px rgba(34,158,217,.9); }
+.zm-kv-web { background: #f4f3ff; border-color: #dcd8fb; color: #1e1b4b !important; }
+.zm-kv-web:hover { background: #ebe8ff; border-color: #c9c3f6; }
+.zm-kv-thx .zm-kv-i svg path { fill: #ef4444; stroke: #e11d48; }
+@media (prefers-reduced-motion: reduce) { .zm-kv-go, .zm-kv-go:hover { transition: none; transform: none; } }
 .zm-kv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .zm-kv-it { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #f7f6ff; border: 1px solid #e6e3fb; color: #1e1b4b; font-size: 14px; line-height: 1.4; min-width: 0; }
 .zm-kv-i { flex: none; width: 34px; height: 34px; border-radius: 10px; background: #e8e5ff; color: #3C3489; display: flex; align-items: center; justify-content: center; }
@@ -57150,8 +57162,11 @@ html.zm-theme-dark .zm-kv-it { background: rgba(255,255,255,.05); border-color: 
 html.zm-theme-dark .zm-kv-i { background: rgba(155,140,255,.18); color: #b7abff; }
 html.zm-theme-dark .zm-kv-thx { background: rgba(225,29,72,.14); border-color: rgba(225,29,72,.28); color: #ffd6df; }
 html.zm-theme-dark .zm-kv-thx .zm-kv-i { background: rgba(225,29,72,.22); color: #fb7185; }
+html.zm-theme-dark .zm-kv-web { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); color: #ffffff !important; }
+html.zm-theme-dark .zm-kv-web:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); }
+html.zm-theme-dark .zm-kv-tg { box-shadow: none; }
 @media (max-width: 1100px) { .zm-kv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .zm-kv-grid { grid-template-columns: minmax(0, 1fr); } .zm-kv-h { font-size: 22px; } .zm-kv-btns .cbi-button { flex: 1 1 auto; justify-content: center; } }
+@media (max-width: 640px) { .zm-kv-grid { grid-template-columns: minmax(0, 1fr); } .zm-kv-h { font-size: 22px; } .zm-kv-cta { grid-template-columns: minmax(0, 1fr); } }
 .zm-sp-count p { margin: 0; font-size: 14.5px; opacity: .8; }
 .zm-sp-count b { font-variant-numeric: tabular-nums; }
 .zm-sp-count[hidden] { display: none; }
@@ -61022,8 +61037,16 @@ var SP_KVN_ICO = {
 	route: '<circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h7a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h7"/>',
 	gift: '<rect x="3" y="9" width="18" height="12" rx="2"/><path d="M12 9v12"/><path d="M3 13h18"/><path d="M12 9c-1.5-3-4-4.5-5.5-3.2S7.5 9 12 9z"/><path d="M12 9c1.5-3 4-4.5 5.5-3.2S16.5 9 12 9z"/>',
 	router: '<rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01"/><path d="M11 16.5h.01"/><path d="M17 13V8"/><path d="M14 6.5a4 4 0 0 1 6 0"/>',
-	heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'
+	heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+	web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/>'
 };
+// Значок Telegram — залитый самолётик
+var SP_TG_ICO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.7 3.6 2.9 10.5c-1.2.5-1.2 1.2-.2 1.5l4.6 1.4 1.7 5.4c.2.6.1.8.7.8.5 0 .7-.2 1-.5l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.8-1.4zM9.4 13.5l9.1-5.7c.4-.3.8-.1.5.2l-7.6 6.9-.3 3.3z"/></svg>';
+function spGo(href, cls, ico, label, sub) {
+	var i = E('span', { 'class': 'zm-kv-go-i' });
+	i.innerHTML = ico;
+	return E('a', { 'class': 'zm-kv-go ' + cls, 'href': href, 'target': '_blank', 'rel': 'noreferrer' }, [ i, E('span', {}, label), sub ? E('small', {}, sub) : E([]) ]);
+}
 var SP_KVN_F = [
 	[ 'shield', 'Работает даже при жёсткой фильтрации' ],
 	[ 'list', 'Работает в условиях белых списков' ],
@@ -61093,8 +61116,11 @@ return view.extend({
 						E('span', { 'class': 'zm-kv-free' }, [ spIco('gift', 'zm-kv-free-i', 15), '3 дня бесплатно' ])
 					]),
 					E('p', { 'class': 'zm-kv-lead' }, 'VPN на случай, когда одного Zapret мало. Работает даже при белых списках операторов и подключается к роутеру прямо из Zapret Manager.')
-				]),
-				E('div', { 'class': 'zm-sp-btns zm-kv-btns' }, [ spLink(SP_KVN_BOT, 'Открыть бота', 'cbi-button-action'), spLink(SP_KVN_SITE, 'Открыть сайт') ])
+				])
+			]),
+			E('div', { 'class': 'zm-kv-cta' }, [
+				spGo(SP_KVN_BOT, 'zm-kv-tg', SP_TG_ICO, 'Подключить в Telegram-боте'),
+				spGo(SP_KVN_SITE, 'zm-kv-web', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + SP_KVN_ICO.web + '</svg>', 'Сайт', 'stresskvn.lol')
 			]),
 			E('div', { 'class': 'zm-kv-grid' }, SP_KVN_F.map(function(f) {
 				return E('div', { 'class': 'zm-kv-it' }, [ spIco(f[0], 'zm-kv-i'), E('span', {}, f[1]) ]);
