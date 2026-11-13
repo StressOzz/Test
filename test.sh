@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.194
+# Version: 5.074
 ZM_VERSION_EOF
 set -e
 
@@ -12809,7 +12809,7 @@ zm_update_action() {
 }
 
 do_zm_update() {
-	local tmp="/tmp/zm_update_install.sh" why v
+	local tmp="/tmp/zm_update_install.sh" why v m="" arg=""
 	echo "==> Скачиваем новую версию панели с GitHub"
 	if ! why="$(_zm_update_fetch "$tmp")"; then
 		rm -f "$tmp"
@@ -12820,8 +12820,11 @@ do_zm_update() {
 	echo "   ✓ Установщик скачан и проверен: версия $v"
 	chmod +x "$tmp"
 	rm -f "$ZM_STATE_DIR/latest.panel"
+	# Панель поставлена в память до перезагрузки («ram») — обновляем её туда же, а не на флеш
+	[ -f "$ZM_STATE_DIR/ui.ram" ] && read -r m < "$ZM_STATE_DIR/ui.ram"
+	[ "$m" = tmp ] && { arg=ram; echo "   · Панель стоит в оперативной памяти — новая версия тоже встанет в память"; }
 	echo "==> Запускаем установку — панель на полминуты пропадёт"
-	( sleep 5; sh "$tmp" >/tmp/zm_update_install.log 2>&1; rm -f "$tmp" ) >/dev/null 2>&1 </dev/null &
+	( sleep 5; sh "$tmp" $arg >/tmp/zm_update_install.log 2>&1; rm -f "$tmp" ) >/dev/null 2>&1 </dev/null &
 	return 0
 }
 ZM_INSTALLER_EOF
@@ -73000,6 +73003,11 @@ html:not([data-zm-motion="0"]) .zmw-nav-item.zmw-nav-folded { clip-path: inset(0
 	background: var(--grad); color: #fff; border-color: transparent;
 	box-shadow: 0 6px 16px -6px rgba(99,102,241,.8);
 }
+.zmw-nav-item[data-route="thanks"] .zmw-nav-ico .zmw-i { transition: transform .25s cubic-bezier(.34,1.56,.64,1); }
+.zmw-nav-item[data-route="thanks"] .zmw-nav-ico .zmw-i path { fill: #ef4444; stroke: #dc2626; }
+.zmw-nav-item[data-route="thanks"].zmw-active .zmw-nav-ico .zmw-i path { stroke: currentColor; }
+.zmw-nav-item[data-route="thanks"]:hover .zmw-nav-ico .zmw-i { transform: scale(1.14); }
+@media (prefers-reduced-motion: reduce) { .zmw-nav-item[data-route="thanks"] .zmw-nav-ico .zmw-i { transition: none; transform: none; } }
 .zmw-nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: none; }
 .zmw-nav-dot.zmw-on, .zmw-nav-dot.zmw-stop, .zmw-nav-dot.zmw-part, .zmw-nav-dot.zmw-idle { display: block; }
 .zmw-nav-dot.zmw-idle { background: #9aa3b2; box-shadow: 0 0 0 3px rgba(154,163,178,.18); }
@@ -75537,7 +75545,7 @@ if [ -x "$b" ]; then
 	cat "$t.log" 2>/dev/null; rm -f "$t.log"
 	[ "$r" = 0 ] || { rm -f "$t"; [ -n "$e" ] && echo "$e"; echo "Не удалось скачать $u"; exit 1; }
 elif ! get "$u"; then rm -f "$t"; echo "Не удалось скачать $u"; exit 1; fi
-sh "$t"; r=$?; rm -f "$t"; exit $r
+sh "$t" "$@"; r=$?; rm -f "$t"; exit $r
 ZM_GET_EOF
 	chmod +x "/usr/bin/${_zm_c%% *}"
 done
