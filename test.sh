@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.081
+# Version: 5.082
 ZM_VERSION_EOF
 set -e
 
@@ -6231,6 +6231,8 @@ stl_state() {
 		[ "$STL_KIND" = group ] && [ "$STL_FAILED" = true ] && [ -z "$STL_PSTATE" ] && { STL_PSTATE=failed; STL_PTOTAL=0; }
 	fi
 	[ "$STL_UP" = true ] && STL_NWHY=""
+	# Ядро обрезает причину по байтам, посреди слова: «…соединения не открыва»
+	case "$STL_NWHY" in "проверка проходит, а соединения не "*) STL_NWHY="проверка проходит, а соединения не открываются" ;; esac
 	printf '%s' "$STL_DEV" | grep -qE '^[A-Za-z0-9_.-]+$' || STL_DEV=""
 	case "$STL_PSTATE" in probing|failed|no_such_node|excluded) ;; *) STL_PSTATE="" ;; esac
 	case "$STL_PNODE" in ''|*[!0-9]*) STL_PNODE=0 ;; esac
@@ -31981,9 +31983,13 @@ _st_happ_miss() {
 			while ((getline l < N) > 0) { split(l, z, "\t"); NM[z[5]] = 1 }
 		}
 		$1 != "" && !($1 in NM) && !($1 in S) {
-			n = split($2, w, " "); hit = 0
-			for (i = 1; i <= n; i++) if (w[i] in K) hit = 1
-			if (!hit) { S[$1] = 1; printf "%s\"%s\"", (c++ ? "," : ""), j($1) }
+			n = split($2, w, " "); hit = 0; real = 0
+			for (i = 1; i <= n; i++) {
+				if (w[i] in K) hit = 1
+				split(w[i], q, "|"); if (q[2] !~ /^(127\.|localhost$|0\.0\.0\.0$|::1?$|\[::1\]$)/) real = 1
+			}
+			# Заглушка провайдера на 127.0.0.1 («Торренты запрещены», «Подключитесь через Happ») — не сервер
+			if (real && !hit) { S[$1] = 1; printf "%s\"%s\"", (c++ ? "," : ""), j($1) }
 		}' "$ST_SUB_GRPS.all"
 }
 
@@ -32304,8 +32310,8 @@ _st_json_map() {
 		| (.streamSettings // {}) as $t | ($t.network // "tcp") as $n
 		| (if $n == "ws" then ($t.wsSettings.path // "") elif $n == "grpc" then ($t.grpcSettings.serviceName // "")
 		   elif $n == "xhttp" or $n == "splithttp" then (($t.xhttpSettings // $t.splithttpSettings // {}).path // "")
-		   elif $n == "httpupgrade" then ($t.httpupgradeSettings.path // "") else "" end | tostring | sub("\\?.*$"; "") | gsub(" "; "%20")) as $path
-		| (($t.realitySettings.serverName // $t.tlsSettings.serverName // "") | tostring | ascii_downcase | gsub("[\t ]"; "")) as $sni
+		   elif $n == "httpupgrade" then ($t.httpupgradeSettings.path // "") else "" end | tostring | (split("?") | .[0] // "") | split(" ") | join("%20")) as $path
+		| (($t.realitySettings.serverName // $t.tlsSettings.serverName // "") | tostring | ascii_downcase | split(" ") | join("") | split("\t") | join("")) as $sni
 		| { p: $p, h: (($s.address // "") | tostring | ascii_downcase), port: (($s.port // 0) | tostring), path: $path, sni: $sni } | select(.h != "") ]
 		| to_entries[] | "\(.key + 1)\t\(.value.p)\t\(.value.h)\t\(.value.port)\t\(.value.path)\t\(.value.sni)"' "$1" > "$1.map.j" 2>/dev/null &&
 		[ -s "$1.map.j" ] && mv -f "$1.map.j" "$1.map"
@@ -32430,38 +32436,56 @@ _st_sub_curl() {
 	esac
 	STL_SUB_TITLE="$(printf '%s' "$x" | tr -d '\000-\037"\\' | cut -c1-120)"
 	rm -f "$h"
-	# Как для Happ: конфиг с балансировщиком — это группа АВТО (её панель берёт отдельно). Его серверы, которых
-	# нет отдельными конфигами, становятся узлами «Группа · 1», «Группа · 2»; уже знакомые отдельные серверы не
-	# дублируются. Так в списке все серверы подписки и ни одного повтора
+	# Как для Happ: из обычного конфига берётся один сервер — тот, через который Happ и ходит (первый исходящий
+	# или «proxy»); запасные исходящие для правил маршрутизации, цепочки через другой сервер (dialerProxy — Steer
+	# так не умеет) и заглушки на 127.0.0.1 («Торренты запрещены») не берутся. Конфиг с балансировщиком — группа
+	# АВТО: его серверы, которых нет отдельными конфигами, становятся узлами «Группа · 1», «Группа · 2».
+	# Повторы убираются. Без регулярных выражений: jq в OpenWrt может быть собран без них
+	v=""
 	if [ "$6" = happ ] && command -v jq >/dev/null 2>&1 && head -c 256 "$t" | tr -d ' \t\r\n' | grep -q '^[[{]'; then
 		jq -c '
+			def trim: tostring | explode | until(length == 0 or .[0] > 32; .[1:]) | until(length == 0 or .[-1] > 32; .[:-1]) | implode;
 			def nobal: ((.routing.balancers // []) | if type == "array" then length else 0 end) == 0;
-			def srv: select(type == "object") | select(.protocol == "vless" or .protocol == "trojan" or .protocol == "shadowsocks" or .protocol == "vmess" or .protocol == "hysteria")
-				| select(((.streamSettings.sockopt.dialerProxy // "") | tostring) == "");
+			def issrv: type == "object" and (.protocol == "vless" or .protocol == "trojan" or .protocol == "shadowsocks" or .protocol == "vmess" or .protocol == "hysteria");
+			def chained: ((.streamSettings.sockopt.dialerProxy // "") | tostring) != "";
 			def peer: if .protocol == "hysteria" then { address: .settings.address, port: .settings.port }
 				else (.settings.vnext[0] // .settings.servers[0] // (if ((.settings.address // "") | tostring) != "" then .settings else {} end)) end;
+			def host: (peer.address // "") | tostring | ascii_downcase;
+			def stub: host as $h | $h == "" or $h == "localhost" or $h == "0.0.0.0" or $h == "::" or $h == "::1" or $h == "[::1]" or ($h | startswith("127."));
 			def tpath: (.streamSettings // {}) as $s | ($s.network // "tcp") as $n
 				| if $n == "ws" then ($s.wsSettings.path // "") elif $n == "grpc" then ($s.grpcSettings.serviceName // "")
 				  elif $n == "xhttp" or $n == "splithttp" then (($s.xhttpSettings // $s.splithttpSettings // {}).path // "")
-				  elif $n == "httpupgrade" then ($s.httpupgradeSettings.path // "") else "" end | tostring;
-			def fp: peer as $p | "\(.protocol)|\(($p.address // "") | tostring | ascii_downcase)|\($p.port // 0)|\(tpath)|\(((.streamSettings.realitySettings.serverName // .streamSettings.tlsSettings.serverName // "") | tostring | ascii_downcase))";
+				  elif $n == "httpupgrade" then ($s.httpupgradeSettings.path // "") else "" end | tostring | (split("?") | .[0] // "");
+			def fp: "\(.protocol)|\(host)|\(peer.port // 0)|\(tpath)|\(((.streamSettings.realitySettings.serverName // .streamSettings.tlsSettings.serverName // "") | tostring | ascii_downcase))";
+			def ok: issrv and (chained | not) and (stub | not);
+			def main: (.outbounds // []) as $o
+				| if ($o[0] | issrv) then $o[0] else ([ $o[] | select(issrv) ] | (map(select(.tag == "proxy")) + .)[0]) end;
 			(if type == "array" then . else [.] end) | map(select(type == "object")) as $c
-			| [ $c[] | select(nobal) | (.outbounds // [])[] | srv | fp ] as $have
-			| reduce $c[] as $x ({ out: [], seen: $have };
-				if ($x | nobal) then .out += [ $x ]
-				else
+			| [ $c[] | select(nobal) | main | select(. != null and ok) | fp ] as $have
+			| reduce $c[] as $x ({ out: [], seen: [], ch: 0 };
+				(($x.remarks // "") | trim) as $nm
+				| if ($x | nobal) then
+					($x | main) as $m
+					| if $m != null and ($m | issrv) and ($m | chained) then .ch += 1
+				  elif $m == null or ($m | ok | not) then .
+					  else ($m | fp) as $k
+					  | if any(.seen[]; . == $k) then . else .seen += [ $k ] | .out += [ { remarks: $nm, outbounds: [ $m ] } ] end end
+				  else
 					([ $x.routing.balancers[] | (.selector // [])[] | tostring ] | unique) as $sel
-					| (($x.remarks // "") | tostring | gsub("^\\s+|\\s+$"; "")) as $nm
-					| [ ($x.outbounds // [])[] | srv | select(.tag as $g | ($sel | length) == 0 or any($sel[]; ($g // "" | tostring) | startswith(.))) ] as $ob
-					| reduce range(0; $ob | length) as $i (.;
-						($ob[$i] | fp) as $k
-						| if (.seen | index([ $k ])) != null then .
-						  else .seen += [ $k ] | .out += [ { remarks: ($nm + " · " + (($i + 1) | tostring)), outbounds: [ $ob[$i] ] } ] end)
-				end)
-			| .out' "$t" > "$t.f" 2>/dev/null &&
-			[ "$(jq 'length' "$t.f" 2>/dev/null)" -gt 0 ] 2>/dev/null && stl_sub_check "$t.f" && mv -f "$t.f" "$t"
-		rm -f "$t.f" "$t.f.map"
+					| [ ($x.outbounds // [])[] | select(ok) | select(.tag as $g | ($sel | length) == 0 or any($sel[]; ($g // "" | tostring) | startswith(.))) ] as $ob
+					| .i = 0
+					| reduce $ob[] as $o (.;
+						($o | fp) as $k
+						| if any(.seen[]; . == $k) or any($have[]; . == $k) then .
+						  else .i += 1 | .seen += [ $k ] | .out += [ { remarks: ((if $nm == "" then "АВТО" else $nm end) + " · " + (.i | tostring)), outbounds: [ $o ] } ] end)
+				  end)
+			| { c: .out, ch: .ch }' "$t" > "$t.j" 2>/dev/null && jq -c '.c' "$t.j" > "$t.f" 2>/dev/null &&
+			[ "$(jq 'length' "$t.f" 2>/dev/null)" -gt 0 ] 2>/dev/null && stl_sub_check "$t.f" && mv -f "$t.f" "$t" &&
+			v="$(jq '.ch' "$t.j" 2>/dev/null | tr -cd '0-9')"
+		rm -f "$t.f" "$t.f.map" "$t.j"
 	fi
+	# Отметка «скачано по-новому» (и сколько цепочек Steer не взял): по ней панель видит подписку от старой версии
+	[ "$6" = happ ] && [ -f "$ST_SUB_URL.happ" ] && printf 'chain=%s\n' "${v:-0}" > "$ST_SUB_URL.happ"
 	mv -f "$t" "$out"
 	return 0
 }
@@ -33141,7 +33165,7 @@ steer_sub_status() {
 		"$(_st_lat_mode)" "$([ -s "$ST_SUB_PING" ] && awk -F'\t' -v q='"' 'function j(s,    o, i, c, n) { o = ""; n = length(s); for (i = 1; i <= n; i++) { c = substr(s, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else if (c < " ") o = o " "; else o = o c } return o } $3 == "b" { n = j($1); printf "%s%s%s%s", (c++ ? "," : ""), q, n, q }' "$ST_SUB_PING")" \
 		"$([ -s "$ST_SUB_PING" ] && awk -F'\t' -v q='"' 'function j(s,    o, i, c, n) { o = ""; n = length(s); for (i = 1; i <= n; i++) { c = substr(s, i, 1); if (c == "\\") o = o "\\\\"; else if (c == "\"") o = o "\\\""; else if (c < " ") o = o " "; else o = o c } return o } $3 == "t" { n = j($1); printf "%s%s%s%s", (c++ ? "," : ""), q, n, q }' "$ST_SUB_PING")" \
 		"$(esc "$(head -n1 "$ST_SUB_HOME" 2>/dev/null)")" "$(_st_node_pol)" | sed '$ s/}$//'
-	printf ',"group":"%s","groups":%s,"stubs":[%s],"miss":[%s],"grp_nojq":%s,"insecure":%s,"happ":%s,"nopq":{"mode":"%s","auto":"%s","on":%s}}\n' "$(esc "$grp")" "$grps" "$stubs" "$miss" "$nojq" "$(_stl_insec "$ST_SUB" && echo true || echo false)" "$([ -f "$ST_SUB_URL.happ" ] && echo true || echo false)" \
+	printf ',"group":"%s","groups":%s,"stubs":[%s],"miss":[%s],"grp_nojq":%s,"insecure":%s,"happ":%s,"happ_chain":%s,"happ_old":%s,"nopq":{"mode":"%s","auto":"%s","on":%s}}\n' "$(esc "$grp")" "$grps" "$stubs" "$miss" "$nojq" "$(_stl_insec "$ST_SUB" && echo true || echo false)" "$([ -f "$ST_SUB_URL.happ" ] && echo true || echo false)" "$(sed -n 's/^chain=\([0-9][0-9]*\)$/\1/p' "$ST_SUB_URL.happ" 2>/dev/null | head -n1 | grep . || echo 0)" "$([ -f "$ST_SUB_URL.happ" ] && ! grep -q '^chain=' "$ST_SUB_URL.happ" 2>/dev/null && echo true || echo false)" \
 		"$(_st_nopq_mode)" "$(esc "$(head -n1 "$ST_NOPQ_AUTO" 2>/dev/null)")" "$(_st_nopq_have && echo true || echo false)"
 }
 
@@ -41886,7 +41910,8 @@ def member:
   peer as $p
   | { p: proto, h: (($p.address // "") | tostring | lc), port: (($p.port // 0) | tonumber? // 0),
       c: (cred($p) | tostring), path: tpath, sni: (sni | lc) }
-  | select(.h != "" and .port > 0);
+  | select(.h != "" and .port > 0)
+  | select((.h == "localhost" or .h == "0.0.0.0" or .h == "::" or .h == "::1" or .h == "[::1]" or (.h | startswith("127."))) | not);
 def trimmed:
   tostring | explode
   | (until(length == 0 or .[0] > 32; .[1:])) | (until(length == 0 or .[-1] > 32; .[:-1])) | implode;
@@ -51182,7 +51207,9 @@ return view.extend({
 					act('sub_happ', 'on', 'Берём узлы как у Happ');
 				} }, 'Брать узлы как у Happ') ]) ]));
 			if (subData.happ) out.push(E('div', { 'class': 'zm-hint', 'style': 'display:flex; align-items:center; gap:10px; flex-wrap:wrap' }, [
-				E('span', {}, 'Узлы берутся как у Happ — подписка качается в том виде, в каком её получает приложение Happ.' + (miss.length ? ' Не нашлись: ' + miss.join(', ') + '.' : '')),
+				E('span', {}, 'Узлы берутся как у Happ — подписка качается в том виде, в каком её получает приложение Happ, повторы убраны.' + (miss.length ? ' Не нашлись: ' + miss.join(', ') + '.' : '') +
+					(subData.happ_old ? ' Список скачан прежней версией панели — нажмите «Обновить», чтобы убрать повторы.' : '') +
+					(subData.happ_chain > 0 ? ' ' + subData.happ_chain + ' ' + plural(subData.happ_chain, 'сервер', 'сервера', 'серверов') + ' Happ ' + (subData.happ_chain == 1 ? 'ходит' : 'ходят') + ' цепочкой через другой сервер — Steer так не умеет, в списке их нет.' : '')),
 				E('button', { 'class': 'cbi-button', 'disabled': busy ? '' : null, 'click': function() { act('sub_happ', 'off', 'Возвращаем обычную подписку'); } }, 'Как обычно') ]));
 			if (L.skipped > 0) {
 				var items = sk.map(function(r) {
