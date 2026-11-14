@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.079
+# Version: 5.080
 ZM_VERSION_EOF
 set -e
 
@@ -6090,7 +6090,9 @@ _stl_t() { _zm_tmo "$@"; }
 _stl_out() { case "$1" in vpn) echo "$STL_VPN_OUT" ;; iface) echo "zm_if${ST_SEC#s}" ;; *) echo "$STL_WARP_OUT" ;; esac; }
 _stl_ver_ok() { _zm_re "$1" '^[0-9]+\.[0-9]+\.[0-9]+$' && [ "${1%%.*}" -ge 2 ]; }
 
-stl_present() { command -v steer >/dev/null 2>&1; }
+# Оболочка запоминает, где лежала команда: после удаления пакета «command -v» в том же процессе ещё находит
+# её — поэтому проверяем сам файл
+stl_present() { local p; p="$(command -v steer 2>/dev/null)" && [ -x "$p" ]; }
 stl_version() { steer --version 2>/dev/null | awk 'NR == 1 { print $2 }'; }
 stl_v2() { _stl_ver_ok "$(stl_version)"; }
 _stl_mod_x() { [ -x "$STL_SBIN/steer-$1" ] || [ -s "$STL_PLUG/$1/plugin.json" ]; }
@@ -27328,8 +27330,17 @@ _stl_plug_add() {
 _stl_purge() {
 	local was="$(stl_version)"
 	_stl_say "Снимаем ядро steer $was — новое встанет начисто, настройки Steer сохранятся"
+	local p pk="" sb
 	"$STL_INIT" stop >/dev/null 2>&1
-	stl_engine_remove $(stl_pkgs_installed) >/dev/null 2>&1
+	# Все пакеты ядра любой версии: у 2.1 это steer-core и плагины, у 2.0 — ещё отдельные пакеты модулей
+	for p in $(for m in $STL_MODS warpbox; do echo "steer-$m"; done) steer-extended steer-core steer libsteer libsteer-wolfssl; do
+		_pkg_is_installed "$p" && pk="$pk $p"
+	done
+	stl_engine_remove $pk >/dev/null 2>&1
+	# Команда осталась без пакета (остаток прошлого обновления) — убираем файл сам
+	if stl_present && ! _pkg_is_installed steer-core && ! _pkg_is_installed steer; then
+		sb="$(command -v steer)"; killall steer steerd >/dev/null 2>&1; rm -f "$sb"
+	fi
 	if stl_present; then
 		echo "ОШИБКА: прежнее ядро steer $was снять не удалось — оставляем его"
 		return 1
@@ -48102,9 +48113,10 @@ function steps(items) {
 	return E('ol', { 'class': 'zm-ts-steps' }, items.filter(Boolean).map(function(it) { return E('li', {}, [ E('div', {}, it) ]); }));
 }
 
-function code(text, okMsg) {
+function code(text, okMsg, priv) {
+	// priv — адрес своего сервера: размыт, как остальные адреса (кнопка «Скопировать» копирует как есть)
 	return E('div', { 'class': 'zm-ts-cmd' }, [
-		E('code', {}, text),
+		E('code', priv ? { 'class': 'zm-blur' } : {}, text),
 		E('button', { 'type': 'button', 'class': 'cbi-button', 'click': function() { zm.copyText(text, okMsg || 'Скопировано'); } }, 'Скопировать')
 	]);
 }
@@ -48391,7 +48403,7 @@ return view.extend({
 						[ 'Нажмите ', E('b', {}, 'Войти через LuCI'), ' — откроется ', luciWhere(), '. Перейдите на вкладку ', E('b', {}, 'Account Settings') ],
 						official()
 							? [ 'Поля ', E('b', {}, 'Custom Login Server'), ' и ', E('b', {}, 'Auth Key'), ' оставьте пустыми' ]
-							: [ 'В ', E('b', {}, 'Custom Login Server'), ' вставьте ', E('code', {}, data.server || ''), ', поле ', E('b', {}, 'Auth Key'), ' оставьте пустым' ],
+							: [ 'В ', E('b', {}, 'Custom Login Server'), ' вставьте ', E('code', {}, [ zm.secret(data.server || '') ]), ', поле ', E('b', {}, 'Auth Key'), ' оставьте пустым' ],
 						[ 'Нажмите ', E('b', {}, 'Login'), ', откройте ссылку и войдите в ', E('b', {}, 'тот же аккаунт'), official() ? ' (Google, Apple, Microsoft или GitHub), что и на телефоне' : ', что и на телефоне' ],
 						[ 'Вернитесь сюда — панель сама увидит вход и включит выход в интернет и домашнюю сеть' ]
 					]),
@@ -48483,7 +48495,7 @@ return view.extend({
 					]) : steps([
 						data.server_kind === 'routerich'
 							? [ 'Откройте ', panelLink('/machines', 'устройства в панели Routerich'), ' (вход по Management Key)' ]
-							: [ 'Откройте панель своего сервера' + (data.server ? ' (' + data.server + ')' : '') ],
+							: [ 'Откройте панель своего сервера', data.server ? [ ' (', zm.secret(data.server), ')' ] : '' ],
 						data.server_kind === 'routerich'
 							? (data.exit_want && !data.exit_ok ? [ 'У роутера ', E('b', {}, data.host || 'openwrt'), ' включите тумблер ', E('b', {}, 'Exit Node'), ' — он между кнопкой «Маршруты» и удалением, его легко не заметить' ] : [ 'Найдите роутер ', E('b', {}, data.host || 'openwrt') ])
 							: [ 'Найдите роутер ', E('b', {}, data.host || 'openwrt'), ' в списке устройств и откройте его маршруты' ],
@@ -48597,7 +48609,7 @@ return view.extend({
 				[ 'Установите приложение ', E('b', {}, 'Tailscale'), '. ' ].concat(android, [ '. ' ], iphone),
 				official()
 					? [ 'Войдите в ', E('b', {}, 'тот же аккаунт'), ', что и на роутере' + (data.tailnet ? ' (' + data.tailnet + ')' : '') ]
-					: [ 'Укажите сервер. Android: шестерёнка → ', E('b', {}, 'Accounts'), ' → «⋮» → ', E('b', {}, 'Use an alternate server'), '. iPhone: «⋯» → ', E('b', {}, 'Settings'), ' → ', E('b', {}, 'Login Server'), '. Затем войдите с ', E('b', {}, 'Device Auth Key'), ' — тем же, что и для роутера', data.server ? code(data.server, 'Адрес сервера скопирован') : E([]) ],
+					: [ 'Укажите сервер. Android: шестерёнка → ', E('b', {}, 'Accounts'), ' → «⋮» → ', E('b', {}, 'Use an alternate server'), '. iPhone: «⋯» → ', E('b', {}, 'Settings'), ' → ', E('b', {}, 'Login Server'), '. Затем войдите с ', E('b', {}, 'Device Auth Key'), ' — тем же, что и для роутера', data.server ? code(data.server, 'Адрес сервера скопирован', true) : E([]) ],
 				[ 'Откройте ', E('b', {}, 'Exit Node'), ', выберите ', host, ' и включите ', E('b', {}, 'Allow LAN access') ],
 				[ 'Включите VPN — готово. ', E('b', {}, 'Use Tailscale DNS'), ' в приложении не выключайте (по умолчанию включено)' ]
 			]));
@@ -48614,7 +48626,7 @@ return view.extend({
 			phoneCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Роутера нет в списке Exit Node? Подождите минуту после входа роутера и откройте список снова. На iPhone помогает включить и выключить «Run as Exit Node».'));
 			if (!official() && data.server) phoneCard.appendChild(E('div', { 'class': 'zm-hint' }, [
 				E('b', {}, 'Ноутбук в поездке'), ': установите Tailscale с сайта tailscale.com, выполните в терминале (Windows — PowerShell) команду ниже и введите Device Auth Key на открывшейся странице. Затем выберите ', E('b', {}, data.host || 'роутер'), ' как Exit Node.',
-				code('tailscale up --login-server=' + data.server, 'Команда скопирована'),
+				code('tailscale up --login-server=' + data.server, 'Команда скопирована', true),
 				'Ноутбук уже был в другой сети? Добавьте к команде --reset --force-reauth.'
 			]));
 			phoneCard.appendChild(E('p', { 'class': 'zm-hint' }, [ E('b', {}, 'Дома VPN Tailscale выключайте'), ' — и на телефоне, и на компьютере. В Wi-Fi роутера Steer, Forkozz и Zapret и так работают, а через Tailscale трафик идёт лишним кругом.' ]));
@@ -50826,7 +50838,7 @@ return view.extend({
 					var info = [];
 					if (t.colo) info.push('сервер ' + t.colo + (t.city ? ' (' + t.city + ')' : ''));
 					if (t.seen) info.push('сайты видят: ' + country(t.seen));
-					if (t.host) info.push(t.host + ':' + t.port);
+					if (t.host) info.push(zm.secret(t.host + ':' + t.port));
 					if (t.up) info.push('связь ' + fmtAge(t.hs_age));
 					if (t.up) info.push('↓ ' + zm.fmtSize(+t.rx || 0) + ' / ↑ ' + zm.fmtSize(+t.tx || 0));
 					warpCard.appendChild(E('div', { 'class': 'zm-row' }, [
@@ -50835,7 +50847,7 @@ return view.extend({
 						st,
 						cur,
 						fix,
-						info.length ? E('span', { 'style': 'flex:1 1 100%; order:1; min-width:0; overflow-wrap:anywhere' }, info.join(' · ')) : ''
+						info.length ? E('span', { 'style': 'flex:1 1 100%; order:1; min-width:0; overflow-wrap:anywhere' }, info.reduce(function(a, x, i) { if (i) a.push(' · '); a.push(x); return a; }, [])) : ''
 					]));
 				});
 			} else {
@@ -64266,11 +64278,11 @@ return view.extend({
 				var link, extra, outLink = '';
 				if (v.kind === 'socks') {
 					link = 'tg://socks?server=' + host + '&port=' + port;
-					extra = 'SOCKS5-адрес: ' + host + ':' + port;
+					extra = [ 'SOCKS5-адрес: ', zm.secret(host + ':' + port) ];
 				} else {
 					if (!st.secret) return;
 					link = 'tg://proxy?server=' + host + '&port=' + port + '&secret=' + st.secret;
-					extra = [ 'Хост: ' + host + '   Порт: ' + port + '   Ключ: ', zm.secret(st.secret) ];
+					extra = [ 'Хост: ', zm.secret(host), '   Порт: ' + port + '   Ключ: ', zm.secret(st.secret) ];
 					outLink = extLink(st, st.ext);
 				}
 
