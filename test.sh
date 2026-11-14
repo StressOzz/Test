@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.075
+# Version: 5.076
 ZM_VERSION_EOF
 set -e
 
@@ -1387,6 +1387,7 @@ do_steer_sub_remove() { _zmL steer2 && do_steer_sub_remove "$@"; }
 steer_sub_action() { _zmL steer2 && steer_sub_action "$@"; }
 _st_sub_auto_set() { _zmL steer2 && _st_sub_auto_set "$@"; }
 do_steer_engine() { _zmL steer2 && do_steer_engine "$@"; }
+do_steer_engine_ver() { _zmL steer2 && do_steer_engine_ver "$@"; }
 steer_sub_status() { _zmL steer2 && steer_sub_status "$@"; }
 steer_sub_tcp() { _zmL steer2 && steer_sub_tcp "$@"; }
 _st_bind() { _zmL steer2 && _st_bind "$@"; }
@@ -6059,6 +6060,9 @@ STL_STATE="${STL_STATE:-/var/lib/steer}"
 STL_PLUG="${STL_PLUG:-/usr/lib/steer/plugins}"
 STL_SEED_SPEC='{"version":2,"outputs":{"direct":{"kind":"direct"}}}'
 STL_MIN="2.0.0"
+# Ядро steer 2.0.5 — версия до перехода на плагины. Выбрана при установке — закреплена: обновлений не ищем
+STL_LEGACY="2.0.5"
+STL_PIN="$ST_DIR/engine.pin"
 STL_MODS="vless xsteer obfs tgws hysteria2 proxy"
 STL_REL_URLS="${STL_REL_URLS:-https://raw.githubusercontent.com/splify2/releases/main/version.json https://cdn.jsdelivr.net/gh/splify2/releases@main/version.json https://splify2.github.io/releases/version.json}"
 STL_PKG_URLS="${STL_PKG_URLS:-https://github.com/splify2/releases/releases/download/steer-v@V@ https://github.com/splify2/steer/releases/download/v@V@ https://gitlab.com/xyzmean/steer/-/raw/dist}"
@@ -6119,7 +6123,16 @@ _stl_rel() {
 	return 1
 }
 
+_stl_pin() { local v; v="$(head -n1 "$STL_PIN" 2>/dev/null)"; _stl_ver_ok "$v" && echo "$v"; }
+
+# Версия, до которой панель обновляет ядро: закреплённая или последняя
 stl_latest() {
+	local p
+	p="$(_stl_pin)" && { echo "$p"; return 0; }
+	stl_latest_real
+}
+
+stl_latest_real() {
 	local v="" f u
 	if [ -z "$ZM_VER_FORCE" ] && [ -s "$STL_CACHE" ] && [ -z "$(find "$STL_CACHE" -mmin +360 2>/dev/null)" ]; then cat "$STL_CACHE"; return 0; fi
 	f="$(_stl_rel)" && v="$(jsonfilter -i "$f" -e '@.products.steer.stable' 2>/dev/null)"
@@ -7689,7 +7702,7 @@ steer_action() {
 	esac
 	case "$action" in diag|wfix_tick|explain|lists_bg|lists_cron) ;; *) rm -f "$ST_VPN_PROBE" ;; esac
 	case "$action" in
-		install|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode|warp_iface|ext_pick|warp_pick|warp_remove|onfail|dnsmode|realip|cttl|torrent|quic|lan_set)
+		install|engine_ver|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode|warp_iface|ext_pick|warp_pick|warp_remove|onfail|dnsmode|realip|cttl|torrent|quic|lan_set)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
 			case "$action" in warp_iface|ext_pick|warp_restart|warp_mode|warp_own) _job_alive awg && { echo '{"error":"на вкладке AmneziaWG идёт операция — дождитесь её окончания"}'; return 1; } ;; esac
 			[ "$action" = remove ] || [ -z "$(_st_blocker)" ] || { echo '{"error":"ядро steer сейчас настраивает не Zapret Manager — панель его не трогает"}'; return 1; }
@@ -7784,7 +7797,13 @@ steer_action() {
 							job_start steer do_steer_warp_pick order "$mode" ;;
 						*) echo '{"error":"неизвестный режим"}'; return 1 ;;
 					esac ;;
-				install)       job_start steer do_steer_install ;;
+				install)
+					case "$mode" in ''|latest|legacy) ;; *) echo '{"error":"неизвестная версия ядра"}'; return 1 ;; esac
+					job_start steer do_steer_install "$mode" ;;
+				engine_ver)
+					case "$mode" in latest|legacy) ;; *) echo '{"error":"неизвестная версия ядра"}'; return 1 ;; esac
+					_st_installed || { echo '{"error":"Steer ещё не установлен"}'; return 1; }
+					job_start steer do_steer_engine_ver "$mode" ;;
 				apply|start)   job_start steer do_steer_apply ;;
 				stop)          job_start steer do_steer_stop ;;
 				remove)        job_start steer do_steer_remove ;;
@@ -22711,7 +22730,7 @@ do_versions_refresh() {
 		j="$(tgws_status)"
 		add "$(_ver_item sTGWS "$(_jf "$j" '@.version')" "$(_jf "$j" '@.latest')")"
 	fi
-	stl_present && add "$(_ver_item 'Ядро steer' "$(stl_version)" "$(_vl stl_latest)")"
+	stl_present && add "$(_ver_item 'Ядро steer' "$(stl_version)" "$(_stl_pin || _vl stl_latest)")"
 	_fk_ours && add "$(_ver_item Forkozz "$(_fk_version)" "$(_vl _fk_latest)")"
 	local v
 	[ -n "$ZM_VER_LOCAL" ] || [ -n "$(_ver_feed_latest busybox)" ] || [ -n "$(_zm_busy_job)" ] || { $UPDATE >/dev/null 2>&1; }
@@ -27173,6 +27192,24 @@ _stl_plug_add() {
 	return 0
 }
 
+# Снять ядро steer начисто: пакеты, плагины, состояние, правила — перед сменой версии (2.0.5 <-> последняя).
+# Настройки панели (/etc/zm-steer) и спека остаются; новое ядро ставится как на чистый роутер
+_stl_purge() {
+	local was="$(stl_version)"
+	_stl_say "Снимаем ядро steer $was — новое встанет начисто, настройки Steer сохранятся"
+	"$STL_INIT" stop >/dev/null 2>&1
+	stl_engine_remove $(stl_pkgs_installed) >/dev/null 2>&1
+	if stl_present; then
+		echo "ОШИБКА: прежнее ядро steer $was снять не удалось — оставляем его"
+		return 1
+	fi
+	stl_leftovers >/dev/null 2>&1
+	rm -f "$ST_DIR/core.arch"
+	[ -f "$ST_OWNED" ] && sed -i '/^pkg \(steer\|libsteer\)[a-z0-9-]*$/d' "$ST_OWNED"
+	[ -f /etc/apk/world ] && _stl_world_drop steer steer-core steer-extended libsteer libsteer-wolfssl $(for m in $STL_MODS warpbox; do printf 'steer-%s ' "$m"; done)
+	return 0
+}
+
 stl_engine_install() {
 	local ver="$1" arch m p n f mods="" pkgs files="" old="" back="" legacy="" keep="$STL_TMP/spec.keep" was_on="" rc p21="" plug="" STL_CORE_ARCH=""
 	shift
@@ -27184,10 +27221,17 @@ stl_engine_install() {
 		for n in steer steer-extended libsteer libsteer-wolfssl; do _pkg_is_installed "$n" && legacy="$legacy $n"; done
 		case " $legacy " in *" steer-extended "*) mods="$mods vless" ;; esac
 	fi
-	mods="$(for m in $mods $(_stl_mods_present); do echo "$m"; done | awk '!s[$0]++' | tr '\n' ' ')"
+	if [ -n "$STL_PURGE" ]; then
+		# Смена версии: из прежних модулей берём только протоколы подписки — остальные новой версии могут быть не нужны
+		legacy=""
+		mods="$mods $(for m in $(_stl_mods_present); do case "$m" in vless|hysteria2|proxy) printf '%s ' "$m" ;; esac; done)"
+		mods="$(for m in $mods; do echo "$m"; done | awk '!s[$0]++' | tr '\n' ' ')"
+	else
+		mods="$(for m in $mods $(_stl_mods_present); do echo "$m"; done | awk '!s[$0]++' | tr '\n' ' ')"
+	fi
 	_st_ver_lt "$ver" 2.1.0 || { p21=1; for m in $mods; do [ "$m" = tgws ] || plug="$plug $m"; done; }
 	pkgs="steer-core$([ -n "$p21" ] || for m in $mods; do printf ' steer-%s' "$m"; done)"
-	[ -z "$p21" ] && stl_v2 && _pkg_is_installed steer-extended && pkgs="$pkgs steer-extended"
+	[ -z "$p21" ] && [ -z "$STL_PURGE" ] && stl_v2 && _pkg_is_installed steer-extended && pkgs="$pkgs steer-extended"
 	if [ -n "$STL_MODS_ONLY" ] && stl_v2 && [ "$(stl_version)" = "$ver" ] && [ -n "$p21" ]; then
 		STL_NEW=""; STL_PKGS=""
 		_stl_plug_add $plug
@@ -27220,6 +27264,10 @@ stl_engine_install() {
 	case " $pkgs " in *" steer-core "*) _stl_say "Ставим ядро steer $ver: $(echo $pkgs | sed 's/ /, /g')" ;; *) _stl_say "Ставим к ядру steer $ver: $(echo $pkgs | sed 's/ /, /g')" ;; esac
 	$UPDATE >&2
 	[ -s "$STL_SPEC" ] && cp -f "$STL_SPEC" "$keep"
+	if [ -n "$STL_PURGE" ] && stl_present; then
+		_stl_purge || { rm -f $files "$keep"; [ -n "$was_on" ] && stl_restart >/dev/null 2>&1; return 1; }
+		STL_NEW="$pkgs"
+	fi
 	[ -n "$p21" ] && _stl_arch_fix
 	local seedspec=""
 	if [ -n "$p21" ] && [ ! -s "$STL_SPEC" ] && [ ! -s "$STL_YAML" ]; then
@@ -27644,7 +27692,8 @@ _stl_upd_hint() {
 	local cur new need="$1"
 	cur="$(stl_version)"
 	new="$([ -s "$STL_CACHE" ] && head -n 1 "$STL_CACHE")"
-	if _stl_ver_ok "$new" && _stl_ver_ok "$cur" && _st_ver_lt "$cur" "$new" && { [ -z "$need" ] || ! _st_ver_lt "$new" "$need"; }; then
+	if [ -n "$(_stl_pin)" ]; then echo "В закреплённом ядре steer ${cur:-$STL_LEGACY} этого нет — есть в последней версии (Steer → «Сменить версию»)"
+	elif _stl_ver_ok "$new" && _stl_ver_ok "$cur" && _st_ver_lt "$cur" "$new" && { [ -z "$need" ] || ! _st_ver_lt "$new" "$need"; }; then
 		echo "Обновите ядро steer до $new"
 	elif [ -n "$need" ]; then echo "Заработает само с ядром steer ${need%.0} — сейчас стоит ${cur:-старое}"
 	else echo "Заработает само в новой версии ядра steer"; fi
@@ -28090,16 +28139,20 @@ _st_spec_foreign() {
 }
 
 _st_install_steer() {
-	local want cur feat="$*" p
-	cur="$(stl_version)"
-	if [ -n "$STL_MODS_ONLY" ] && stl_v2; then want="$cur"; else want="$(stl_latest)"; fi
-	stl_v2 && _st_ver_lt "$want" "$cur" && want="$cur"
+	local want cur feat="$*" p pin STL_PURGE=""
+	cur="$(stl_version)"; pin="$(_stl_pin)"
+	if [ -n "$STL_MODS_ONLY" ] && stl_v2 && { [ -z "$pin" ] || [ "$cur" = "$pin" ]; }; then want="$cur"; else want="$(stl_latest)"; fi
+	[ -z "$pin" ] && stl_v2 && _st_ver_lt "$want" "$cur" && want="$cur"
+	# Версию меняем начисто: ядро другой версии снимается целиком, без смешения пакетов, плагинов и состояния
+	stl_present && [ "$cur" != "$want" ] && { [ -n "$pin" ] || { [ -n "$STL_SWITCH" ] && stl_v2 && { _st_ver_lt "$cur" 2.1.0 || _st_ver_lt "$want" "$cur"; }; }; } && STL_PURGE=1
 	[ -z "$feat" ] && [ -s "$ST_SUB" ] && feat="$(_st_sub_feats)"
 	if stl_v2 && [ "$cur" = "$want" ] && _st_feats_ok $feat; then
-		_rb_say "Ядро steer уже последней версии: $cur"
+		if [ -n "$pin" ]; then _rb_say "Ядро steer $cur уже стоит — версия закреплена, обновлений не ищем"
+		else _rb_say "Ядро steer уже последней версии: $cur"; fi
 		return 0
 	fi
-	if stl_present && ! stl_v2; then _rb_say "Ядро steer $cur — переводим на $want"
+	if [ -n "$STL_PURGE" ]; then _rb_say "Ядро steer $cur — меняем на $want$([ -n "$pin" ] && echo ' (закреплённая версия, без обновлений)')"
+	elif stl_present && ! stl_v2; then _rb_say "Ядро steer $cur — переводим на $want"
 	elif stl_present && [ "$cur" != "$want" ]; then _rb_say "Ядро steer $cur — обновляем до $want"
 	elif stl_v2; then _rb_say "Ставим модули ядра steer $cur для протоколов подписки — само ядро не трогаем"; fi
 	if ! stl_engine_install "$want" $feat; then
@@ -30113,6 +30166,14 @@ _st_selfcheck0() {
 	return $bad
 }
 
+_st_pin_set() {
+	case "$1" in
+		legacy) mkdir -p "$ST_DIR"; echo "$STL_LEGACY" > "$STL_PIN" ;;
+		latest) rm -f "$STL_PIN" ;;
+	esac
+	return 0
+}
+
 do_steer_install() {
 	local blk
 	_st_phase install
@@ -30129,8 +30190,10 @@ do_steer_install() {
 	esac
 	_ensure_deps
 	mkdir -p "$ST_DIR"
+	_st_pin_set "$1"
+	[ "$1" = legacy ] && _rb_say "Ставим ядро steer $STL_LEGACY — версия закрепляется, обновлений панель искать не будет"
 	_st_phase pkgs
-	_st_install_steer || return 1
+	STL_SWITCH=1 _st_install_steer || return 1
 	if ! command -v conntrack >/dev/null 2>&1; then
 		$INSTALL conntrack >&2 && _st_own "pkg conntrack"
 	fi
@@ -31010,7 +31073,7 @@ steer_status() {
 	_st_heal_list
 	ZM_STL_CACHE=1; STL_ST_J=""
 	stl_present && STL_ST_J="$(_stl_t 10 steer status 2>/dev/null)"
-	local running=false phase="" blk colo="" warp_up=false installed=false ver="" run=false chans=0 dns=false
+	local running=false phase="" blk colo="" warp_up=false installed=false ver="" run=false chans=0 dns=false pin="" newest=""
 	local host="" port="" hs="" age="" rx=0 tx=0 off=false svc="" id sel=" " skip w k r
 	_st_running && running=true
 	[ -f "$ST_PHASE_FILE" ] && phase=$(cat "$ST_PHASE_FILE")
@@ -31086,10 +31149,12 @@ steer_status() {
 	_st_warp_on && won=true
 	stl_v2 && { [ ! -s "$ST_SUB" ] || _st_feats_ok $(_st_sub_feats); } && ext=true
 	if [ -s "$STL_CACHE" ]; then latest="$(cat "$STL_CACHE")"
-	elif stl_present && [ -z "$(find "$JOBS_DIR/steer.latest.try" -mmin -10 2>/dev/null)" ]; then
+	elif [ -z "$(find "$JOBS_DIR/steer.latest.try" -mmin -10 2>/dev/null)" ]; then
 		: > "$JOBS_DIR/steer.latest.try"
-		( stl_latest >/dev/null 2>&1 & )
+		( stl_latest_real >/dev/null 2>&1 & )
 	fi
+	pin="$(_stl_pin)"; newest="$latest"
+	[ -n "$pin" ] && latest="$pin"
 	if [ "$run" = true ] && _st_owns "steer-spec" && stl_state "$vexit"; then
 		failed="$STL_FAILED"
 		[ "$vexit" = vpn ] || [ "$vexit" = iface ] || [ "$failed" = true ] || active="$STL_DEV"
@@ -31106,13 +31171,13 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s]}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s],"pin":"%s","newest":"%s","legacy":"%s"}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
 		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$([ -f "$ST_SUB_VIA" ] && echo true || echo false)" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_torrent)" "$(_st_quic)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
 		"$(_st_owns "pkg kmod-amneziawg" || _st_owns "pkg amneziawg-tools" && echo true || echo false)" \
 		"$(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p" | grep -cvE '^zmwarp[0-9]*$')" \
-		"$(_st_xsets_json)"
+		"$(_st_xsets_json)" "$(esc "$pin")" "$(esc "$newest")" "$STL_LEGACY"
 }
 
 _st_xsets_json() {
@@ -32769,6 +32834,29 @@ _st_sub_auto_set() {
 	/etc/init.d/cron enable >/dev/null 2>&1
 	/etc/init.d/cron restart >/dev/null 2>&1
 	printf '{"ok":true}\n'
+}
+
+do_steer_engine_ver() {
+	local was
+	_st_phase pkgs
+	rm -f "$ST_STOP_FLAG"
+	_st_installed || { echo "ОШИБКА: Steer ещё не установлен"; return 1; }
+	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: настройку ядра steer сейчас ведёт не Zapret Manager"; return 1; }
+	was="$(_stl_pin)"
+	_st_pin_set "$1"
+	[ "$1" = latest ] && rm -f "$STL_CACHE" "$JOBS_DIR/steer.latest.try"
+	_ensure_deps
+	if ! STL_SWITCH=1 _st_install_steer; then
+		if [ -n "$was" ]; then _st_pin_set legacy; else _st_pin_set latest; fi
+		stl_present || echo "!! Ядро steer не встало — нажмите «Сменить версию» ещё раз, когда появится интернет"
+		return 1
+	fi
+	if [ ! -f "$ST_OFF" ] && _st_work; then
+		_st_phase rules
+		_st_apply || return 1
+	fi
+	if [ "$1" = legacy ]; then _rb_say "Готово: ядро steer $(stl_version), версия закреплена — обновлений не будет"
+	else _rb_say "Готово: ядро steer $(stl_version) — обновления панель найдёт сама"; fi
 }
 
 do_steer_engine() {
@@ -43679,6 +43767,25 @@ function dialog(o) {
 							E('div', {}, [ E('div', { 'class': 'zm-swrow-label' }, x.label), x.hint ? E('div', { 'class': 'zm-hint' + (x.warn ? ' zm-dlg-warn' : '') }, x.hint) : E([]) ])
 						]));
 					});
+				} else if (b.type === 'cards') {
+					// Крупные карточки выбора рядом: заголовок, значок, короткий список. На телефоне — одна под другой
+					if (b.title) body.appendChild(E('div', { 'class': 'zm-dlg-title' }, b.title));
+					body.appendChild(E('div', { 'class': 'zm-dlg-cards' }, (b.options || []).map(function(x) {
+						var on = vals[b.id] === x.id;
+						return E('div', {
+							'class': 'zm-dlg-card' + (on ? ' zm-active' : '') + (x.disabled ? ' zm-dlg-card-off' : '') + (x.tone ? ' zm-dlg-card-' + x.tone : ''),
+							'role': 'radio', 'aria-checked': on ? 'true' : 'false', 'tabindex': x.disabled ? '-1' : '0',
+							'click': function() { if (x.disabled || on) return; vals[b.id] = x.id; draw(); },
+							'keydown': function(ev) { if ((ev.key === 'Enter' || ev.key === ' ') && !x.disabled) { ev.preventDefault(); vals[b.id] = x.id; draw(); } }
+						}, [
+							E('div', { 'class': 'zm-dlg-card-head' }, [
+								E('div', { 'class': 'zm-dlg-card-title' }, [ E('b', {}, x.label), x.sub ? E('span', {}, x.sub) : E([]) ]),
+								E('span', { 'class': 'zm-dlg-card-check' })
+							]),
+							x.badge ? E('span', { 'class': 'zm-dlg-card-badge' }, x.badge) : E([]),
+							E('ul', { 'class': 'zm-dlg-card-list' }, (x.points || []).map(function(t) { return E('li', {}, t); }))
+						]);
+					})));
 				} else if (b.type === 'switch') {
 					body.appendChild(swRow(!!vals[b.id], b.label, b.hint, function() { vals[b.id] = !vals[b.id]; draw(); }, b.disabled));
 				} else if (b.type === 'input') {
@@ -43698,7 +43805,7 @@ function dialog(o) {
 
 		okBtn = E('button', { 'class': 'cbi-button ' + (o.danger ? 'cbi-button-remove' : 'cbi-button-positive'), 'click': function() { if (allowed()) close(vals); } }, o.okText || 'Продолжить');
 		wrap = E('div', { 'class': 'zm-dlg-wrap', 'click': function(ev) { if (ev.target === wrap) close(null); } }, [
-			E('div', { 'class': 'zm-card zm-dlg zmw-modal' }, [
+			E('div', { 'class': 'zm-card zm-dlg zmw-modal' + (o.wide ? ' zm-dlg-wide' : '') }, [
 				E('h3', {}, o.title || ''),
 				o.intro ? E('p', { 'class': 'zm-dlg-intro' }, o.intro) : E([]),
 				body,
@@ -48679,6 +48786,7 @@ return view.extend({
 			else if (/^sub_/.test(lastAction)) msg = 'Готово';
 			else if (lastAction === 'devs_set') msg = 'Готово, выбор устройств применён';
 			else if (lastAction === 'engine') msg = 'Движок Steer обновлён';
+			else if (lastAction === 'engine_ver') msg = 'Версия ядра steer сменена';
 			else if (lastAction === 'lists_bg') msg = 'Готово, свежие списки работают';
 			else if (lastAction === 'sec_kind') msg = 'Подключение секции «' + secName(secCur) + '» применено';
 			else if (lastAction === 'sec_del') msg = 'Секция удалена';
@@ -48749,9 +48857,31 @@ return view.extend({
 				lastAction = action;
 				data.running = true;
 				setTimeout(function() { try { logEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 50);
-				data.phase = action === 'install' ? 'pkgs' : action === 'remove' ? 'remove' : /^(warp_|ext_)/.test(action) ? 'warp' : /^sub_/.test(action) ? 'sub' : action === 'engine' ? 'pkgs' : 'rules';
+				data.phase = action === 'install' ? 'pkgs' : action === 'remove' ? 'remove' : /^(warp_|ext_)/.test(action) ? 'warp' : /^sub_/.test(action) ? 'sub' : action === 'engine' || action === 'engine_ver' ? 'pkgs' : 'rules';
 				follow();
 			}).catch(function() { if (done) done(false); zm.toast('Роутер не ответил', 'error'); });
+		}
+
+		// Выбор версии ядра steer: при установке и потом — «Сменить версию». 2.0.5 закрепляется без обновлений
+		function engineDlg(sw) {
+			var leg = String(data.legacy || '2.0.5'), cur = String(data.version || ''), pinned = !!data.pin;
+			var nv = data.newest && data.newest !== leg ? String(data.newest) : '';
+			var isLeg = sw && pinned, isNew = sw && !pinned;
+			return zm.dialog({
+				wide: true,
+				title: sw ? 'Сменить версию ядра steer' : 'Какое ядро steer поставить?',
+				intro: sw ? 'Сейчас стоит ' + (cur || '—') + (pinned ? ', версия закреплена.' : '.') : 'Выбор можно поменять потом — кнопкой «Сменить версию» в карточке Steer.',
+				blocks: [
+					{ type: 'cards', id: 'v', value: sw ? (pinned ? 'latest' : 'legacy') : 'latest', options: [
+						{ id: 'latest', label: 'Последняя', sub: isNew ? 'стоит сейчас · ' + cur : nv ? 'версия ' + nv : 'новая версия', badge: isNew ? 'Стоит сейчас' : 'Рекомендуем', disabled: isNew,
+							points: [ 'Все возможности панели и свежие исправления', 'Протоколы ставятся плагинами — меньше места', 'Панель сама находит обновления' ] },
+						{ id: 'legacy', label: 'Steer ' + leg, sub: isLeg ? 'стоит сейчас' : 'прежняя версия', badge: isLeg ? 'Стоит сейчас' : 'Без обновлений', tone: 'warn', disabled: isLeg,
+							points: [ 'Версия до перехода на плагины', 'Закрепляется — обновлений не будет', 'Нет «Торренты», «QUIC» и исправлений\u00a02.1' ] }
+					] },
+					sw ? { type: 'note', text: 'Ядро снимется и встанет начисто — минута-две без туннеля. Подписка, сервисы и настройки Steer сохранятся.' } : null
+				],
+				okText: sw ? 'Сменить' : 'Установить'
+			}).then(function(v) { return v && v.v ? v.v : null; });
 		}
 
 		function warpUsers() { return secIds().filter(function(id) { return id === 'main' ? data.exit !== 'vpn' && data.exit !== 'iface' : (secObj(id) || {}).kind === 'warp'; }); }
@@ -49191,7 +49321,7 @@ return view.extend({
 			setCard.appendChild(E('p', { 'class': 'zm-hint' }, ct
 				? 'Адрес сервиса остаётся в туннеле не меньше ' + (ct >= 3600 ? 'часа' : ct / 60 + ' минут') + ' после DNS-ответа. Помогает, если приложение (Instagram, YouTube) подвисает раз в минуту: оно держит адрес дольше, чем живёт DNS-ответ, и уходило мимо туннеля.'
 				: 'Адрес сервиса живёт в туннеле столько, сколько разрешает DNS-ответ (часто минуту). Если приложение подвисает — поставьте 5 или 15 минут.'));
-			var v21 = !data.version || !verLt(String(data.version), '2.1.0'), need = v21 ? '' : ' Нужно ядро steer 2.1 — обновите его в карточке ядра.';
+			var v21 = !data.version || !verLt(String(data.version), '2.1.0'), need = v21 ? '' : data.pin ? ' В закреплённом ядре steer ' + data.version + ' этого нет — есть в последней версии («Сменить версию» в карточке Steer).' : ' Нужно ядро steer 2.1 — обновите его в карточке ядра.';
 			var tor = data.torrent || 'allow';
 			setCard.appendChild(seg('Торренты', [
 				[ tor === 'allow', 'Как весь трафик', function() { if (v21) act('torrent', 'allow', 'Торренты идут так же, как остальной трафик'); } ],
@@ -49262,7 +49392,7 @@ return view.extend({
 					info('Исключения', nd ? nd + ' ' + plural(nd, 'адрес', 'адреса', 'адресов') : 'нет'),
 					info('Мимо Steer', nb ? nb + ' ' + plural(nb, 'устройство', 'устройства', 'устройств') : 'нет устройств'),
 					data.doh ? info('Шифрованный DNS', DOHN[data.doh] || data.doh) : E([]),
-					info('Ядро steer', (data.version || '—') + (!data.ext && data.version ? ' · нужно обновить' : ''))
+					info('Ядро steer', (data.version || '—') + (data.pin ? ' · закреплена' : '') + (!data.ext && data.version ? ' · ' + (data.pin ? 'нужны модули' : 'нужно обновить') : ''))
 				])
 			]);
 		}
@@ -49325,7 +49455,10 @@ return view.extend({
 					])));
 				}
 				var newer = data.latest && data.version && verLt(data.version, data.latest);
-				mainCard.appendChild(row('Версия Steer', E('span', {}, (data.version || '—') + (newer ? ' · доступна ' + data.latest : (!data.ext && data.version ? ' · ядро нужно обновить' : '')))));
+				mainCard.appendChild(row('Версия Steer', E('span', { 'style': 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap' }, [
+					E('span', {}, (data.version || '—') + (newer ? ' · доступна ' + data.latest : (!data.ext && data.version ? ' · ' + (data.pin ? 'нужны модули' : 'ядро нужно обновить') : ''))),
+					data.pin ? badge('zm-warn', 'закреплена · без обновлений') : E([])
+				])));
 			}
 
 			if (busy) {
@@ -49343,7 +49476,9 @@ return view.extend({
 			if (!data.installed) {
 				mainCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 					E('button', { 'class': 'cbi-button cbi-button-positive', 'click': function() {
-						act('install', '', 'Устанавливаем Steer — это займёт пару минут');
+						engineDlg(false).then(function(v) {
+							if (v) act('install', v, v === 'legacy' ? 'Устанавливаем Steer ' + (data.legacy || '2.0.5') + ' — это займёт пару минут' : 'Устанавливаем Steer — это займёт пару минут');
+						});
 					} }, 'Установить')
 				]));
 				mainCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Ставится ядро steer — около минуты. Потом во вкладке «Подключение» выберите, через что пускать сервисы: VPN или WARP.'));
@@ -49360,7 +49495,12 @@ return view.extend({
 				});
 			}
 			if ((data.latest && data.version && verLt(data.version, data.latest)) || (data.version && !data.ext))
-				actions.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('engine', '', 'Обновляем движок Steer'); } }, 'Обновить движок'));
+				actions.push(E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { act('engine', '', data.pin ? 'Ставим модули ядра steer' : 'Обновляем движок Steer'); } }, data.pin ? 'Поставить модули' : 'Обновить движок'));
+			actions.push(E('button', { 'class': 'cbi-button', 'title': 'Последняя версия с обновлениями или ' + (data.legacy || '2.0.5') + ' без обновлений', 'click': function() {
+				engineDlg(true).then(function(v) {
+					if (v) act('engine_ver', v, v === 'legacy' ? 'Меняем ядро на steer ' + (data.legacy || '2.0.5') : 'Ставим последнюю версию ядра steer');
+				});
+			} }, 'Сменить версию'));
 			actions.push(E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
 				zm.dialog({ title: 'Удалить Steer?', danger: true, okText: 'Удалить Steer',
 					blocks: [ { type: 'list', title: 'Что произойдёт', items: [
@@ -59080,6 +59220,27 @@ html.zm-theme-dark .zm-ts-steps li::before { color: #58a6ff; }
 .zm-dlg-opt:hover { border-color: rgba(26,163,255,.6); }
 .zm-dlg-opt.zm-active { border-color: #1aa3ff; background: rgba(26,163,255,.08); cursor: default; }
 .zm-dlg-opt.zm-dlg-opt-off { opacity: .5; cursor: not-allowed; }
+.zm-dlg.zm-dlg-wide { max-width: 640px; }
+.zm-dlg-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 4px 0 2px; }
+.zm-dlg-card { position: relative; box-sizing: border-box; display: flex; flex-direction: column; gap: 9px; padding: 15px 16px 14px; border: 1.5px solid rgba(110,118,129,.28); border-radius: 14px; cursor: pointer; outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
+.zm-dlg-card:hover { border-color: rgba(26,163,255,.55); }
+.zm-dlg-card:focus-visible { box-shadow: 0 0 0 3px rgba(26,163,255,.28); }
+.zm-dlg-card.zm-active { border-color: #1aa3ff; background: rgba(26,163,255,.07); box-shadow: 0 0 0 1px #1aa3ff inset; cursor: default; }
+.zm-dlg-card.zm-dlg-card-off { opacity: .55; cursor: not-allowed; }
+.zm-dlg-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.zm-dlg-card-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.zm-dlg-card-title b { font-size: 16px; line-height: 1.25; }
+.zm-dlg-card-title span { font-size: 12.5px; opacity: .7; font-variant-numeric: tabular-nums; }
+.zm-dlg-card-check { flex-shrink: 0; width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(110,118,129,.55); transition: border-color .15s, background .15s; }
+.zm-dlg-card.zm-active .zm-dlg-card-check { border-color: #1aa3ff; background: #1aa3ff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.3l2.6 2.6L12 5.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
+.zm-dlg-card-badge { align-self: flex-start; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.6; background: rgba(26,163,255,.14); color: #0b7fd1; }
+.zm-dlg-card-warn .zm-dlg-card-badge { background: rgba(191,135,0,.15); color: #9a6700; }
+.zm-dlg-card-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.4; }
+.zm-dlg-card-list li { position: relative; padding-left: 16px; }
+.zm-dlg-card-list li::before { content: ""; position: absolute; left: 2px; top: .55em; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .35; }
+html.zm-theme-dark .zm-dlg-card-badge { color: #58b8ff; }
+html.zm-theme-dark .zm-dlg-card-warn .zm-dlg-card-badge { color: #e3b341; }
+@media (max-width: 560px) { .zm-dlg-cards { grid-template-columns: minmax(0, 1fr); } }
 .zm-dlg-opt .zm-hint { margin: 2px 0 0; }
 .zm-dlg-radio { width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 2px solid rgba(110,118,129,.6); flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
 .zm-dlg-opt.zm-active .zm-dlg-radio { border-color: #1aa3ff; }
