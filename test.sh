@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.076
+# Version: 5.079
 ZM_VERSION_EOF
 set -e
 
@@ -1484,6 +1484,8 @@ _fk_rs_watch() { _zmL forkozz && _fk_rs_watch "$@"; }
 _fk_fakeip_patch() { _zmL forkozz && _fk_fakeip_patch "$@"; }
 _fk_ru_watch() { _zmL forkozz && _fk_ru_watch "$@"; }
 _fk_desync_patch() { _zmL forkozz && _fk_desync_patch "$@"; }
+_fk_ksgap_patch() { _zmL forkozz && _fk_ksgap_patch "$@"; }
+_fk_ksgap_watch() { _zmL forkozz && _fk_ksgap_watch "$@"; }
 _fk_serial_patch() { _zmL forkozz && _fk_serial_patch "$@"; }
 _fk_mlkem_patch() { _zmL forkozz && _fk_mlkem_patch "$@"; }
 _fk_log_mark() { _zmL forkozz && _fk_log_mark "$@"; }
@@ -7293,7 +7295,10 @@ _st_vpn_probe() {
 		ip="$(echo "$trace" | sed -n 's/^ip=//p')"; loc="$(echo "$trace" | sed -n 's/^loc=//p')"
 		{ [ -n "$ip" ] || [ "$trace" = alive=1 ] || [ "${trace#probe=}" != "$trace" ]; } && r=ok
 		if [ "$r" = ok ] && stl_running && stl_state vpn >/dev/null 2>&1 && [ -n "$STL_KIND" ] && [ "$STL_UP" != true ]; then
-			r=stuck; ST_VPN_STUCK=1
+			# Ответил не тот путь: устройство другого протокола подписки или запасной узел пула. Ядро же
+			# говорит, что узел выхода упал, — значит, VPN не работает, и сторожу пора переходить на рабочий
+			if [ -n "$STL_NWHY" ] || [ "$STL_PSTATE" = failed ] || [ "$STL_PSTATE" = no_such_node ]; then r=fail
+			else r=stuck; ST_VPN_STUCK=1; fi
 		fi
 	fi
 	mkdir -p "$ZM_STATE_DIR"
@@ -7485,6 +7490,8 @@ _st_nopq_pid() {
 }
 _st_nopq_have() {
 	local p
+	# Без строки панели в файле запуска STEER_NOPQ у ядра взяться неоткуда — ubus и /proc не спрашиваем
+	grep -q 'zm-nopq' "$STL_INIT" 2>/dev/null || return 1
 	p="$(_st_nopq_pid)" && tr '\000' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx 'STEER_NOPQ=1'
 }
 _st_nopq_patch() {
@@ -7510,6 +7517,7 @@ _st_nopq_sync() {
 		mkdir -p "$ST_DIR"; : > "$ST_NOPQ_ON"
 	else
 		rm -f "$ST_NOPQ_ON"
+		grep -q 'zm-nopq' "$STL_INIT" 2>/dev/null || return 0
 	fi
 	stl_running && _st_nopq_pid >/dev/null || return 0
 	if [ "$want" = 1 ]; then _st_nopq_have && { rm -f "$ST_DIR/nopq.fail"; return 0; }; else _st_nopq_have || return 0; fi
@@ -8754,6 +8762,7 @@ _fk_service0() {
 	_fk_reality_patch
 	_fk_rsinit_patch
 	_fk_desync_patch
+	_fk_ksgap_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_subck_patch
@@ -13051,24 +13060,44 @@ _fk_ping_burst() {
 _fk_cpu_ticks() { awk '{ print $14 + $15 }' "/proc/$1/stat" 2>/dev/null; }
 _fk_net_bytes() { awk -F'[: ]+' 'NR > 2 && $2 != "lo" { s += $3 + $11 } END { printf "%.0f\n", s }' /proc/net/dev 2>/dev/null; }
 _fk_cpu_guard() {
-	local p n c1 c2 b1 b2 busy kb k f="$JOBS_DIR/fk.cpu"
+	local p n c1 c2 b1 b2 d1 d2 busy core kb k hot="" why="" now cnt f="$JOBS_DIR/fk.cpu" h="$ZM_STATE_DIR/fk.cpu.hist"
 	p="$(pidof $FK_SB_PROCS 2>/dev/null | awk '{ print $1 }')"
 	[ -n "$p" ] && [ -r "/proc/$p/stat" ] || { rm -f "$f"; return 0; }
 	n="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"; [ "${n:-0}" -ge 1 ] 2>/dev/null || n=1
-	c1="$(_fk_cpu_ticks "$p")"; b1="$(_fk_net_bytes)"
+	# Первые 3 минуты после старта sing-box разбирает списки и законно грузит процессор — не трогаем
+	k="$(awk -v u="$(cut -d' ' -f1 /proc/uptime 2>/dev/null)" '{ printf "%d", u - $22 / 100 }' "/proc/$p/stat" 2>/dev/null)"
+	case "$k" in ''|*[!0-9]*) ;; *) [ "$k" -lt 180 ] && { rm -f "$f"; return 0; } ;; esac
+	c1="$(_fk_cpu_ticks "$p")"; b1="$(_fk_net_bytes)"; d1="$(_fk_dl_pk)"
 	sleep 5
-	c2="$(_fk_cpu_ticks "$p")"; b2="$(_fk_net_bytes)"
+	c2="$(_fk_cpu_ticks "$p")"; b2="$(_fk_net_bytes)"; d2="$(_fk_dl_pk)"
 	case "$c1$c2$b1$b2" in ''|*[!0-9]*) return 0 ;; esac
 	busy=$(( (c2 - c1) * 100 / (500 * n) ))
+	core=$(( (c2 - c1) * 100 / 500 ))
 	kb=$(( (b2 - b1) / 5120 ))
-	if [ "$busy" -lt 70 ] || [ "$kb" -ge 512 ]; then rm -f "$f"; return 0; fi
+	# Завис: почти весь процессор без трафика — или, на многоядерном роутере, одно ядро в упор почти без трафика:
+	# зациклившийся поток sing-box грузит одно ядро, и в общем проценте (25% на 4 ядрах) его прежде не было видно
+	if [ "$busy" -ge 70 ] && [ "$kb" -lt 512 ]; then hot=1
+	elif [ "$n" -gt 1 ] && [ "$core" -ge 90 ] && [ "$kb" -lt 64 ]; then hot=1; fi
+	[ -n "$hot" ] || { rm -f "$f"; return 0; }
 	k=0; [ -f "$f" ] && read -r k < "$f"
 	case "$k" in ''|*[!0-9]*) k=0 ;; esac
 	k=$((k + 1))
-	mkdir -p "$JOBS_DIR"
+	mkdir -p "$JOBS_DIR" "$ZM_STATE_DIR"
 	[ "$k" -lt 2 ] && { echo "$k" > "$f"; return 0; }
 	rm -f "$f"
-	logger -t zapret-manager "$(_fk_name): sing-box грузит процессор на ${busy}% при трафике ${kb} КБ/с — завис, перезапускаем"
+	case "$d1$d2" in *[!0-9]*|'') ;; *) [ $((d2 - d1)) -gt 20 ] && why=", за 5 секунд отброшено $((d2 - d1)) DNS-запросов в петле" ;; esac
+	now="$(date +%s)"
+	{ awk -v t="$now" '$1 + 0 > t - 7200' "$h" 2>/dev/null; echo "$now"; } > "$h.tmp" && mv -f "$h.tmp" "$h"
+	cnt="$(grep -c . "$h" 2>/dev/null)"
+	logger -t zapret-manager "$(_fk_name): sing-box грузит процессор на ${busy}%$([ "$n" -gt 1 ] && echo " (одно ядро — ${core}%)") при трафике ${kb} КБ/с${why} — завис, перезапускаем"
+	if [ "${cnt:-0}" -ge 3 ] && [ -z "$(find "$h.note" -mmin -720 2>/dev/null)" ]; then
+		: > "$h.note"
+		if [ "$(uci -q get netshift.settings.dns_via_outbound)" = 1 ]; then
+			logger -t zapret-manager "$(_fk_name): sing-box зависает снова и снова ($cnt раза за 2 часа). Так бывает с DNS через VPN — попробуйте в настройках DNS Forkozz выключить «через VPN» или оставить один сервер"
+		else
+			logger -t zapret-manager "$(_fk_name): sing-box зависает снова и снова ($cnt раза за 2 часа) — панель каждый раз перезапускает его. Пришлите отчёт Forkozz из «Системной информации»"
+		fi
+	fi
 	_zm_run 180 /etc/init.d/netshift restart >/dev/null 2>&1
 	return 0
 }
@@ -14344,7 +14373,7 @@ _fk_dl_vals() {
 _fk_dl_live() { nft list chain inet fw4 "$FK_DL_CHAIN" >/dev/null 2>&1; }
 
 _fk_dl_load() {
-	local t="$JOBS_DIR/fk-dnsloop.nft"
+	local t="$JOBS_DIR/fk-dnsloop.nft.$$"
 	mkdir -p "$JOBS_DIR"
 	{
 		echo "add chain inet fw4 $FK_DL_CHAIN { type filter hook output priority -160; policy accept; }"
@@ -14397,12 +14426,14 @@ _fk_dnsloop_patch() {
 		rm -f "$tmp"
 	fi
 	if command -v nft >/dev/null 2>&1 && command -v fw4 >/dev/null 2>&1; then
-		tmp="$JOBS_DIR/fk-dnsloop.new"
+		# Свои временные файлы у каждого вызова: сторож и применение настроек зовут это одновременно,
+		# и общий файл один забирал у другого («mv: can't rename … fk-dnsloop.new»)
+		tmp="$JOBS_DIR/fk-dnsloop.new.$$"
 		mkdir -p "$JOBS_DIR" "${FK_DL_NFT%/*}"
 		{ echo "# Zapret Manager: Forkozz — sing-box не шлёт DNS-запросы сам себе (защита от петли)"; _fk_dl_vals; } > "$tmp" 2>/dev/null
-		t="$JOBS_DIR/fk-dnsloop.chk"
+		t="$JOBS_DIR/fk-dnsloop.chk.$$"
 		if grep -q '^chain ' "$tmp" && { echo "table inet zm_dlchk {"; cat "$tmp"; echo "}"; } > "$t" && nft -c -f "$t" >/dev/null 2>&1; then
-			if cmp -s "$tmp" "$FK_DL_NFT"; then rm -f "$tmp"; else mv -f "$tmp" "$FK_DL_NFT"; _fk_dl_drop; fi
+			if cmp -s "$tmp" "$FK_DL_NFT"; then rm -f "$tmp"; else mv -f "$tmp" "$FK_DL_NFT" 2>/dev/null; _fk_dl_drop; fi
 			nft list table inet fw4 >/dev/null 2>&1 && ! _fk_dl_live && _fk_dl_load
 			_fk_dl_live && _fk_dl_count
 		else
@@ -14601,6 +14632,100 @@ _fk_ru_watch() {
 		/etc/init.d/dnsmasq restart >/dev/null 2>&1
 	fi
 	logger -t zapret-manager "$(_fk_name): DNS провайдера для российских сайтов сменился — теперь $(printf '%s' "$now" | sed 's/ /, /g')"
+	return 0
+}
+
+_fk_ksgap_patch() {
+	local f=/usr/bin/netshift tmp a1='    if ! kill_switch_apply; then' a2='    (exec 1000>&-; list_update) &' a3='    rm -f "$TMP_RULESET_FOLDER"/*' a4='list_update)'
+	[ -f "$f" ] && [ -f /usr/lib/netshift/kill_switch.sh ] || return 0
+	grep -q '^# ZM_KSGAP 1$' "$f" && return 0
+	[ "$(grep -cxF "$a1" "$f")" = 1 ] && [ "$(grep -cxF "$a2" "$f")" = 1 ] && [ "$(grep -cxF "$a3" "$f")" = 1 ] && [ "$(grep -cxF "$a4" "$f")" = 1 ] || return 0
+	grep -q '^kill_switch_load_elements() {$' /usr/lib/netshift/kill_switch.sh && grep -q '^kill_switch_read_set() {$' /usr/lib/netshift/kill_switch.sh || return 0
+	tmp="$f.zm-ksgap"
+	cat > "$tmp.fn" << 'ZM_FK_KSGAP_EOF'
+# ZM_KSGAP 1
+# Защита от утечек при запуске. Списки сервисов (подсети и домены) грузит list_update уже ПОСЛЕ старта sing-box:
+# защита, собранная заново без них, и пустые списки открывали окно, в которое сайты уходили напрямую мимо VPN.
+# Теперь до конца загрузки списков прежняя защита (или её копия с прошлого запуска) остаётся в силе, списки
+# доменов не стираются при остановке, а точная защита собирается, когда списки загрузились
+ZM_KS_STALE=/var/run/netshift-zm-guard.stale
+ZM_KS_SNAP=/var/run/netshift-zm-guard
+zm_ks_opt() { [ "$(uci -q get netshift.settings.block_leaks)" = 1 ]; }
+zm_ks_add() {
+    local zm_f
+    nft list set inet "$NFT_GUARD_TABLE_NAME" "$NFT_GUARD_SUBNET_SET_NAME" > /dev/null 2>&1 || return 0
+    zm_f="$(mktemp)" || return 0
+    kill_switch_read_set "$NFT_TABLE_NAME" "$NFT_COMMON_SET_NAME" > "$zm_f"
+    [ -s "$ZM_KS_SNAP.4" ] && cat "$ZM_KS_SNAP.4" >> "$zm_f"
+    sort -u "$zm_f" -o "$zm_f"
+    kill_switch_load_elements "$NFT_GUARD_SUBNET_SET_NAME" "$zm_f" > /dev/null 2>&1
+    if netshift_ipv6_enabled && nft list set inet "$NFT_GUARD_TABLE_NAME" "$NFT_GUARD_SUBNET_SET_NAME_V6" > /dev/null 2>&1; then
+        kill_switch_read_set "$NFT_TABLE_NAME" "$NFT_COMMON_SET_NAME_V6" > "$zm_f"
+        [ -s "$ZM_KS_SNAP.6" ] && cat "$ZM_KS_SNAP.6" >> "$zm_f"
+        sort -u "$zm_f" -o "$zm_f"
+        kill_switch_load_elements "$NFT_GUARD_SUBNET_SET_NAME_V6" "$zm_f" > /dev/null 2>&1
+    fi
+    rm -f "$zm_f"
+    return 0
+}
+zm_ks_start_apply() {
+    if kill_switch_enabled && nft list table inet "$NFT_GUARD_TABLE_NAME" > /dev/null 2>&1; then
+        zm_ks_add
+        : > "$ZM_KS_STALE"
+        log "block_leaks: the previous guard stays armed until the lists are loaded" "info"
+        return 0
+    fi
+    kill_switch_apply || return 1
+    kill_switch_enabled || return 0
+    if [ -s "$ZM_KS_SNAP.4" ] || [ -s "$ZM_KS_SNAP.6" ]; then
+        zm_ks_add
+        : > "$ZM_KS_STALE"
+        log "block_leaks: the guard keeps the subnets of the previous run until the lists are loaded" "info"
+    fi
+    return 0
+}
+zm_ks_exact() {
+    if ! kill_switch_enabled; then
+        rm -f "$ZM_KS_STALE" "$ZM_KS_SNAP.4" "$ZM_KS_SNAP.6"
+        return 0
+    fi
+    if [ -f "$ZM_KS_STALE" ] || [ "$1" = force ]; then
+        kill_switch_apply || return 1
+        rm -f "$ZM_KS_STALE"
+    fi
+    nft list table inet "$NFT_GUARD_TABLE_NAME" > /dev/null 2>&1 || return 0
+    kill_switch_read_set "$NFT_GUARD_TABLE_NAME" "$NFT_GUARD_SUBNET_SET_NAME" > "$ZM_KS_SNAP.4.tmp" && mv -f "$ZM_KS_SNAP.4.tmp" "$ZM_KS_SNAP.4"
+    if netshift_ipv6_enabled; then
+        kill_switch_read_set "$NFT_GUARD_TABLE_NAME" "$NFT_GUARD_SUBNET_SET_NAME_V6" > "$ZM_KS_SNAP.6.tmp" && mv -f "$ZM_KS_SNAP.6.tmp" "$ZM_KS_SNAP.6"
+    fi
+    return 0
+}
+ZM_FK_KSGAP_EOF
+	awk -v bf="$tmp.fn" -v a1="$a1" -v a2="$a2" -v a3="$a3" -v a4="$a4" '
+		NR == 1 { print; while ((getline l < bf) > 0) print l; next }
+		$0 == a1 { print "    if ! zm_ks_start_apply; then"; c++; next }
+		$0 == a2 { print "    (exec 1000>&-; list_update && zm_ks_exact) &"; c++; next }
+		$0 == a3 { print "    zm_ks_opt || rm -f \"$TMP_RULESET_FOLDER\"/*"; c++; next }
+		$0 == a4 { print "zm_ks_exact)"; print "    zm_ks_exact \"$2\""; print "    ;;"; print; getline; print "    list_update && zm_ks_exact"; c++; next }
+		{ print }
+		END { exit c == 4 ? 0 : 1 }' "$f" > "$tmp" &&
+	sh -n "$tmp" && chmod 0755 "$tmp" && mv -f "$tmp" "$f" &&
+	logger -t zapret-manager "$(_fk_name): защита от утечек держится, пока после запуска грузятся списки сервисов — окно утечки при включении закрыто"
+	rm -f "$tmp" "$tmp.fn"
+	return 0
+}
+
+# Если списки после запуска так и не загрузились (нет GitHub), защита остаётся расширенной — сервисы закрыты, а не
+# уходят напрямую. Через полчаса собираем её точно по тому, что есть, чтобы не держать закрытым лишнее
+_fk_ksgap_watch() {
+	local st=/var/run/netshift-zm-guard.stale
+	[ -f "$st" ] && [ -n "$(find "$st" -mmin +30 2>/dev/null)" ] || return 0
+	_fk_up || return 0
+	[ -f /var/run/netshift_list_update.pid ] && kill -0 "$(cat /var/run/netshift_list_update.pid 2>/dev/null)" 2>/dev/null && return 0
+	grep -q '^zm_ks_exact)$' /usr/bin/netshift 2>/dev/null || return 0
+	logger -t zapret-manager "$(_fk_name): списки сервисов после запуска так и не загрузились — собираем защиту от утечек по тому, что есть"
+	_zm_run 120 /usr/bin/netshift zm_ks_exact force >/dev/null 2>&1
+	rm -f "$st"
 	return 0
 }
 
@@ -15372,6 +15497,7 @@ do_fk_install() {
 	_fk_reality_patch
 	_fk_rsinit_patch
 	_fk_desync_patch
+	_fk_ksgap_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_updl_patch
@@ -15723,6 +15849,7 @@ do_fk_lists() {
 	_fk_reality_patch
 	_fk_rsinit_patch
 	_fk_desync_patch
+	_fk_ksgap_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_updl_patch
@@ -15895,6 +16022,7 @@ do_fk_subs() {
 	_fk_reality_patch
 	_fk_rsinit_patch
 	_fk_desync_patch
+	_fk_ksgap_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_updl_patch
@@ -16466,6 +16594,7 @@ forkop_action() {
 			_fk_reality_patch
 			_fk_rsinit_patch
 			_fk_desync_patch
+			_fk_ksgap_patch
 		_fk_fakeip_patch
 			grep -q '^# ZM_REALITY 1$' /usr/bin/netshift 2>/dev/null || { echo '{"error":"эта версия Forkozz не даёт менять настройки REALITY — обновите Forkozz"}'; return 1; }
 			b="$(printf '%s' "$arg" | _fk_ucj rlnode)"
@@ -16664,6 +16793,7 @@ zm_watch() {
 		_fk_reality_patch
 		_fk_rsinit_patch
 		_fk_desync_patch
+		_fk_ksgap_patch
 		_fk_dnslan_patch
 		_fk_dnsloop_patch
 		_fk_fakeip_patch
@@ -16683,6 +16813,7 @@ zm_watch() {
 	_ft_zapret_sync
 	_zp_rsp_sync >/dev/null 2>&1
 	_fk_installed && ! _fk_foreign && _fk_rl_watch
+	_fk_installed && ! _fk_foreign && _fk_ksgap_watch
 	_st_colo_guard
 	_st_vpn_watch
 	_st_secs_vpn_watch
@@ -30175,7 +30306,7 @@ _st_pin_set() {
 }
 
 do_steer_install() {
-	local blk
+	local blk rc
 	_st_phase install
 	rm -f "$ST_STOP_FLAG"
 	rm -f "$ST_HEAL_STAMP"
@@ -30193,7 +30324,8 @@ do_steer_install() {
 	_st_pin_set "$1"
 	[ "$1" = legacy ] && _rb_say "Ставим ядро steer $STL_LEGACY — версия закрепляется, обновлений панель искать не будет"
 	_st_phase pkgs
-	STL_SWITCH=1 _st_install_steer || return 1
+	STL_SWITCH=1; _st_install_steer; rc=$?; STL_SWITCH=""
+	[ "$rc" = 0 ] || return 1
 	if ! command -v conntrack >/dev/null 2>&1; then
 		$INSTALL conntrack >&2 && _st_own "pkg conntrack"
 	fi
@@ -31757,6 +31889,10 @@ _st_grp_has() { [ -n "$1" ] && [ -s "$ST_SUB_GRPS" ] && ZM_W="$1" awk -F'\t' '$1
 
 _st_grp_cur() { local g; g="$(head -n1 "$ST_SUB_GRP" 2>/dev/null)"; [ -n "$g" ] && _st_grp_has "$g" && printf '%s' "$g"; }
 
+# Узлы группы АВТО: сервер балансировщика из ответа для Happ (протокол|адрес|порт|путь|SNI) ищем среди узлов
+# подписки. Несколько серверов часто сидят на одном адресе и порту (вход через общий ретранслятор) и
+# различаются путём или SNI — поэтому сверяем и их. Чужой путь или SNI — не тот сервер. Если путь и SNI ничего
+# не решают, берём узел только когда он на этом адресе и порту один: лучше не показать, чем показать не тот
 _st_grp_ids() {
 	[ -s "$ST_SUB.map" ] && [ -s "$ST_SUB_GRPS" ] || return 0
 	LC_ALL=C ZM_W="$1" awk -F'\t' -v G="$ST_SUB_GRPS" -v M="$ST_SUB.map" -v S="$ST_SUB" '
@@ -31777,25 +31913,52 @@ _st_grp_ids() {
 		}
 		BEGIN {
 			while ((getline l < G) > 0) { split(l, a, "\t"); GN[a[1]] = 1; if (a[1] == ENVIRON["ZM_W"]) { nm = split(a[3], W, " ") } }
-			while ((getline l < M) > 0) { split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] }
-			ln = 0; while ((getline l < S) > 0) { ln++; if (ln in K) { pt = qv(l, "path"); if (pt == "") pt = qv(l, "serviceName"); sub(/\?.*$/, "", pt); gsub(/ /, "%20", pt); P[ln] = pt } }
+			while ((getline l < M) > 0) { nb = split(l, b, "\t"); K[b[1]] = b[2] "|" tolower(b[3]) "|" b[4]; if (nb >= 6) { P[b[1]] = b[5]; SN[b[1]] = tolower(b[6]) } }
+			ln = 0; js = 0
+			while ((getline l < S) > 0) {
+				ln++; if (ln == 1 && l ~ /^[ \t]*[[{]/) js = 1
+				if (js || !(ln in K)) continue
+				pt = qv(l, "path"); if (pt == "") pt = qv(l, "serviceName"); sub(/\?.*$/, "", pt); gsub(/ /, "%20", pt); P[ln] = pt
+				sn = qv(l, "sni"); if (sn == "") sn = qv(l, "peer"); SN[ln] = tolower(sn)
+			}
 		}
-		{ r++; id[r] = $1; lk[r] = ($9 in K) ? K[$9] : ""; sk[r] = lk[r] "|" P[$9]; ar[r] = (index($5, "\342\254\207") || index($5, "\342\254\206")) ? 1 : 0; bn = $5; gs[r] = (($5 in GN) || (sub(/ \([0-9]+\)$/, "", bn) && (bn in GN))) ? 1 : 0 }
+		{
+			r++; id[r] = $1; lk[r] = ($9 in K) ? K[$9] : ""; pa[r] = P[$9]; sa[r] = SN[$9]
+			ar[r] = (index($5, "\342\254\207") || index($5, "\342\254\206")) ? 1 : 0
+			bn = $5; gs[r] = 0; gn[r] = (($5 in GN) || (sub(/ \([0-9]+\)$/, "", bn) && (bn in GN))) ? 1 : 0
+		}
 		END {
 			for (j = 1; j <= nm; j++) {
-				m = W[j]; x = m; sub(/\|[^|]*$/, "", x); pa = 0
-				if (split(m, z, "|") >= 4 && z[4] != "") for (i = 1; i <= r; i++) if (sk[i] == m && !gs[i] && !ar[i]) { pa = i; break }
-				if (!pa) for (i = 1; i <= r; i++) if (lk[i] != "" && lk[i] == x && !gs[i] && !ar[i]) { pa = i; break }
-				if (pa) on[pa] = 1
+				split(W[j], z, "|"); x = z[1] "|" z[2] "|" z[3]; mp = z[4]; ms = tolower(z[5])
+				best = 0; bs = -1; cnt = 0
+				for (i = 1; i <= r; i++) {
+					if (lk[i] == "" || lk[i] != x || gs[i] || ar[i]) continue
+					if (mp != "" && pa[i] != "" && mp != pa[i]) continue
+					if (ms != "" && sa[i] != "" && ms != sa[i]) continue
+					# При равенстве берём сервер с собственным именем, а не строку с именем группы
+					cnt++; sc = ((mp != "" && mp == pa[i]) * 2 + (ms != "" && ms == sa[i])) * 2 + !gn[i]
+					if (sc > bs) { bs = sc; best = i }
+				}
+				if (best && (bs > 1 || cnt == 1)) on[best] = 1
 			}
 			for (i = 1; i <= r; i++) if (on[i]) print id[i]
 		}' "$2"
 }
 
+# Узлы-копии групп АВТО, которые прячем: только у подписки JSON Xray — там ядро steer превращает каждый сервер
+# балансировщика в узел «Группа», «Группа (2)»… Строка подписки из ссылок с именем группы — настоящий сервер
+# (так панель провайдера отдаёт группу приложениям без балансировщиков): её показываем, как любой узел
 _st_stub_ids() {
-	[ -s "$ST_SUB.map" ] || return 0
-	LC_ALL=C awk -F'\t' -v G="$ST_SUB_GRPS" 'BEGIN { while ((getline l < G) > 0) { split(l, a, "\t"); GN[a[1]] = 1 } }
-		{ b = $5; if (b in GN) { print $1; next } if (sub(/ \([0-9]+\)$/, "", b) && (b in GN)) print $1 }' "$1"
+	[ -s "$ST_SUB.map" ] && [ -s "$ST_SUB_GRPS" ] || return 0
+	head -c 256 "$ST_SUB" 2>/dev/null | tr -d ' \t\r\n' | grep -q '^[[{]' || return 0
+	# Копию прячем, только если тот же сервер (адрес, порт, путь, SNI) есть в списке под своим именем
+	LC_ALL=C awk -F'\t' -v G="$ST_SUB_GRPS" -v M="$ST_SUB.map" '
+		BEGIN {
+			while ((getline l < G) > 0) { split(l, a, "\t"); GN[a[1]] = 1 }
+			while ((getline l < M) > 0) { split(l, b, "\t"); FK[b[1]] = b[2] "|" tolower(b[3]) "|" b[4] "|" b[5] "|" tolower(b[6]) }
+		}
+		{ r++; id[r] = $1; k[r] = ($9 in FK) ? FK[$9] : ""; nn = $5; cp[r] = (($5 in GN) || (sub(/ \([0-9]+\)$/, "", nn) && (nn in GN))) ? 1 : 0; if (!cp[r] && k[r] != "") own[k[r]] = 1 }
+		END { for (i = 1; i <= r; i++) if (cp[i] && k[i] != "" && (k[i] in own)) print id[i] }' "$1"
 }
 
 _st_happ_miss() {
@@ -31830,7 +31993,7 @@ _st_report() {
 	ids="$(cut -f1,5 "$t" | _zm_excl_hits "$ST_SUB_EXCL" "$ST_SUB_HIDE" | tr '\n' ' ')"
 	[ -n "$ids" ] && echo "Скрыты фильтром: $ids"
 	ids="$(_st_stub_ids "$t" | tr '\n' ' ')"
-	[ -n "$ids" ] && echo "Заглушки групп (не показаны): $ids"
+	[ -n "$ids" ] && echo "Копии серверов из групп (не показаны): $ids"
 	if [ -s "$ST_SUB_GRPS" ]; then
 		echo "Группы АВТО из ответа для Happ:"
 		while IFS="$(printf '\t')" read -r g _ f || [ -n "$g" ]; do
@@ -31862,11 +32025,11 @@ _st_grps_json() {
 
 _st_autogrp_sync() {
 	local quiet="$1" u t="$ST_RUN/ag.$$" n g dv
-	[ -s "$ST_SUB_URL" ] || { rm -f "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.all" "$ST_SUB_GRP"; return 0; }
+	[ -s "$ST_SUB_URL" ] || { rm -f "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.all" "$ST_SUB_GRPS.v2" "$ST_SUB_GRP"; return 0; }
 	[ -s "$ZM_AG_JQ" ] || return 0
 	u="$(head -n1 "$ST_SUB_URL")"
 	mkdir -p "$ST_RUN" "$ST_VDIR"
-	: > "$ST_SUB_GRPS.chk"
+	: > "$ST_SUB_GRPS.chk"; : > "$ST_SUB_GRPS.v2"
 	[ -f "$ST_SUB_GRPS.all" ] || : > "$ST_SUB_GRPS.all"
 	dv=""; [ -f "$ST_SUB_VIA" ] && dv="$(_st_sub_via_pick 2>/dev/null)" && dv="${dv%%|*}"
 	rm -f "$t"
@@ -31886,7 +32049,7 @@ _st_autogrp_sync() {
 	fi
 	rm -f "$ST_SUB_GRPS.nojq"
 	if jq -c -f "$ZM_AG_JQ" "$t" > "$t.j" 2>/dev/null; then
-		jq -r '.groups[] | [ .name, ((.iv // 0) | tostring), ([ .m[] | "\(.p)|\(.h)|\(.port)|\(.path | split(" ") | join("%20"))" ] | reduce .[] as $k ([]; if index([$k]) == null then . + [$k] else . end) | join(" ")) ] | @tsv' "$t.j" > "$t.g" 2>/dev/null
+		jq -r '.groups[] | [ .name, ((.iv // 0) | tostring), ([ .m[] | "\(.p)|\(.h)|\(.port)|\(.path | split(" ") | join("%20"))|\(.sni | split(" ") | join(""))" ] | reduce .[] as $k ([]; if index([$k]) == null then . + [$k] else . end) | join(" ")) ] | @tsv' "$t.j" > "$t.g" 2>/dev/null
 		jq -r '(.all // [])[] | [ .name, (.k | join(" ")) ] | @tsv' "$t.j" > "$t.a" 2>/dev/null || : > "$t.a"
 	else
 		: > "$t.g"; : > "$t.a"
@@ -31909,7 +32072,7 @@ _st_autogrp_sync() {
 
 _st_autogrp_bg() {
 	[ -s "$ST_SUB_URL" ] && [ -s "$ZM_AG_JQ" ] || return 0
-	[ -f "$ST_SUB_GRPS.chk" ] && [ -f "$ST_SUB_GRPS.all" ] && [ ! "$ST_SUB" -nt "$ST_SUB_GRPS.chk" ] && return 0
+	[ -f "$ST_SUB_GRPS.chk" ] && [ -f "$ST_SUB_GRPS.all" ] && [ -f "$ST_SUB_GRPS.v2" ] && [ ! "$ST_SUB" -nt "$ST_SUB_GRPS.chk" ] && return 0
 	[ -n "$(find "$ST_SUB_GRPS.chk" -mmin -30 2>/dev/null)" ] && return 0
 	mkdir -p "$ST_VDIR"; : > "$ST_SUB_GRPS.chk"
 	( _st_autogrp_sync quiet >/dev/null 2>&1 ) >/dev/null 2>&1 </dev/null &
@@ -32127,8 +32290,13 @@ _st_json_map() {
 		| select($p == "vless" or $p == "trojan" or $p == "shadowsocks" or $p == "hysteria2" or $p == "vmess" or $p == "socks" or $p == "http")
 		| (if .protocol == "hysteria" then { address: .settings.address, port: .settings.port }
 		   else (.settings.vnext[0] // .settings.servers[0] // (if ((.settings.address // "") | tostring) != "" then .settings else {} end)) end) as $s
-		| { p: $p, h: (($s.address // "") | tostring | ascii_downcase), port: (($s.port // 0) | tostring) } | select(.h != "") ]
-		| to_entries[] | "\(.key + 1)\t\(.value.p)\t\(.value.h)\t\(.value.port)"' "$1" > "$1.map.j" 2>/dev/null &&
+		| (.streamSettings // {}) as $t | ($t.network // "tcp") as $n
+		| (if $n == "ws" then ($t.wsSettings.path // "") elif $n == "grpc" then ($t.grpcSettings.serviceName // "")
+		   elif $n == "xhttp" or $n == "splithttp" then (($t.xhttpSettings // $t.splithttpSettings // {}).path // "")
+		   elif $n == "httpupgrade" then ($t.httpupgradeSettings.path // "") else "" end | tostring | sub("\\?.*$"; "") | gsub(" "; "%20")) as $path
+		| (($t.realitySettings.serverName // $t.tlsSettings.serverName // "") | tostring | ascii_downcase | gsub("[\t ]"; "")) as $sni
+		| { p: $p, h: (($s.address // "") | tostring | ascii_downcase), port: (($s.port // 0) | tostring), path: $path, sni: $sni } | select(.h != "") ]
+		| to_entries[] | "\(.key + 1)\t\(.value.p)\t\(.value.h)\t\(.value.port)\t\(.value.path)\t\(.value.sni)"' "$1" > "$1.map.j" 2>/dev/null &&
 		[ -s "$1.map.j" ] && mv -f "$1.map.j" "$1.map"
 	rm -f "$1.map.j"
 	return 0
@@ -32178,7 +32346,9 @@ _st_sub_via_pick() {
 _st_sub_get() {
 	local c dv lb
 	if [ -f "$ST_SUB_URL.happ" ] && c="$(_zm_bin curl)"; then
-		command -v jq >/dev/null 2>&1 || _zm_pkg_add jq >/dev/null 2>&1
+		if ! command -v jq >/dev/null 2>&1 && [ -z "$(find "$JOBS_DIR/jq.try" -mmin -360 2>/dev/null)" ]; then
+			mkdir -p "$JOBS_DIR"; : > "$JOBS_DIR/jq.try"; _zm_pkg_add jq >/dev/null 2>&1
+		fi
 		dv=""; lb=""
 		[ -f "$ST_SUB_VIA" ] && dv="$(_st_sub_via_pick 2>/dev/null)" && { lb="${dv#*|}"; dv="${dv%%|*}"; }
 		echo "   · Подписку качаем как для Happ${lb:+ через $lb}"
@@ -32249,10 +32419,35 @@ _st_sub_curl() {
 	esac
 	STL_SUB_TITLE="$(printf '%s' "$x" | tr -d '\000-\037"\\' | cut -c1-120)"
 	rm -f "$h"
-	# Как для Happ: конфиги с балансировщиком — это группы АВТО (их панель берёт отдельно), а не серверы,
-	# в списке узлов они дали бы копии серверов. Убираются, если без них остаются пригодные узлы
+	# Как для Happ: конфиг с балансировщиком — это группа АВТО (её панель берёт отдельно). Его серверы, которых
+	# нет отдельными конфигами, становятся узлами «Группа · 1», «Группа · 2»; уже знакомые отдельные серверы не
+	# дублируются. Так в списке все серверы подписки и ни одного повтора
 	if [ "$6" = happ ] && command -v jq >/dev/null 2>&1 && head -c 256 "$t" | tr -d ' \t\r\n' | grep -q '^[[{]'; then
-		jq -c '(if type == "array" then . else [.] end) | [ .[] | select(type == "object") | select(((.routing.balancers // []) | if type == "array" then length else 0 end) == 0) ]' "$t" > "$t.f" 2>/dev/null &&
+		jq -c '
+			def nobal: ((.routing.balancers // []) | if type == "array" then length else 0 end) == 0;
+			def srv: select(type == "object") | select(.protocol == "vless" or .protocol == "trojan" or .protocol == "shadowsocks" or .protocol == "vmess" or .protocol == "hysteria")
+				| select(((.streamSettings.sockopt.dialerProxy // "") | tostring) == "");
+			def peer: if .protocol == "hysteria" then { address: .settings.address, port: .settings.port }
+				else (.settings.vnext[0] // .settings.servers[0] // (if ((.settings.address // "") | tostring) != "" then .settings else {} end)) end;
+			def tpath: (.streamSettings // {}) as $s | ($s.network // "tcp") as $n
+				| if $n == "ws" then ($s.wsSettings.path // "") elif $n == "grpc" then ($s.grpcSettings.serviceName // "")
+				  elif $n == "xhttp" or $n == "splithttp" then (($s.xhttpSettings // $s.splithttpSettings // {}).path // "")
+				  elif $n == "httpupgrade" then ($s.httpupgradeSettings.path // "") else "" end | tostring;
+			def fp: peer as $p | "\(.protocol)|\(($p.address // "") | tostring | ascii_downcase)|\($p.port // 0)|\(tpath)|\(((.streamSettings.realitySettings.serverName // .streamSettings.tlsSettings.serverName // "") | tostring | ascii_downcase))";
+			(if type == "array" then . else [.] end) | map(select(type == "object")) as $c
+			| [ $c[] | select(nobal) | (.outbounds // [])[] | srv | fp ] as $have
+			| reduce $c[] as $x ({ out: [], seen: $have };
+				if ($x | nobal) then .out += [ $x ]
+				else
+					([ $x.routing.balancers[] | (.selector // [])[] | tostring ] | unique) as $sel
+					| (($x.remarks // "") | tostring | gsub("^\\s+|\\s+$"; "")) as $nm
+					| [ ($x.outbounds // [])[] | srv | select(.tag as $g | ($sel | length) == 0 or any($sel[]; ($g // "" | tostring) | startswith(.))) ] as $ob
+					| reduce range(0; $ob | length) as $i (.;
+						($ob[$i] | fp) as $k
+						| if (.seen | index([ $k ])) != null then .
+						  else .seen += [ $k ] | .out += [ { remarks: ($nm + " · " + (($i + 1) | tostring)), outbounds: [ $ob[$i] ] } ] end)
+				end)
+			| .out' "$t" > "$t.f" 2>/dev/null &&
 			[ "$(jq 'length' "$t.f" 2>/dev/null)" -gt 0 ] 2>/dev/null && stl_sub_check "$t.f" && mv -f "$t.f" "$t"
 		rm -f "$t.f" "$t.f.map"
 	fi
@@ -32475,17 +32670,21 @@ _st_vpn_heal() {
 	local pinned who
 	if stl_running && _st_vpn_probe >/dev/null 2>&1; then echo "[ OK ] VPN уже работает — чинить нечего"; return 0; fi
 	who="VPN"; [ -n "$ST_SEC" ] && who="VPN секции «$(_st_sec_name "$ST_SEC")»"
+	pinned="$(cat "$ST_SUB_NODE" 2>/dev/null)"
+	# Закреплённый узел упал — сначала переходим на рабочий (как задано в «Если узел не отвечает»), что бы ни
+	# показала проверка: перезапуск ядра или перечитывание правил узел не оживят
+	if [ -n "$pinned" ] && [ "$(_st_node_pol)" != hold ] && stl_running && stl_state vpn >/dev/null 2>&1 && _st_node_down; then
+		_rb_warn "$who не отвечает: не отвечает выбранный узел «$pinned»${STL_NWHY:+ ($STL_NWHY)}"
+		if _st_node_failover; then _st_vpn_probe >/dev/null 2>&1; echo "[ OK ] $who работает через другой узел"; return 0; fi
+		echo "[FAIL] $who: рабочего узла пока нет — ядро steer продолжит перебирать узлы, панель проверит ещё раз"
+		return 1
+	fi
 	if stl_running && _st_others_alive; then
 		if [ -n "$ST_VPN_STUCK" ]; then
 			_rb_warn "$who отвечает, но трафик сервисов в него не вернулся — перечитываем правила Steer, не перезапуская его: другие секции работают"
 			stl_reload
 			sleep 3
 			_st_vpn_probe >/dev/null 2>&1 && { echo "[ OK ] $who снова работает"; return 0; }
-		else
-			pinned="$(cat "$ST_SUB_NODE" 2>/dev/null)"
-			if [ -n "$pinned" ] && stl_state vpn >/dev/null 2>&1 && _st_node_down && [ "$(_st_node_pol)" != hold ]; then
-				_st_node_failover >/dev/null 2>&1 && { _st_vpn_probe >/dev/null 2>&1; echo "[ OK ] $who работает через другой узел"; return 0; }
-			fi
 		fi
 		_rb_warn "$who не отвечает, а другие секции работают — Steer целиком не перезапускаем, чтобы не оборвать их. Сервисы, выбранные и в других секциях, идут через них, а эту секцию панель проверит ещё раз позже"
 		logger -t zapret-manager "Steer: $who не отвечает — другие секции работают, службу не перезапускаем"
@@ -32501,13 +32700,10 @@ _st_vpn_heal() {
 		echo "[FAIL] После перезапуска Steer трафик в VPN так и не пошёл — панель повторит попытку позже"
 		return 1
 	fi
-	pinned="$(cat "$ST_SUB_NODE" 2>/dev/null)"
+	# Держим выбранный узел («Держать выбранный»): ядро исправно, перезапуск узел не оживит
 	if [ -n "$pinned" ] && stl_running && stl_state vpn >/dev/null 2>&1 && _st_node_down; then
-		_rb_warn "VPN не отвечает: не отвечает выбранный узел «$pinned»${STL_NWHY:+ ($STL_NWHY)} — ядро steer исправно, перезапускать его незачем"
-		_st_node_failover && { _st_vpn_probe >/dev/null 2>&1; echo "[ OK ] VPN работает через другой узел"; return 0; }
-		[ "$(_st_node_pol)" = hold ] && return 0
-		echo "[FAIL] VPN не поднялся — ни один узел подписки не отвечает"
-		return 1
+		_st_node_failover
+		return 0
 	fi
 	_rb_say "VPN не отвечает — перезапускаем Steer"
 	logger -t zapret-manager "Steer: VPN не отвечает — перезапускаем службу"
@@ -32574,7 +32770,7 @@ do_steer_sub_remove() {
 	_st_phase sub
 	rm -f "$ST_STOP_FLAG"
 	_st_use_vpn && was=1
-	rm -f "$ST_SUB" "$ST_SUB.bak" "$ST_SUB.map" "$ST_SUB.map.jt" "$ST_SUB_URL.happ" "$ST_SUB_NODES" "$ST_SUB_NODES.meta" "$ST_SUB_NODES.hp" "$ST_VDIR/sub.insecure" "$ST_SUB_INFO" "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_NODE" "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_SUB_PING" "$ST_SUB_ORDER" "$ST_SUB_GRP" "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.nojq" "$ST_SUB_GRPS.all"
+	rm -f "$ST_SUB" "$ST_SUB.bak" "$ST_SUB.map" "$ST_SUB.map.jt" "$ST_SUB_URL.happ" "$ST_SUB_NODES" "$ST_SUB_NODES.meta" "$ST_SUB_NODES.hp" "$ST_VDIR/sub.insecure" "$ST_SUB_INFO" "$ST_SUB_URL" "$ST_SUB_TITLE" "$ST_SUB_NODE" "$ST_SUB_FELL" "$ST_SUB_HOME" "$ST_SUB_PING" "$ST_SUB_ORDER" "$ST_SUB_GRP" "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.nojq" "$ST_SUB_GRPS.all" "$ST_SUB_GRPS.v2"
 	[ -n "$ST_SEC" ] || echo warp > "$ST_EXIT"
 	_st_vpn_zone off
 	[ -n "$(_st_sec_with main eval '[ -s "$ST_SUB_URL" ] && echo 1')$(_st_secs_url)" ] || _st_sub_auto_set off >/dev/null
@@ -32837,7 +33033,7 @@ _st_sub_auto_set() {
 }
 
 do_steer_engine_ver() {
-	local was
+	local was rc
 	_st_phase pkgs
 	rm -f "$ST_STOP_FLAG"
 	_st_installed || { echo "ОШИБКА: Steer ещё не установлен"; return 1; }
@@ -32846,11 +33042,19 @@ do_steer_engine_ver() {
 	_st_pin_set "$1"
 	[ "$1" = latest ] && rm -f "$STL_CACHE" "$JOBS_DIR/steer.latest.try"
 	_ensure_deps
-	if ! STL_SWITCH=1 _st_install_steer; then
+	STL_SWITCH=1; _st_install_steer; rc=$?
+	if [ "$rc" != 0 ]; then
 		if [ -n "$was" ]; then _st_pin_set legacy; else _st_pin_set latest; fi
-		stl_present || echo "!! Ядро steer не встало — нажмите «Сменить версию» ещё раз, когда появится интернет"
+		# Прежнее ядро уже снято, а новое не встало — ставим прежнее обратно, чтобы Steer не остался без ядра
+		if ! stl_present; then
+			_rb_warn "Новое ядро steer не встало — возвращаем прежнее"
+			_st_install_steer || echo "!! Ядро steer не встало — переустановите Steer, когда появится интернет"
+		fi
+		STL_SWITCH=""
+		stl_present && [ ! -f "$ST_OFF" ] && _st_work && _st_apply >/dev/null 2>&1
 		return 1
 	fi
+	STL_SWITCH=""
 	if [ ! -f "$ST_OFF" ] && _st_work; then
 		_st_phase rules
 		_st_apply || return 1
@@ -50977,7 +51181,7 @@ return view.extend({
 					'Steer умеет VLESS, Hysteria2, Trojan, Shadowsocks, VMess, SOCKS и HTTP; TUIC, AnyTLS и WireGuard из подписки он не берёт.' ]));
 			}
 			var st = (subData.stubs || []).length;
-			if (st && (subData.groups || []).length) out.push(E('p', { 'class': 'zm-hint' }, 'Не показаны ' + st + ' ' + plural(st, 'строка', 'строки', 'строк') + ' подписки с именами групп АВТО — это не серверы, а заглушки для приложений без групп. Группы — в режиме «Группа АВТО».'));
+			if (st && (subData.groups || []).length) out.push(E('p', { 'class': 'zm-hint' }, 'Не показаны ' + st + ' ' + plural(st, 'копия', 'копии', 'копий') + ' серверов из групп АВТО — эти серверы уже есть в списке. Группы — в режиме «Группа АВТО».'));
 			return out;
 		}
 		function helloDiag(l) {
@@ -51335,10 +51539,12 @@ return view.extend({
 							else { manualView = true; renderSub(); }
 						} ]
 					]));
+					// На карточке группы — её серверы коротко (без флагов и значков): сразу видно, через что пойдёт трафик
+					var shortName = function(n) { return String(n.name || '').replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]/g, '').replace(/[\u2190-\u21FF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]/g, '').replace(/\s+/g, ' ').trim() || String(n.name || ''); };
 					if (gmode === 'group') subCard.appendChild(E('div', { 'class': 'zm-nodes', 'style': 'margin-top:4px' }, grps.map(function(g) {
 						var on = curGrp === g;
 						return nodeCard({
-							name: g.name, foot: g.nodes.length + ' ' + plural(g.nodes.length, 'узел', 'узла', 'узлов') + (isPing ? ' · по пингу' : ' · по порядку'),
+							name: g.name, foot: g.nodes.map(shortName).join(', ') + (isPing ? ' · по пингу' : ''),
 							active: on, grp: true, title: 'Группа АВТО из подписки: ' + g.nodes.map(function(n) { return n.name; }).join(', '),
 							click: function() { if (!on && !busy) grpSelectS(g); }
 						});
@@ -51393,11 +51599,15 @@ return view.extend({
 					}
 				}));
 			});
+			var inGrp = {}; grps.forEach(function(g) { g.nodes.forEach(function(n) { inGrp[n.index] = true; }); });
+			var outN = nodes.filter(function(n) { return !inGrp[n.index]; });
+			var outGrp = outN.slice(0, 3).map(function(n) { return '«' + n.name + '»'; }).join(', ') + (outN.length > 3 ? ' и ещё ' + (outN.length - 3) : '');
 			if (!hideMode) subCard.appendChild(grid);
 			if (!hideMode && gmode === 'group') subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Группа АВТО из подписки — как в Happ: в списке только её ' + curGrp.nodes.length + ' ' + plural(curGrp.nodes.length, 'узел', 'узла', 'узлов') + ', Steer работает только через них — ' +
-				(isPing ? 'первым стоит самый быстрый по пингу' : 'первый отвечающий по порядку подписки (чтобы первым был самый быстрый, включите «По пингу»)') + '. Узел оборвался — ядро steer само переходит на следующий узел группы. Группа остаётся выбранной и после перезапуска. Нажмите на узел, чтобы закрепить его.'));
+				(isPing ? 'первым стоит самый быстрый по пингу' : 'первый отвечающий по порядку подписки (чтобы первым был самый быстрый, включите «По пингу»)') + '. Узел оборвался — ядро steer само переходит на следующий узел группы. Группа остаётся выбранной и после перезапуска. Нажмите на узел, чтобы закрепить его.' +
+				(outGrp ? ' Узлы вне групп (' + outGrp + ') — в режиме «Вручную».' : '')));
 			else if (!hideMode && grps.length && gmode === 'auto') subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Авто: Steer выбирает из всех узлов подписки. Нажмите на узел, чтобы закрепить его, или включите «Группа АВТО».'));
-			else if (!hideMode && grps.length && gmode === 'manual') subCard.appendChild(E('p', { 'class': 'zm-hint' }, subData.node ? 'Закреплён узел «' + subData.node + '». Чтобы Steer снова выбирал сам, включите «Авто» или «Группа АВТО».' : 'Нажмите на узел, чтобы закрепить его.'));
+			else if (!hideMode && grps.length && gmode === 'manual') subCard.appendChild(E('p', { 'class': 'zm-hint' }, subData.node ? 'Закреплён узел «' + subData.node + '». Чтобы Steer снова выбирал сам, включите «Авто» или «Группа АВТО».' : 'Нажмите на любой узел — Steer будет работать только через него.'));
 			if (!hideMode && subData.grp_nojq) subCard.appendChild(E('p', { 'class': 'zm-hint' }, 'В подписке есть группы АВТО (как в Happ). Нажмите «Обновить» у подписки — панель поставит небольшой пакет jq и покажет их.'));
 			var hn = subData.hide_names || [];
 			hidePick.update(allNodes.filter(function(n) { return !!n.name; }).map(function(n, ni) {
@@ -57614,13 +57824,14 @@ html.zm-theme-dark body:not(.zmw-body) .zm-meter-bar { background: rgba(255,255,
 .zm-kv-go:active { transform: none; }
 .zm-kv-go:focus-visible { outline: 2px solid #229ed9; outline-offset: 2px; }
 .zm-kv-go-i { flex: none; line-height: 0; }
-.zm-kv-go small { font-size: 13.5px; font-weight: 500; opacity: .7; }
+.zm-kv-go-out { flex: none; display: inline-flex; line-height: 0; opacity: .8; transition: transform .15s, opacity .15s; }
+.zm-kv-go:hover .zm-kv-go-out { transform: translate(2px, -2px); opacity: 1; }
 .zm-kv-tg { background: #229ed9; border-color: #229ed9; color: #ffffff !important; box-shadow: 0 8px 20px -10px rgba(34,158,217,.8); }
 .zm-kv-tg:hover { background: #1c8cc2; border-color: #1c8cc2; box-shadow: 0 10px 22px -10px rgba(34,158,217,.9); }
-.zm-kv-web { background: #f4f3ff; border-color: #dcd8fb; color: #1e1b4b !important; }
-.zm-kv-web:hover { background: #ebe8ff; border-color: #c9c3f6; }
+.zm-kv-web { background: linear-gradient(135deg, #7c5cff 0%, #5b4bff 55%, #4338ca 100%) border-box; border-color: transparent; color: #ffffff !important; box-shadow: 0 8px 20px -10px rgba(91,75,255,.85); }
+.zm-kv-web:hover { background: linear-gradient(135deg, #6f4dff 0%, #4f3ff0 55%, #3a30b5 100%) border-box; box-shadow: 0 10px 22px -10px rgba(91,75,255,.95); }
 .zm-kv-thx .zm-kv-i svg path { fill: #ef4444; stroke: #e11d48; }
-@media (prefers-reduced-motion: reduce) { .zm-kv-go, .zm-kv-go:hover { transition: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .zm-kv-go, .zm-kv-go:hover, .zm-kv-go-out, .zm-kv-go:hover .zm-kv-go-out { transition: none; transform: none; } }
 .zm-kv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .zm-kv-it { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #f7f6ff; border: 1px solid #e6e3fb; color: #1e1b4b; font-size: 14px; line-height: 1.4; min-width: 0; }
 .zm-kv-i { flex: none; width: 34px; height: 34px; border-radius: 10px; background: #e8e5ff; color: #3C3489; display: flex; align-items: center; justify-content: center; }
@@ -57632,9 +57843,7 @@ html.zm-theme-dark .zm-kv-it { background: rgba(255,255,255,.05); border-color: 
 html.zm-theme-dark .zm-kv-i { background: rgba(155,140,255,.18); color: #b7abff; }
 html.zm-theme-dark .zm-kv-thx { background: rgba(225,29,72,.14); border-color: rgba(225,29,72,.28); color: #ffd6df; }
 html.zm-theme-dark .zm-kv-thx .zm-kv-i { background: rgba(225,29,72,.22); color: #fb7185; }
-html.zm-theme-dark .zm-kv-web { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); color: #ffffff !important; }
-html.zm-theme-dark .zm-kv-web:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); }
-html.zm-theme-dark .zm-kv-tg { box-shadow: none; }
+html.zm-theme-dark .zm-kv-tg, html.zm-theme-dark .zm-kv-web { box-shadow: none; }
 @media (max-width: 1100px) { .zm-kv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .zm-kv-grid { grid-template-columns: minmax(0, 1fr); } .zm-kv-h { font-size: 22px; } .zm-kv-cta { grid-template-columns: minmax(0, 1fr); } }
 .zm-sp-count p { margin: 0; font-size: 14.5px; opacity: .8; }
@@ -61546,10 +61755,12 @@ var SP_KVN_ICO = {
 };
 // Значок Telegram — залитый самолётик
 var SP_TG_ICO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.7 3.6 2.9 10.5c-1.2.5-1.2 1.2-.2 1.5l4.6 1.4 1.7 5.4c.2.6.1.8.7.8.5 0 .7-.2 1-.5l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.8-1.4zM9.4 13.5l9.1-5.7c.4-.3.8-.1.5.2l-7.6 6.9-.3 3.3z"/></svg>';
-function spGo(href, cls, ico, label, sub) {
-	var i = E('span', { 'class': 'zm-kv-go-i' });
+var SP_OUT_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>';
+function spGo(href, cls, ico, label, out) {
+	var i = E('span', { 'class': 'zm-kv-go-i' }), a;
 	i.innerHTML = ico;
-	return E('a', { 'class': 'zm-kv-go ' + cls, 'href': href, 'target': '_blank', 'rel': 'noreferrer' }, [ i, E('span', {}, label), sub ? E('small', {}, sub) : E([]) ]);
+	if (out) { a = E('span', { 'class': 'zm-kv-go-out' }); a.innerHTML = SP_OUT_ICO; }
+	return E('a', { 'class': 'zm-kv-go ' + cls, 'href': href, 'target': '_blank', 'rel': 'noreferrer' }, [ i, E('span', {}, label), a || E([]) ]);
 }
 var SP_KVN_F = [
 	[ 'shield', 'Работает даже при жёсткой фильтрации' ],
@@ -61624,7 +61835,7 @@ return view.extend({
 			]),
 			E('div', { 'class': 'zm-kv-cta' }, [
 				spGo(SP_KVN_BOT, 'zm-kv-tg', SP_TG_ICO, 'Подключить в Telegram-боте'),
-				spGo(SP_KVN_SITE, 'zm-kv-web', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + SP_KVN_ICO.web + '</svg>', 'Сайт', 'stresskvn.lol')
+				spGo(SP_KVN_SITE, 'zm-kv-web', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + SP_KVN_ICO.web + '</svg>', 'Сайт StressKVN', true)
 			]),
 			E('div', { 'class': 'zm-kv-grid' }, SP_KVN_F.map(function(f) {
 				return E('div', { 'class': 'zm-kv-it' }, [ spIco(f[0], 'zm-kv-i'), E('span', {}, f[1]) ]);
