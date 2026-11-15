@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.086
+# Version: 5.090
 ZM_VERSION_EOF
 set -e
 
@@ -150,6 +150,21 @@ fi
 sed "s/@ZM_VERSION@/$ZM_NEW_VER/" > "$_zmi_st/backend.sh" << 'ZM_INSTALLER_EOF'
 #!/bin/sh
 umask 022
+# «Не трогать трафик VPN» (основная часть — у _zm_zskip_sync). Здесь то, что нужно и быстрой проверке сторожа
+ZSKIP_FILE="/opt/zapret-manager-luci/zapret_vpn_skip"
+ZSKIP_NFT="/usr/share/nftables.d/ruleset-post/90-zm-zskip.nft"
+ZSKIP_FP="/tmp/zapret-manager-luci/zskip.fp"
+ZSKIP_SVC="steer sing-box netshift netshift-naive mihomo xray v2ray tailscale podkop podkop-plus podkop-engine passwall passwall2"
+# Отпечаток того, от чего зависит правило: устройство основного интернета, туннели (тип устройства «none» —
+# tun, wireguard, amneziawg) и cgroup запущенных служб VPN. Почти без запуска программ: сторож сверяет его
+# каждые две минуты и обновляет правило, только если что-то поменялось
+_zm_zskip_fp() (
+	set +f
+	echo "zskip 1"
+	while read -r n d g f r u x m t; do [ "$d" = 00000000 ] && [ "$m" = 00000000 ] && { echo "wan $n"; break; }; done < /proc/net/route 2>/dev/null
+	for n in /sys/class/net/*; do { read -r t < "$n/type"; } 2>/dev/null && [ "$t" = 65534 ] && echo "if ${n##*/}"; done
+	for n in $ZSKIP_SVC; do [ -d "/sys/fs/cgroup/services/$n" ] && set -- $(ls -id "/sys/fs/cgroup/services/$n" 2>/dev/null) && echo "svc $n $1"; done
+)
 if [ "$1" = zm_watch ]; then
 	[ -z "$ZM_WATCH_FORCE" ] && [ -f /opt/zapret-manager-luci/state/watch.off ] && exit 0
 	mkdir -p /tmp/zapret-manager-luci 2>/dev/null; : > /tmp/zapret-manager-luci/watch.last 2>/dev/null
@@ -212,6 +227,11 @@ if [ "$1" = zm_watch ]; then
 			[ -f "$d/zp.respawn.skip" ] && [ ! "$t" -nt "$d/zp.respawn.skip" ] || return 1
 		fi
 		[ -f "$d/zp.respawn" ] && return 1
+		if { read -r t < "$ZSKIP_FILE"; } 2>/dev/null && [ "$t" = on ] && { [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; } && [ -d /usr/share/nftables.d ]; then
+			[ "$(_zm_zskip_fp)" = "$(cat "$ZSKIP_FP" 2>/dev/null)" ] || return 1
+			[ -f "$ZSKIP_FP.cg" ] && { nft list table inet zm_zskip_cg >/dev/null 2>&1 || return 1; }
+		elif [ -f "$ZSKIP_FP" ] || [ -f "$ZSKIP_NFT" ]; then return 1
+		fi
 		rm -f /tmp/zm-rpcd-slow /tmp/zm-rpcd-plugin.stamp "$s/fk.watch" "$d/steer.vpnwatch"
 		return 0
 	}
@@ -2433,6 +2453,20 @@ _strat_label() {
 	printf '%s' "$s"
 }
 
+# Сколько доменов в списке РКН. Список большой (до ~125 тыс. строк), а статус спрашивают при каждом открытии
+# страницы — поэтому число кэшируется до изменения файла (ключ — время изменения и размер)
+_zo_rkn_count() {
+	local k c n f="$JOBS_DIR/rkn.count"
+	[ -s "$ZO_RKN_FILE" ] || { echo 0; return 0; }
+	k="$(date -r "$ZO_RKN_FILE" +%s 2>/dev/null)-$(wc -c < "$ZO_RKN_FILE" 2>/dev/null)"
+	if [ -s "$f" ]; then
+		{ read -r c n; } < "$f" 2>/dev/null
+		[ "$c" = "$k" ] && case "$n" in ''|*[!0-9]*) ;; *) echo "$n"; return 0 ;; esac
+	fi
+	n="$(awk 'NF { n++ } END { print n + 0 }' "$ZO_RKN_FILE" 2>/dev/null)"
+	mkdir -p "$JOBS_DIR" 2>/dev/null && echo "$k ${n:-0}" > "$f" 2>/dev/null
+	echo "${n:-0}"
+}
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
 	_test_recover
@@ -2499,13 +2533,14 @@ status() {
 		_zl_used exclude && zs_hzu=true
 		zs_gv="$(_zo_gv_cur)"
 	fi
-	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"rkn_src":"%s","wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","gv":"%s","gv_want":"%s","gv_list":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s","hdrezka":%s,"hdrezka_used":%s,"main_off":%s,"main_fam":"%s"}\n' \
+	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"rkn_src":"%s","wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","gv":"%s","gv_want":"%s","gv_list":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s","hdrezka":%s,"hdrezka_used":%s,"main_off":%s,"main_fam":"%s","vpnskip":%s,"vpnskip_ifs":"%s"}\n' \
 		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")" \
 		"$zs_yv" "$zs_qy" "$zs_ex" "$zs_rk" "$zs_rko" "$zs_rkf" \
-		"$(awk 'NF { n++ } END { print n + 0 }' "$ZO_RKN_FILE" 2>/dev/null | grep . || echo 0)" "$(_zo_rkn_src)" \
+		"$(_zo_rkn_count)" "$(_zo_rkn_src)" \
 		"$zs_ws" "$zs_ul" "$zs_ulo" "$(_zo_user_count)" "$testing" "$(esc "$test_now")" \
 		"$zs_ip" "$(_yv_ipid_want)" "$zs_gv" "$(_zo_gv_want)" "$(_gv_ids | tr '\n' ' ' | sed 's/ $//')" \
-		"$zs_yt" "$(esc "$zr2_luci")" "$zs_zd" "$zs_zdon" "$(esc "$zdd")" "$zdo" "$zs_s2" "$zs_pd" "$zs_pw" "$zs_hz" "$zs_hzu" "$zs_mo" "$zs_mf"
+		"$zs_yt" "$(esc "$zr2_luci")" "$zs_zd" "$zs_zdon" "$(esc "$zdd")" "$zdo" "$zs_s2" "$zs_pd" "$zs_pw" "$zs_hz" "$zs_hzu" "$zs_mo" "$zs_mf" \
+		"$(_zm_zskip_on && echo true || echo false)" "$(_zm_zskip_on && [ -f "$ZSKIP_NFT" ] && sed -n 's/^.*oifname "\([^"]*\)".*$/\1/p' "$ZSKIP_NFT" | tr '\n' ' ' | sed 's/ $//')"
 }
 _z2_luci_path() {
 	grep -ho '"admin/[A-Za-z0-9_/-]*zapret2[A-Za-z0-9_/-]*"' /usr/share/luci/menu.d/*.json 2>/dev/null | tr -d '"' | grep -v 'zapret-manager' |
@@ -5650,6 +5685,119 @@ _doh_force_apply() {
 }
 
 _dnsm_present() { [ -x /usr/bin/dns-manager ] || [ -x /usr/libexec/rpcd/dns_manager ]; }
+
+# «Zapret не трогает VPN». Пакеты, которые роутер отправляет в туннели (Steer, AmneziaWG, WARP, Mixomo,
+# Tailscale и другие), получают бит DESYNC_MARK: Zapret и Zapret2 принимают их за свои и не искажают. Иначе
+# Zapret может портить рукопожатие сайтов, которые уже идут через VPN. Туннели — файлом fw4 (ruleset-post):
+# переживает перезапуск файрвола и роутера. По умолчанию выключено; включено — в $ZSKIP_FILE записано on
+ZSKIP_PAT="zm_vpn* zmv* zm_warp* zmwarp* awg* wg* tun* tailscale* utun* mihomo* Meta"
+# Службы-клиенты VPN ($ZSKIP_SVC): их собственные подключения к серверу VPN тоже не трогаем (procd кладёт
+# службы в cgroup services/<имя>). Нужны ядро 5.13+ и kmod-nft-socket — если их нет, эта часть просто не ставится
+_zm_zskip_on() { local v; { read -r v < "$ZSKIP_FILE"; } 2>/dev/null; [ "$v" = on ]; }
+_zm_zskip_need() { [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; }
+_zm_zskip_mark() {
+	local m=0 v f
+	for f in /etc/config/zapret /etc/config/zapret2; do
+		for v in $(sed -n "s/^[[:space:]]*option[[:space:]][[:space:]]*DESYNC_MARK[[:space:]][[:space:]]*'\{0,1\}\(0x[0-9a-fA-F]\{1,8\}\)'\{0,1\}[[:space:]]*$/\1/p" "$f" 2>/dev/null); do
+			m=$((m | v))
+		done
+	done
+	[ "$m" -gt 0 ] 2>/dev/null || m=$((0x40000000))
+	printf '0x%08x\n' "$m"
+}
+# Туннели: по названию (шаблоны) и по типу устройства (tun, wireguard, amneziawg). Интерфейс, через который
+# идёт основной интернет, не берём никогда — иначе Zapret перестал бы работать вовсе
+_zm_zskip_ifs() {
+	local wan p n pats
+	set -f
+	wan="$(ip -4 route show default 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"
+	pats=""
+	for p in $ZSKIP_PAT; do case "$wan" in $p) ;; *) pats="$pats $p" ;; esac; done
+	{
+		for p in $pats; do echo "$p"; done
+		ip -d link show 2>/dev/null | awk '/^[0-9]+: / { n = $2; sub(/:$/, "", n); sub(/@.*/, "", n); next } n != "" && $1 ~ /^(tun|wireguard|amneziawg)$/ { print n; n = "" }'
+	} | while read -r n; do
+		[ -n "$n" ] && [ "$n" != "$wan" ] || continue
+		case "$n" in *[!A-Za-z0-9_.*-]*) continue ;; esac
+		for p in $pats; do case "$n" in $p) [ "$n" != "$p" ] && continue 2 ;; esac; done
+		echo "$n"
+	done | awk '!s[$0]++'
+	set +f
+}
+_zm_zskip_cgs() {
+	local n
+	for n in $ZSKIP_SVC; do [ -d "/sys/fs/cgroup/services/$n" ] && echo "$n"; done
+}
+# Файл для fw4: только туннели. Он не зависит от того, запущено ли что-то, — fw4 грузит его при каждом старте
+_zm_zskip_render() {
+	local m n
+	set -f
+	m="$(_zm_zskip_mark)"
+	echo "# Zapret Manager: Zapret и Zapret2 не трогают трафик, который уходит в туннели VPN"
+	echo "table inet zm_zskip"
+	echo "delete table inet zm_zskip"
+	echo "table inet zm_zskip {"
+	echo "	chain post {"
+	echo "		type filter hook postrouting priority 50; policy accept;"
+	for n in $(_zm_zskip_ifs); do echo "		oifname \"$n\" meta mark set meta mark | $m"; done
+	echo "	}"
+	echo "}"
+	set +f
+}
+# Подключения самих служб VPN — отдельной таблицей, только пока служба запущена, и не через fw4: при загрузке
+# роутера служб ещё нет, nft не находит их cgroup и отвергает весь файрвол целиком (роутер остаётся без NAT)
+_zm_zskip_render_cg() {
+	local m n
+	m="$(_zm_zskip_mark)"
+	echo "table inet zm_zskip_cg"
+	echo "delete table inet zm_zskip_cg"
+	echo "table inet zm_zskip_cg {"
+	echo "	chain out {"
+	echo "		type filter hook output priority 50; policy accept;"
+	for n; do
+		# Номер cgroup меняется при перезапуске службы — он в комментарии, чтобы правило обновилось
+		echo "		# $n $(ls -id "/sys/fs/cgroup/services/$n" 2>/dev/null | awk '{ print $1 }')"
+		echo "		socket cgroupv2 level 2 \"services/$n\" meta mark set meta mark | $m"
+	done
+	echo "	}"
+	echo "}"
+}
+_zm_zskip_drop() { command -v nft >/dev/null 2>&1 && nft list table inet "$1" >/dev/null 2>&1 && nft delete table inet "$1" >/dev/null 2>&1; return 0; }
+_zm_zskip_sync() {
+	local t c
+	if _zm_zskip_on && _zm_zskip_need && command -v nft >/dev/null 2>&1 && [ -d /usr/share/nftables.d ]; then
+		mkdir -p "${ZSKIP_NFT%/*}" "${ZSKIP_FP%/*}" || return 1
+		t="$ZSKIP_NFT.zm.$$"
+		_zm_zskip_render > "$t" || { rm -f "$t"; return 1; }
+		if cmp -s "$t" "$ZSKIP_NFT" && nft list table inet zm_zskip >/dev/null 2>&1; then
+			rm -f "$t"
+		elif nft -c -f "$t" >/dev/null 2>&1; then
+			mv -f "$t" "$ZSKIP_NFT" && chmod 0644 "$ZSKIP_NFT" && nft -f "$ZSKIP_NFT" >/dev/null 2>&1 || return 1
+		else
+			rm -f "$t"; return 1
+		fi
+		c="$(_zm_zskip_cgs)"
+		t="$ZSKIP_FP.cg.$$"
+		if [ -z "$c" ]; then
+			rm -f "$ZSKIP_FP.cg"; _zm_zskip_drop zm_zskip_cg
+		elif ! _zm_zskip_render_cg $c > "$t"; then
+			:
+		elif cmp -s "$t" "$ZSKIP_FP.cg" && nft list table inet zm_zskip_cg >/dev/null 2>&1; then
+			:
+		elif nft -c -f "$t" >/dev/null 2>&1 && nft -f "$t" >/dev/null 2>&1; then
+			mv -f "$t" "$ZSKIP_FP.cg"
+		else
+			rm -f "$ZSKIP_FP.cg"; _zm_zskip_drop zm_zskip_cg
+		fi
+		rm -f "$t"
+		_zm_zskip_fp > "$ZSKIP_FP"
+	else
+		rm -f "$ZSKIP_NFT" "$ZSKIP_FP" "$ZSKIP_FP.cg"
+		_zm_zskip_drop zm_zskip
+		_zm_zskip_drop zm_zskip_cg
+	fi
+	return 0
+}
 
 _doh_provider_of() {
 	case "$1" in
@@ -9131,7 +9279,7 @@ case "$cmd" in
 		case "$1" in rkn:*|wssize:*|ipid:*) [ -f "$CONF" ] && { _nochange_guard || exit 1; } ;; esac ;;
 esac
 case "$cmd:$1" in
-	zapret_opt_set:hdrezka:*) ;;
+	zapret_opt_set:hdrezka:*|zapret_opt_set:vpnskip:*) ;;
 	*)
 case "$cmd" in
 	strategy_set_v|strategy_set_flowseal|strategy_set_youtube|youtube_quic_set|discord_set_dv|discord_set_fake|game_set|game_set_fake|game_toggle_xtreme|zapret_opt_set)
@@ -11496,6 +11644,12 @@ if grep -q '/opt/zapret-manager-luci/backend.sh' /etc/crontabs/root 2>/dev/null;
 fi
 [ -x /etc/init.d/zm-ui ] && /etc/init.d/zm-ui disable >/dev/null 2>&1
 rm -rf /etc/init.d/zm-ui /tmp/.zm-ui
+if [ -f /usr/share/nftables.d/ruleset-post/90-zm-zskip.nft ]; then
+	rm -f /usr/share/nftables.d/ruleset-post/90-zm-zskip.nft
+	nft delete table inet zm_zskip >/dev/null 2>&1
+fi
+rm -f /tmp/zapret-manager-luci/zskip.fp /tmp/zapret-manager-luci/zskip.fp.cg
+nft delete table inet zm_zskip_cg >/dev/null 2>&1
 if [ -f /usr/share/nftables.d/table-post/90-zm-dnsloop.nft ]; then
 	rm -f /usr/share/nftables.d/table-post/90-zm-dnsloop.nft
 	nft flush chain inet fw4 zm_dnsloop >/dev/null 2>&1
@@ -16958,6 +17112,7 @@ zm_watch() {
 	_tg_watch
 	_ab_watch
 	_dn_watch
+	_zm_zskip_sync
 	_zo_doh_follow
 	_doh_boot_fill
 	_ft_steer_sync
@@ -21403,6 +21558,21 @@ _zo_script_url() {
 
 zapret_opt_set() {
 	local what="${1%%:*}" val="${1#*:}" url tmp n
+	if [ "$what" = vpnskip ]; then
+		_zm_zskip_need || { echo '{"error":"Zapret и Zapret2 не установлены"}'; return 1; }
+		[ "$val" = on ] && { command -v nft >/dev/null 2>&1 && [ -d /usr/share/nftables.d ] || { echo '{"error":"нужен файрвол fw4 (nftables) — на этой версии OpenWrt функция не работает"}'; return 1; }; }
+		case "$val" in
+			on) mkdir -p "${ZSKIP_FILE%/*}" && echo on > "$ZSKIP_FILE" || { echo '{"error":"не удалось сохранить настройку"}'; return 1; } ;;
+			off) rm -f "$ZSKIP_FILE" ;;
+			*) echo '{"error":"неизвестное значение"}'; return 1 ;;
+		esac
+		if ! _zm_zskip_sync; then
+			[ "$val" = on ] && { rm -f "$ZSKIP_FILE"; _zm_zskip_sync; }
+			echo '{"error":"не удалось применить правило в файрволе (nft)"}'; return 1
+		fi
+		logger -t zapret-manager "Zapret: трафик VPN $([ "$val" = on ] && echo "больше не обрабатывается" || echo "снова обрабатывается")"
+		status; return 0
+	fi
 	[ -x /etc/init.d/zapret ] && [ -f "$CONF" ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	case "$what" in
 		rkn_src)
@@ -55187,6 +55357,12 @@ return view.extend({
 				extraCard.appendChild(zm.swRow(!!status.wssize, extraBusy === 'wssize' ? 'Блок --wssize 1:6 — применяем…' : 'Блок --wssize 1:6', 'Отдельный блок в конце стратегии: для HTTPS уменьшает окно TCP в начале соединения. Помогает с некоторыми блокировками, но может снизить скорость и стабильность. Сохраняется при смене стратегии.', function() { toggleExtra('wssize', !status.wssize); }, !!extraBusy));
 				extraCard.appendChild(zm.swRow(!!status.hdrezka, extraBusy === 'hdrezka' ? 'Исключить домены HDRezka — применяем…' : 'Исключить домены HDRezka', 'Приложение HDRezka может не работать, пока его трафик обрабатывает Zapret. Сайты HDRezka в браузере после этого могут не открываться. Домены сохраняются при обновлении списка исключений.', function() { toggleExtra('hdrezka', !status.hdrezka); }, !!extraBusy));
 				if (status.hdrezka && status.hdrezka_used === false) extraCard.appendChild(E('p', { 'class': 'zm-hint zm-ab-warn', 'style': 'margin:-4px 0 10px 52px' }, 'Текущая стратегия не использует список исключений — домены HDRezka в нём есть, но Zapret их пока обрабатывает. Выберите стратегию из списка панели или добавьте в свою --hostlist-exclude=/opt/zapret/ipset/zapret-hosts-user-exclude.txt.'));
+				var vsOn = status.vpnskip === true;
+				extraCard.appendChild(zm.swRow(vsOn, extraBusy === 'vpnskip' ? 'Не трогать трафик VPN — применяем…' : 'Не трогать трафик VPN',
+					(vsOn ? 'Трафик туннелей (Steer, Forkozz, AmneziaWG, WARP, Mixomo, Tailscale) и их подключения к серверам Zapret пропускает как есть — не ломает рукопожатие TLS. Остальной трафик — как обычно.'
+						: 'Выключено: Zapret обрабатывает и трафик VPN. Если сайты через VPN не открываются или VPN рвёт рукопожатие TLS — включите.')
+						+ ' ⚠ Если ваш VPN подключается только благодаря Zapret (провайдер блокирует сам VPN), держите выключенным — иначе VPN перестанет подключаться.',
+					function() { toggleVpnSkip(!vsOn); }, !!extraBusy));
 			}
 			function setRknSrc(src) {
 				if (busy || extraBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
@@ -55200,6 +55376,17 @@ return view.extend({
 					if (!zBusy) renderZCard(res);
 					renderExtra(); renderBanner();
 					zm.toast(used ? 'Список РКН заменён: ' + (+res.rkn_count || 0) + ' доменов' : 'Списки РКН будут браться из ' + (src === 'tachyon' ? 'Tachyon Lists' : 'zapret4rocket'), 'info');
+				}).catch(function() { extraBusy = ''; zm.toast('Роутер не ответил', 'error'); renderExtra(); });
+			}
+			function toggleVpnSkip(on) {
+				if (busy || extraBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+				extraBusy = 'vpnskip'; renderExtra();
+				zm.zapretOptSet('vpnskip:' + (on ? 'on' : 'off')).then(function(res) {
+					extraBusy = '';
+					if (!res || res.error) { zm.toast((res && res.error) || 'Роутер не ответил', 'error'); renderExtra(); return; }
+					status = res;
+					renderExtra();
+					zm.toast(on ? 'Zapret больше не трогает трафик VPN' : 'Zapret снова обрабатывает трафик VPN', 'info');
 				}).catch(function() { extraBusy = ''; zm.toast('Роутер не ответил', 'error'); renderExtra(); });
 			}
 			function toggleExtra(what, on) {
@@ -57819,6 +58006,23 @@ return view.extend({
 				E('p', { 'class': 'zm-hint' }, 'Только для 64-битных ARM-роутеров (aarch64). Несовместим с основным Zapret.'),
 				E('div', { 'class': 'zm-actions' }, z2Actions)
 			]);
+			if (d.zapret2 === 'installed') {
+				var vsOn = d.vpnskip === true;
+				z2Card.appendChild(zm.swRow(vsOn, view.vsBusy ? 'Не трогать трафик VPN — применяем…' : 'Не трогать трафик VPN',
+					(vsOn ? 'Трафик туннелей (Steer, Forkozz, AmneziaWG, WARP, Mixomo, Tailscale) и их подключения к серверам Zapret2 пропускает как есть — не ломает рукопожатие TLS.'
+						: 'Выключено: Zapret2 обрабатывает и трафик VPN. Если сайты через VPN не открываются или VPN рвёт рукопожатие TLS — включите.')
+						+ ' ⚠ Если ваш VPN подключается только благодаря Zapret2 (провайдер блокирует сам VPN), держите выключенным — иначе VPN перестанет подключаться.',
+					function() {
+						if (view.busy2 || view.vsBusy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
+						view.vsBusy = true; renderCards(d);
+						zm.zapretOptSet('vpnskip:' + (vsOn ? 'off' : 'on')).then(function(res) {
+							view.vsBusy = false;
+							if (!res || res.error) { zm.toast((res && res.error) || 'Роутер не ответил', 'error'); renderCards(d); return; }
+							zm.toast(vsOn ? 'Zapret2 снова обрабатывает трафик VPN' : 'Zapret2 больше не трогает трафик VPN', 'info');
+							renderCards(res);
+						}).catch(function() { view.vsBusy = false; zm.toast('Роутер не ответил', 'error'); renderCards(d); });
+					}, !!(view.busy2 || view.vsBusy)));
+			}
 
 			cards.appendChild(z2Card);
 		}
@@ -71908,12 +72112,12 @@ function dustStart(kind) {
 				if (dk) ctx.globalCompositeOperation = 'lighter';
 				var cols = [ P.a, P.c, P.b ];
 				for (q = 2; q >= 0; q--) {
-					var top = h, pts = [];
-					for (i = 0; i < M; i++) { var yy = h - L[q][i] * h - (q === 0 ? 0 : 6 * q); pts.push([ i / (M - 1) * w, yy ]); if (yy < top) top = yy; }
+					var ty = h, pts = [];
+					for (i = 0; i < M; i++) { var yy = h - L[q][i] * h - (q === 0 ? 0 : 6 * q); pts.push([ i / (M - 1) * w, yy ]); if (yy < ty) ty = yy; }
 					ctx.beginPath(); ctx.moveTo(0, h + 2); ctx.lineTo(pts[0][0], pts[0][1]);
 					for (i = 1; i < M - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
 					ctx.lineTo(w + 4, pts[M - 1][1]); ctx.lineTo(w + 4, h + 2); ctx.closePath();
-					var fg = ctx.createLinearGradient(0, top, 0, h);
+					var fg = ctx.createLinearGradient(0, ty, 0, h);
 					fg.addColorStop(0, bgRgba(cols[q], dk ? 0.3 : 0.22));
 					fg.addColorStop(1, bgRgba(cols[q], dk ? 0.04 : 0.03));
 					ctx.fillStyle = fg; ctx.fill();
@@ -72112,10 +72316,10 @@ function dustStart(kind) {
 				}
 				ctx.globalAlpha = 0.85;
 				for (i = 0; i < tr.length; i++) {
-					var r = tr[i], a, b;
+					var r = tr[i], pa, pb;
 					r.u += r.v * dt * ts; if (r.u > 1) r.u -= 1; if (r.u < 0) r.u += 1;
-					a = pt(L[r.l], r.u); b = pt(L[r.l], Math.max(0, Math.min(1, r.u - (r.v > 0 ? 0.025 : -0.025))));
-					ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+					pa = pt(L[r.l], r.u); pb = pt(L[r.l], Math.max(0, Math.min(1, r.u - (r.v > 0 ? 0.025 : -0.025))));
+					ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke();
 					ctx.strokeStyle = L[r.l].c; ctx.lineWidth = 4; ctx.stroke();
 				}
 				ctx.globalAlpha = 1;
