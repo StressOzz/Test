@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.082
+# Version: 5.083
 ZM_VERSION_EOF
 set -e
 
@@ -15972,7 +15972,43 @@ do_fk_lists() {
 	_fk_say "Готово: списки обновлены"
 }
 
+# Серверы подписки, по которым сравниваем форматы: «протокол|адрес:порт». JSON (sing-box или Xray) — через jq,
+# подписка из ссылок (как у 3x-ui), открытым текстом или base64 — по ссылкам: раньше её не узнавали вовсе
 _fk_sub_keys() {
+	local t b l h
+	t="$(mktemp 2>/dev/null)" || return 0
+	cat > "$t"
+	if head -c 512 "$t" | tr -d ' \t\r\n' | grep -q '^[[{]'; then _fk_sub_jkeys < "$t"; rm -f "$t"; return 0; fi
+	if ! grep -qE '^[A-Za-z0-9+]+://' "$t"; then
+		b="$(tr -d ' \t\r\n' < "$t" | tr '_-' '/+')"
+		case $((${#b} % 4)) in 2) b="$b==" ;; 3) b="$b=" ;; esac
+		printf '%s' "$b" | base64 -d > "$t.d" 2>/dev/null && mv -f "$t.d" "$t"
+		rm -f "$t.d"
+	fi
+	tr -d '\r' < "$t" | while IFS= read -r l; do
+		case "$l" in
+			vmess://*)
+				b="${l#vmess://}"; b="${b%%#*}"; case $((${#b} % 4)) in 2) b="$b==" ;; 3) b="$b=" ;; esac
+				h="$(printf '%s' "$b" | tr '_-' '/+' | base64 -d 2>/dev/null | jq -r '"\(.add):\(.port)"' 2>/dev/null)"
+				[ -n "$h" ] && printf 'vmess://x@%s\n' "$h" ;;
+			ss://*@*|vless://*|trojan://*|hysteria2://*|hy2://*|tuic://*|anytls://*)
+				printf '%s\n' "$l" ;;
+			ss://*)
+				b="${l#ss://}"; b="${b%%#*}"; case $((${#b} % 4)) in 2) b="$b==" ;; 3) b="$b=" ;; esac
+				h="$(printf '%s' "$b" | tr '_-' '/+' | base64 -d 2>/dev/null)"
+				case "$h" in *@*) printf 'ss://%s\n' "$h" ;; esac ;;
+		esac
+	done | awk '{
+		p = tolower($0); sub(/:\/\/.*/, "", p)
+		if (p == "ss") p = "shadowsocks"; else if (p == "hy2") p = "hysteria2"
+		r = $0; sub(/^[^:]*:\/\//, "", r); sub(/#.*/, "", r); sub(/\?.*/, "", r); sub(/\/.*/, "", r)
+		n = split(r, a, "@"); hp = tolower(a[n]); gsub(/[\[\]]/, "", hp)
+		if (hp ~ /:[0-9]+$/) print p "|" hp
+	}'
+	rm -f "$t"
+}
+
+_fk_sub_jkeys() {
 	jq -r '
 		def ap($a; $p): if $a == null or $p == null then empty else "\($a):\($p)" end;
 		if type == "object" and (.outbounds | type) == "array" and ((.outbounds[0].protocol // null) == null) then
@@ -15991,7 +16027,7 @@ _fk_sub_keys() {
 _fk_sub_fmt_name() { case "$1" in xray) echo "Happ" ;; singbox) echo "sing-box" ;; *) echo "Авто" ;; esac; }
 
 _fk_sub_fmt_auto() {
-	local sec url key ver ch="" sw="" d="$JOBS_DIR/fk-subfmt" n_sb n_xr miss xex lost extra pref was man cust name
+	local sec url key ver ch="" sw="" d="$JOBS_DIR/fk-subfmt" n_sb n_xr miss xex lost extra pref was man cust name lbl ins
 	command -v jq >/dev/null 2>&1 || return 1
 	ver="$(sing-box version 2>/dev/null | head -n1 | awk '{print $3}')"
 	for sec in $(uci -q show netshift | sed -n "s/^netshift\.\([A-Za-z0-9_]*\)\.subscription_url=.*/\1/p" | sort -u); do
@@ -16002,17 +16038,19 @@ _fk_sub_fmt_auto() {
 		man="$(uci -q get "netshift.$sec.zm_subfmt_man")"
 		cust="$(uci -q get "netshift.$sec.subscription_user_agent")$(uci -q get "netshift.$sec.subscription_hwid")$(uci -q get "netshift.$sec.subscription_device_os")"
 		name="$(uci -q get "netshift.$sec.zm_label" || echo "$sec")"
+		# Подписке с самоподписанным сертификатом разрешили небезопасную загрузку — так же качаем и для проверки формата
+		ins=""; [ "$(uci -q get "netshift.$sec.subscription_insecure")" = 1 ] && ins="-k"
 		if [ "$(uci -q get "netshift.$sec.zm_subfmt_url")" = "$key" ]; then
 			[ "$pref" = xray ] && [ "$man" != "$url" ] && [ -z "$cust" ] && [ "$(uci -q get "netshift.$sec.zm_subfmt_chk")" != "$key" ] || continue
 			case "$url" in http://*|https://*) ;; *) continue ;; esac
 			case "$url" in *' '*) continue ;; esac
 			_fk_say "Подписка «$name»: проверяем, отдаёт ли сервер её в формате Happ"
 			rm -rf "$d"; mkdir -p "$d"; : > "$d/sb"; : > "$d/xr"
-			curl -fsSL --compressed -m 15 -b "" --max-redirs 10 -A "singbox/${ver:-1.12.0}" -o "$d/sb" "$url" 2>/dev/null
-			curl -fsSL --compressed -m 15 -b "" --max-redirs 10 -A "Happ/1.0.0" -o "$d/xr" "$url" 2>/dev/null
+			curl -fsSL --compressed -m 15 $ins -b "" --max-redirs 10 -A "singbox/${ver:-1.12.0}" -o "$d/sb" "$url" 2>/dev/null
+			curl -fsSL --compressed -m 15 $ins -b "" --max-redirs 10 -A "Happ/1.0.0" -o "$d/xr" "$url" 2>/dev/null
 			n_sb="$(_fk_sub_keys < "$d/sb" | sort -u | grep -c .)"; n_xr="$(_fk_sub_keys < "$d/xr" | sort -u | grep -c .)"
 			rm -rf "$d"
-			if [ "$n_sb" = 0 ] && [ "$n_xr" = 0 ]; then echo "   · подписка не скачалась напрямую — проверим в следующий раз"; continue; fi
+			if [ "$n_sb" = 0 ] && [ "$n_xr" = 0 ]; then echo "   · подписка не скачалась напрямую или в ней нет серверов — проверим в следующий раз"; continue; fi
 			uci set "netshift.$sec.zm_subfmt_chk=$key"; ch=1
 			if [ "$n_xr" = 0 ]; then
 				uci -q delete "netshift.$sec.subscription_format_preference"; uci -q delete "netshift.$sec.zm_subfmt_man"; sw=1
@@ -16037,12 +16075,17 @@ _fk_sub_fmt_auto() {
 		case "$url" in http://*|https://*) ;; *) continue ;; esac
 		_fk_say "Новая подписка «$(uci -q get "netshift.$sec.zm_label" || echo "$sec")»: определяем формат — сравниваем, что сервер отдаёт в форматах sing-box и Happ"
 		rm -rf "$d"; mkdir -p "$d"; : > "$d/sb"; : > "$d/xr"
-		curl -fsSL --compressed -m 15 -b "" --max-redirs 10 -A "singbox/${ver:-1.12.0}" -o "$d/sb" "$url" 2>/dev/null
-		curl -fsSL --compressed -m 15 -b "" --max-redirs 10 -A "Happ/1.0.0" -o "$d/xr" "$url" 2>/dev/null
+		curl -fsSL --compressed -m 15 $ins -b "" --max-redirs 10 -A "singbox/${ver:-1.12.0}" -o "$d/sb" "$url" 2>/dev/null
+		curl -fsSL --compressed -m 15 $ins -b "" --max-redirs 10 -A "Happ/1.0.0" -o "$d/xr" "$url" 2>/dev/null
 		_fk_sub_keys < "$d/sb" | sort -u > "$d/sb.k"; _fk_sub_keys < "$d/xr" | sort -u > "$d/xr.k"
 		n_sb="$(grep -c . "$d/sb.k")"; n_xr="$(grep -c . "$d/xr.k")"
-		if [ "$n_sb" = 0 ] && [ "$n_xr" = 0 ]; then echo "   · подписка не скачалась напрямую — формат определим в следующий раз, пока «Авто»"; rm -rf "$d"; continue; fi
+		if [ "$n_sb" = 0 ] && [ "$n_xr" = 0 ]; then
+			if [ -s "$d/sb" ] || [ -s "$d/xr" ]; then echo "   · сервер подписки ответил, но серверов в ответе не нашли — формат определим в следующий раз, пока «Авто»"
+			else echo "   · подписка не скачалась напрямую — формат определим в следующий раз, пока «Авто»"; fi
+			rm -rf "$d"; continue
+		fi
 		uci set "netshift.$sec.zm_subfmt_url=$key"; ch=1
+		lbl="sing-box"; head -c 512 "$d/sb" | tr -d ' \t\r\n' | grep -q '^[[{]' || lbl="ссылки"
 		miss="$(grep -vxF -f "$d/xr.k" "$d/sb.k" | grep -c .)"; [ -s "$d/xr.k" ] || miss="$n_sb"
 		xex="$(grep -vxF -f "$d/sb.k" "$d/xr.k" | grep -c .)"; [ -s "$d/sb.k" ] || xex="$n_xr"
 		if [ "$n_xr" -gt 0 ] && [ "$xex" -gt 0 ] && { [ "$miss" = 0 ] || [ "$n_xr" -gt "$n_sb" ]; }; then
@@ -16052,10 +16095,10 @@ _fk_sub_fmt_auto() {
 			echo "   ✓ в формате Happ серверов больше ($n_xr против $n_sb${extra:+, в том числе $extra}) — подписке поставлен формат Happ"
 			[ -n "$lost" ] && echo "   ! в формате Happ нет $miss серверов из формата sing-box ($lost)"
 			logger -t zapret-manager "Forkozz: новой подписке секции $sec поставлен формат Happ ($n_xr серверов против $n_sb)"
-		elif [ "$n_xr" = 0 ]; then echo "   ✓ формат «Авто» (sing-box): в формате Happ сервер подписку не отдал"
-		elif [ "$xex" = 0 ]; then echo "   ✓ формат «Авто» (sing-box): в Happ нет серверов, которых нет в нём ($n_sb)"
-		elif [ "$n_sb" = "$n_xr" ]; then echo "   ✓ формат «Авто» (sing-box): серверов столько же ($n_sb), но $xex есть только в Happ, а $miss — только в sing-box. Нужны именно они — выберите Happ вручную"
-		else echo "   ✓ формат «Авто» (sing-box): в нём серверов больше ($n_sb против $n_xr), хотя $xex есть только в Happ. Нужны именно они — выберите Happ вручную"; fi
+		elif [ "$n_xr" = 0 ]; then echo "   ✓ формат «Авто» ($lbl): в формате Happ сервер подписку не отдал"
+		elif [ "$xex" = 0 ]; then echo "   ✓ формат «Авто» ($lbl): в Happ нет серверов, которых нет в нём ($n_sb)"
+		elif [ "$n_sb" = "$n_xr" ]; then echo "   ✓ формат «Авто» ($lbl): серверов столько же ($n_sb), но $xex есть только в Happ, а $miss — только в sing-box. Нужны именно они — выберите Happ вручную"
+		else echo "   ✓ формат «Авто» ($lbl): в нём серверов больше ($n_sb против $n_xr), хотя $xex есть только в Happ. Нужны именно они — выберите Happ вручную"; fi
 		echo "   · формат запомнен для этой подписки — поменять можно вручную в её настройках; для другой подписки панель определит формат заново"
 		rm -rf "$d"
 	done
@@ -69592,6 +69635,8 @@ cat > '/www/zm/app.js' << 'ZM_INSTALLER_EOF'
 'use strict';
 
 var BUILD = '__ZMW_BUILD__';
+// Версия панели: вписывает установщик; если страницы открыты не с роутера (программа для ПК) — берём запомненную
+var VER = /^[0-9][0-9.]*$/.test('__ZMW_VER__') ? '__ZMW_VER__' : '';
 var RES = '/luci-static/resources/';
 var NULL_SID = '00000000000000000000000000000000';
 var K_SID = 'zmw.sid', K_THEME = 'zmw.theme', K_USER = 'zmw.user', K_NOTE = 'zmw.note', K_ANIM = 'zmw.anim', K_ANIMFOR = 'zmw.animfor', K_NAV = 'zmw.nav', K_LOOK = 'zmw.look';
@@ -73003,7 +73048,7 @@ function buildShell() {
 		E('span', { 'class': 'zmw-device-model' }, [ 'Роутер' ]),
 		E('span', { 'class': 'zmw-device-sub' }, [ '' ])
 	]);
-	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'by StressOzz' ]);
+	verEl = E('div', { 'class': 'zmw-brand-sub' }, [ 'by StressOzz' + (verNow() ? ' · v' + verNow() : '') ]);
 	updateEl = E('a', { 'class': 'zmw-update', 'href': '#/dashboard', 'hidden': '' }, [ 'Доступно обновление' ]);
 	memEl = E('div', { 'class': 'zmw-mem' });
 
@@ -73267,7 +73312,10 @@ function loadShellInfo() {
 }
 function applyUpd(u) {
 	if (!u || u.error || !shell || !updateEl) return;
-	if (u.current) verEl.textContent = 'by StressOzz · v' + u.current;
+	if (u.current) {
+		verEl.textContent = 'by StressOzz · v' + u.current;
+		try { window.localStorage.setItem('zmw.ver', String(u.current)); } catch (e) {}
+	}
 	var on = !!(u.latest && u.current && u.latest !== u.current && u.newer !== false);
 	updateEl.hidden = !on;
 	if (on) updateEl.textContent = 'Доступна версия ' + u.latest;
@@ -73405,6 +73453,12 @@ function matrixRain(c, msg) {
 	return stop;
 }
 
+function verNow() {
+	var v = VER;
+	if (!v) { try { v = window.localStorage.getItem('zmw.ver') || ''; } catch (e) { v = ''; } }
+	return /^[0-9][0-9.]*$/.test(v) ? v : '';
+}
+
 function showLogin(note, noteKind) {
 	if (loginEl) return;
 	var user = E('input', { 'type': 'text', 'name': 'username', 'autocomplete': 'username', 'autocapitalize': 'off', 'spellcheck': 'false', 'value': sget(K_USER) || 'root', 'required': '' });
@@ -73425,8 +73479,9 @@ function showLogin(note, noteKind) {
 	var card = E('form', { 'class': 'zmw-login-card', 'autocomplete': 'on' }, [
 		logo('zmw-logo-lg'),
 		E('div', { 'class': 'zmw-mx-title' }, [ 'ZAPRET_MANAGER' ]),
-		E('p', { 'class': 'zmw-mx-sub' }, [ 'wake up, ' + (sget(K_USER) || 'root') + '… · ' + location.hostname ]),
-		E('h1', {}, [ 'Zapret Manager' ]),
+		E('p', { 'class': 'zmw-mx-sub' }, [ 'wake up, ' + (sget(K_USER) || 'root') + '… · ' + location.hostname + (verNow() ? ' · v' + verNow() : '') ]),
+		E('h1', { 'class': 'zmw-brand-name' }, [ 'Zapret ', E('b', {}, [ 'Manager' ]) ]),
+		E('div', { 'class': 'zmw-brand-sub zmw-login-ver' }, [ 'by StressOzz' + (verNow() ? ' · v' + verNow() : '') ]),
 		E('p', { 'class': 'zmw-login-sub' }, [ 'Панель управления роутером ', E('b', {}, [ location.hostname ]) ]),
 		E('label', { 'class': 'zmw-field' }, [ E('span', { 'class': 'zmw-field-label' }, [ 'Пользователь' ]), E('div', { 'class': 'zmw-input' }, [ icon('user'), user ]) ]),
 		E('label', { 'class': 'zmw-field' }, [ E('span', { 'class': 'zmw-field-label' }, [ 'Пароль' ]), E('div', { 'class': 'zmw-input' }, [ icon('lock'), pass, eye ]) ]),
@@ -73812,8 +73867,8 @@ body.zmw-locked .zmw-shell { filter: blur(6px); pointer-events: none; }
 .zmw-brand { display: flex; align-items: center; gap: 12px; padding: 2px 8px 14px; }
 .zmw-brand-text { min-width: 0; flex: 1; }
 .zmw-brand-name { font-weight: 750; font-size: 20px; line-height: 1.15; letter-spacing: -.01em; white-space: nowrap; }
-.zmw-brand-name b { font-weight: inherit; background: linear-gradient(90deg, #1a8cff, #7c5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-html[data-theme="dark"] .zmw-brand-name b, html[data-theme="depth"] .zmw-brand-name b, html.zm-theme-dark .zmw-brand-name b { background: linear-gradient(90deg, #38bdf8, #a78bfa); -webkit-background-clip: text; background-clip: text; }
+.zmw-brand-name b { font-weight: inherit; background: linear-gradient(90deg, var(--a1), var(--a3)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-theme="dark"] .zmw-brand-name b, html[data-theme="depth"] .zmw-brand-name b, html.zm-theme-dark .zmw-brand-name b { background: linear-gradient(90deg, var(--a1), var(--a3)); -webkit-background-clip: text; background-clip: text; }
 .zmw-brand-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .zmw-brand .zmw-logo svg { width: 36px; height: 36px; }
 @media (max-width: 960px) {
@@ -74178,11 +74233,9 @@ html[data-theme="light"] .zmw-orbs i { opacity: .28; }
 	animation: zmw-card-in .6s cubic-bezier(.2,.8,.2,1) both;
 }
 @keyframes zmw-card-in { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
-.zmw-login-card h1 {
-	margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.02em;
-	background: linear-gradient(135deg, var(--text) 30%, var(--a1) 75%, var(--a3));
-	-webkit-background-clip: text; background-clip: text; color: transparent;
-}
+/* Заголовок входа — как имя панели в боковом меню: те же цвета темы и акцента, только крупнее */
+.zmw-login-card h1.zmw-brand-name { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.02em; white-space: normal; }
+.zmw-login-ver { margin-top: 4px; font-size: 12.5px; }
 .zmw-login-sub { margin: 6px 0 24px; color: var(--muted); font-size: 13.5px; }
 .zmw-login-sub b { color: var(--text-2); font-weight: 650; }
 .zmw-shake { animation: zmw-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
@@ -75398,7 +75451,7 @@ html[data-theme="graphite"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-the
 html[data-theme="graphite"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="graphite"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="graphite"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="graphite"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="graphite"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="graphite"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #ffb020; color: #1b1300; box-shadow: none; }
 html[data-theme="graphite"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="graphite"] .zmw-icon-btn.zmw-link-kvn:hover { background: #ffb020; color: #1b1300; border-color: #ffb020; }
 html[data-theme="graphite"] .zmw-icon-btn.zmw-link-tg, html[data-theme="graphite"] .zmw-icon-btn.zmw-link-tg:hover { background: rgba(255,176,32,.10); color: #ffcf6e; border-color: rgba(255,176,32,.35); }
-html[data-theme="graphite"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #ffb020; }
+html[data-theme="graphite"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); }
 html[data-theme="graphite"] .zm-stopbar { background: #2a1614; color: #ffd0cb; border-color: rgba(255,90,78,.5); }
 html[data-theme="oled"] {
 	--font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -75454,7 +75507,7 @@ html[data-theme="oled"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-theme="
 html[data-theme="oled"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="oled"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="oled"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="oled"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="oled"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="oled"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: #ffffff; color: #000000; box-shadow: none; }
 html[data-theme="oled"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="oled"] .zmw-icon-btn.zmw-link-kvn:hover { background: #ffffff; color: #000000; border-color: #ffffff; }
 html[data-theme="oled"] .zmw-icon-btn.zmw-link-tg, html[data-theme="oled"] .zmw-icon-btn.zmw-link-tg:hover { background: rgba(255,255,255,.10); color: #ffffff; border-color: rgba(255,255,255,.35); }
-html[data-theme="oled"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #ffffff; }
+html[data-theme="oled"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); }
 html[data-theme="oled"] .zm-stopbar { background: #1a0705; color: #ffd0cb; border-color: rgba(255,90,78,.5); }
 html[data-theme="oled"] .zmw-nav-item { border-radius: 999px; }
 html[data-theme="oled"] .zmw-nav-item.zmw-active { background: #ffffff; color: #000000; }
@@ -75510,7 +75563,7 @@ html[data-theme="matrix"] .zmw-title { font-weight: 400; letter-spacing: .06em; 
 html[data-theme="matrix"] .zmw-side { background: #000000; border-right: 1px solid #0d3d1a; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html[data-theme="matrix"] .zmw-logo svg { filter: hue-rotate(-90deg) saturate(1.6) brightness(1.1) drop-shadow(0 0 6px rgba(0,255,65,.6)); }
 html[data-theme="matrix"] .zmw-brand-name { letter-spacing: .04em; }
-html[data-theme="matrix"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #00ff41; text-shadow: 0 0 8px rgba(0,255,65,.55); }
+html[data-theme="matrix"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); text-shadow: 0 0 8px rgba(0,255,65,.55); }
 html[data-theme="matrix"] .zmw-nav-item { border-radius: 0; color: #4fd07a; }
 html[data-theme="matrix"] .zmw-nav-item:hover { background: rgba(0,255,65,.06); color: #b8ffcc; }
 html[data-theme="matrix"] .zmw-nav-item.zmw-active { background: #00ff41; color: #001a07; box-shadow: 0 0 16px -4px rgba(0,255,65,.7); }
@@ -75610,7 +75663,7 @@ html[data-theme="contrast"] #zmw-view .zmw-tabs .cbi-button:hover, html[data-the
 html[data-theme="contrast"] #zmw-view .zmw-tabs .cbi-button-positive, html[data-theme="contrast"] #zmw-view .zmw-tabs .cbi-button-positive:hover, html[data-theme="contrast"] .zm-dock .zmw-tabs .cbi-button-positive, html[data-theme="contrast"] .zm-dock .zmw-tabs .cbi-button-positive:hover, html[data-theme="contrast"] .zmw-modal .zmw-tabs .cbi-button-positive, html[data-theme="contrast"] .zmw-modal .zmw-tabs .cbi-button-positive:hover { background: transparent; color: #e8edf5; box-shadow: inset 0 0 0 1.5px #e8edf5; }
 html[data-theme="contrast"] .zmw-icon-btn.zmw-link-kvn, html[data-theme="contrast"] .zmw-icon-btn.zmw-link-kvn:hover { background: #3ba7ff; color: #0a0d13; border-color: #3ba7ff; }
 html[data-theme="contrast"] .zmw-icon-btn.zmw-link-tg, html[data-theme="contrast"] .zmw-icon-btn.zmw-link-tg:hover { background: rgba(67,224,160,.08); color: #43e0a0; border-color: rgba(67,224,160,.5); }
-html[data-theme="contrast"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #3ba7ff; }
+html[data-theme="contrast"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); }
 html[data-theme="contrast"] .zm-stopbar { background: #2a0f12; color: #ffc2c2; border-color: rgba(255,107,107,.5); }
 html[data-theme="contrast"] .zmw-nav-gear.zmw-on, html[data-theme="contrast"] .zmw-nav-editfoot .zmw-nav-btn-done { background: #3ba7ff; color: #0a0d13; border-color: #3ba7ff; }
 html[data-theme="contrast"] .zmw-nav-editing .zmw-nav-eye { color: #3ba7ff; background: rgba(59,167,255,.14); }
@@ -75649,7 +75702,7 @@ html[data-theme="neon"] .zmw-title { font-weight: 400; letter-spacing: .06em; co
 html[data-theme="neon"] .zmw-side { background: #07060f; border-right: 1px solid #2a2150; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html[data-theme="neon"] .zmw-logo svg { filter: hue-rotate(-150deg) saturate(1.8) brightness(1.15) drop-shadow(0 0 6px rgba(252,238,10,.6)); }
 html[data-theme="neon"] .zmw-brand-name { letter-spacing: .04em; }
-html[data-theme="neon"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #fcee0a; text-shadow: 0 0 8px rgba(252,238,10,.55); }
+html[data-theme="neon"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); text-shadow: 0 0 8px rgba(252,238,10,.55); }
 html[data-theme="neon"] .zmw-nav-item { border-radius: 0; color: #c9bff0; }
 html[data-theme="neon"] .zmw-nav-item:hover { background: rgba(252,238,10,.06); color: #f2eefe; }
 html[data-theme="neon"] .zmw-nav-item.zmw-active { background: #fcee0a; color: #0a0812; box-shadow: 0 0 16px -4px rgba(252,238,10,.7); }
@@ -75717,7 +75770,7 @@ html[data-theme="synth"] .zmw-title { font-weight: 400; letter-spacing: .06em; c
 html[data-theme="synth"] .zmw-side { background: #12062b; border-right: 1px solid #3a1663; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html[data-theme="synth"] .zmw-logo svg { filter: hue-rotate(110deg) saturate(1.6) brightness(1.1) drop-shadow(0 0 6px rgba(255,60,170,.6)); }
 html[data-theme="synth"] .zmw-brand-name { letter-spacing: .04em; }
-html[data-theme="synth"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #ff3caa; text-shadow: 0 0 8px rgba(255,60,170,.55); }
+html[data-theme="synth"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); text-shadow: 0 0 8px rgba(255,60,170,.55); }
 html[data-theme="synth"] .zmw-nav-item { border-radius: 10px; color: #e2c2f2; }
 html[data-theme="synth"] .zmw-nav-item:hover { background: rgba(255,60,170,.06); color: #ffeefe; }
 html[data-theme="synth"] .zmw-nav-item.zmw-active { background: #ff3caa; color: #ffffff; box-shadow: 0 0 16px -4px rgba(255,60,170,.7); }
@@ -75785,7 +75838,7 @@ html[data-theme="noir"] .zmw-title { font-weight: 400; letter-spacing: .06em; co
 html[data-theme="noir"] .zmw-side { background: #0b0b0b; border-right: 1px solid #2a2a2a; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 html[data-theme="noir"] .zmw-logo svg { filter: grayscale(1) contrast(1.2) brightness(1.1); }
 html[data-theme="noir"] .zmw-brand-name { letter-spacing: .04em; }
-html[data-theme="noir"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: #e9e6df; text-shadow: 0 0 8px rgba(233,230,223,.55); }
+html[data-theme="noir"] .zmw-brand-name b { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--a1); text-shadow: 0 0 8px rgba(233,230,223,.55); }
 html[data-theme="noir"] .zmw-nav-item { border-radius: 0; color: #cfcac0; }
 html[data-theme="noir"] .zmw-nav-item:hover { background: rgba(233,230,223,.06); color: #e9e6df; }
 html[data-theme="noir"] .zmw-nav-item.zmw-active { background: #e9e6df; color: #0b0b0b; box-shadow: 0 0 16px -4px rgba(233,230,223,.7); }
@@ -75852,7 +75905,7 @@ html[data-theme="matrix"] .zmw-login { background: #000000; }
 html[data-theme="matrix"] .zmw-mx-rain { display: block; }
 html[data-theme="matrix"] .zmw-login::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,.85) 100%); }
 html[data-theme="matrix"] .zmw-login-card { z-index: 2; max-width: 360px; padding: 26px 26px 20px; border-radius: 0; background: rgba(0,10,3,.84); border: 1px solid #00ff41; box-shadow: 0 0 0 1px rgba(0,255,65,.15), 0 0 40px rgba(0,255,65,.25), inset 0 0 30px rgba(0,255,65,.08); text-align: left; backdrop-filter: none; -webkit-backdrop-filter: none; }
-html[data-theme="matrix"] .zmw-login-card .zmw-logo-lg, html[data-theme="matrix"] .zmw-login-card > h1, html[data-theme="matrix"] .zmw-login-card > .zmw-login-sub { display: none; }
+html[data-theme="matrix"] .zmw-login-card .zmw-logo-lg, html[data-theme="matrix"] .zmw-login-card > h1, html[data-theme="matrix"] .zmw-login-card > .zmw-login-sub, html[data-theme="matrix"] .zmw-login-card > .zmw-login-ver { display: none; }
 html[data-theme="matrix"] .zmw-mx-title { display: block; font-size: 24px; letter-spacing: .14em; color: #00ff41; text-shadow: 0 0 8px rgba(0,255,65,.55); margin: 0 0 2px; overflow-wrap: anywhere; }
 html[data-theme="matrix"] .zmw-mx-sub { display: block; font-size: 13px; color: #3bd16f; margin: 0 0 18px; }
 html[data-theme="matrix"] .zmw-field-label { text-transform: uppercase; letter-spacing: .1em; color: #3bd16f; font-weight: 400; font-size: 11.5px; }
@@ -76273,7 +76326,7 @@ cat > '/www/zm-webui.html' << 'ZM_INSTALLER_EOF'
 </html>
 ZM_INSTALLER_EOF
 ZMW_BUILD="$(date +%s)"
-sed -i "s/__ZMW_BUILD__/$ZMW_BUILD/g" /www/zm/app.js /www/zm/app.css /www/zm-webui.html
+sed -i -e "s/__ZMW_BUILD__/$ZMW_BUILD/g" -e "s/__ZMW_VER__/$ZM_NEW_VER/g" /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 chmod 0644 /www/zm/app.js /www/zm/app.css /www/zm-webui.html
 mkdir -p /etc/crontabs 2>/dev/null || true
 [ -f /etc/crontabs/root ] || : > /etc/crontabs/root 2>/dev/null || true
