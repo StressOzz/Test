@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.090
+# Version: 5.083
 ZM_VERSION_EOF
 set -e
 
@@ -150,14 +150,10 @@ fi
 sed "s/@ZM_VERSION@/$ZM_NEW_VER/" > "$_zmi_st/backend.sh" << 'ZM_INSTALLER_EOF'
 #!/bin/sh
 umask 022
-# «Не трогать трафик VPN» (основная часть — у _zm_zskip_sync). Здесь то, что нужно и быстрой проверке сторожа
 ZSKIP_FILE="/opt/zapret-manager-luci/zapret_vpn_skip"
 ZSKIP_NFT="/usr/share/nftables.d/ruleset-post/90-zm-zskip.nft"
 ZSKIP_FP="/tmp/zapret-manager-luci/zskip.fp"
 ZSKIP_SVC="steer sing-box netshift netshift-naive mihomo xray v2ray tailscale podkop podkop-plus podkop-engine passwall passwall2"
-# Отпечаток того, от чего зависит правило: устройство основного интернета, туннели (тип устройства «none» —
-# tun, wireguard, amneziawg) и cgroup запущенных служб VPN. Почти без запуска программ: сторож сверяет его
-# каждые две минуты и обновляет правило, только если что-то поменялось
 _zm_zskip_fp() (
 	set +f
 	echo "zskip 1"
@@ -799,11 +795,11 @@ _inet_ping() {
 	echo "$(date +%s) fail"
 }
 _inet_state() {
-	local f="$ZM_STATE_DIR/inet" t r ms age
+	local f="$JOBS_DIR/inet" t r ms age
 	read -r t r ms 2>/dev/null < "$f"
 	age=$(( $(date +%s) - ${t:-0} ))
 	if [ "$age" -ge 10 ] || [ "$age" -lt 0 ]; then
-		mkdir -p "$ZM_STATE_DIR"
+		mkdir -p "$JOBS_DIR"
 		if mkdir "$f.lock" 2>/dev/null; then
 			( _inet_ping > "$f.new" 2>/dev/null && mv -f "$f.new" "$f"; rmdir "$f.lock" ) >/dev/null 2>&1 &
 		elif [ -n "$(find "$f.lock" -mmin +1 2>/dev/null)" ]; then
@@ -2453,8 +2449,6 @@ _strat_label() {
 	printf '%s' "$s"
 }
 
-# Сколько доменов в списке РКН. Список большой (до ~125 тыс. строк), а статус спрашивают при каждом открытии
-# страницы — поэтому число кэшируется до изменения файла (ключ — время изменения и размер)
 _zo_rkn_count() {
 	local k c n f="$JOBS_DIR/rkn.count"
 	[ -s "$ZO_RKN_FILE" ] || { echo 0; return 0; }
@@ -5686,13 +5680,7 @@ _doh_force_apply() {
 
 _dnsm_present() { [ -x /usr/bin/dns-manager ] || [ -x /usr/libexec/rpcd/dns_manager ]; }
 
-# «Zapret не трогает VPN». Пакеты, которые роутер отправляет в туннели (Steer, AmneziaWG, WARP, Mixomo,
-# Tailscale и другие), получают бит DESYNC_MARK: Zapret и Zapret2 принимают их за свои и не искажают. Иначе
-# Zapret может портить рукопожатие сайтов, которые уже идут через VPN. Туннели — файлом fw4 (ruleset-post):
-# переживает перезапуск файрвола и роутера. По умолчанию выключено; включено — в $ZSKIP_FILE записано on
 ZSKIP_PAT="zm_vpn* zmv* zm_warp* zmwarp* awg* wg* tun* tailscale* utun* mihomo* Meta"
-# Службы-клиенты VPN ($ZSKIP_SVC): их собственные подключения к серверу VPN тоже не трогаем (procd кладёт
-# службы в cgroup services/<имя>). Нужны ядро 5.13+ и kmod-nft-socket — если их нет, эта часть просто не ставится
 _zm_zskip_on() { local v; { read -r v < "$ZSKIP_FILE"; } 2>/dev/null; [ "$v" = on ]; }
 _zm_zskip_need() { [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; }
 _zm_zskip_mark() {
@@ -5705,8 +5693,6 @@ _zm_zskip_mark() {
 	[ "$m" -gt 0 ] 2>/dev/null || m=$((0x40000000))
 	printf '0x%08x\n' "$m"
 }
-# Туннели: по названию (шаблоны) и по типу устройства (tun, wireguard, amneziawg). Интерфейс, через который
-# идёт основной интернет, не берём никогда — иначе Zapret перестал бы работать вовсе
 _zm_zskip_ifs() {
 	local wan p n pats
 	set -f
@@ -5728,7 +5714,6 @@ _zm_zskip_cgs() {
 	local n
 	for n in $ZSKIP_SVC; do [ -d "/sys/fs/cgroup/services/$n" ] && echo "$n"; done
 }
-# Файл для fw4: только туннели. Он не зависит от того, запущено ли что-то, — fw4 грузит его при каждом старте
 _zm_zskip_render() {
 	local m n
 	set -f
@@ -5744,8 +5729,6 @@ _zm_zskip_render() {
 	echo "}"
 	set +f
 }
-# Подключения самих служб VPN — отдельной таблицей, только пока служба запущена, и не через fw4: при загрузке
-# роутера служб ещё нет, nft не находит их cgroup и отвергает весь файрвол целиком (роутер остаётся без NAT)
 _zm_zskip_render_cg() {
 	local m n
 	m="$(_zm_zskip_mark)"
@@ -5755,7 +5738,6 @@ _zm_zskip_render_cg() {
 	echo "	chain out {"
 	echo "		type filter hook output priority 50; policy accept;"
 	for n; do
-		# Номер cgroup меняется при перезапуске службы — он в комментарии, чтобы правило обновилось
 		echo "		# $n $(ls -id "/sys/fs/cgroup/services/$n" 2>/dev/null | awk '{ print $1 }')"
 		echo "		socket cgroupv2 level 2 \"services/$n\" meta mark set meta mark | $m"
 	done
@@ -5791,7 +5773,7 @@ _zm_zskip_sync() {
 		fi
 		rm -f "$t"
 		_zm_zskip_fp > "$ZSKIP_FP"
-	else
+	elif [ -f "$ZSKIP_NFT" ] || [ -f "$ZSKIP_FP" ] || [ -f "$ZSKIP_FP.cg" ]; then
 		rm -f "$ZSKIP_NFT" "$ZSKIP_FP" "$ZSKIP_FP.cg"
 		_zm_zskip_drop zm_zskip
 		_zm_zskip_drop zm_zskip_cg
@@ -19451,7 +19433,7 @@ tsc_status() {
 		$on && $run && _tsc_tg_ip_fix >/dev/null 2>&1
 	fi
 	[ -f "$TSC_ON" ] && $inst && ! grep -qF "$TSC_CRON_TAG" "$CRON_FILE" 2>/dev/null && _tsc_cron on
-	mkdir -p "$TSC_DIR" 2>/dev/null; printf '%s\n' "${st:-}" > "$TSC_STATE" 2>/dev/null
+	[ "$(cat "$TSC_STATE" 2>/dev/null)" = "${st:-}" ] || { mkdir -p "$TSC_DIR" 2>/dev/null; printf '%s\n' "${st:-}" > "$TSC_STATE" 2>/dev/null; }
 	[ "$(uci -q get "network.$TSC_NET")" = interface ] && net=true
 	lz="$(_zm_lan_zone)"
 	z="$(_zm_zone_sec "$lz")" && case " $(uci -q get "firewall.$z.network") " in *" $TSC_NET "*) zone=true ;; esac
