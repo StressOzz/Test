@@ -1485,6 +1485,7 @@ _fk_fakeip_patch() { _zmL forkozz && _fk_fakeip_patch "$@"; }
 _fk_ru_watch() { _zmL forkozz && _fk_ru_watch "$@"; }
 _fk_desync_patch() { _zmL forkozz && _fk_desync_patch "$@"; }
 _fk_ksgap_patch() { _zmL forkozz && _fk_ksgap_patch "$@"; }
+_fk_naivesni_patch() { _zmL forkozz && _fk_naivesni_patch "$@"; }
 _fk_ksgap_watch() { _zmL forkozz && _fk_ksgap_watch "$@"; }
 _fk_serial_patch() { _zmL forkozz && _fk_serial_patch "$@"; }
 _fk_mlkem_patch() { _zmL forkozz && _fk_mlkem_patch "$@"; }
@@ -5626,8 +5627,10 @@ _doh_main_text() {
 	echo "	option group 'nogroup'"
 	echo "	option listen_addr '127.0.0.1'"
 	echo "	option force_ip_family 'auto'"
-	echo "	option canary_domains_icloud '$1'"
-	echo "	option canary_domains_mozilla '$1'"
+	# Подсказка браузерам — вместе с перехватом, если её не выключили в «Браузеры и российские сайты»
+	n="$1"; [ "$(_kv_last "$DN_FILE" canary_off)" = 1 ] && n=0
+	echo "	option canary_domains_icloud '$n'"
+	echo "	option canary_domains_mozilla '$n'"
 }
 _doh_other_sections() {
 	awk '/^config[ \t]/ { skip = ($2 == "main") } !skip' "$_doh_file" 2>/dev/null | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed '/./,$!d'
@@ -5642,6 +5645,7 @@ _doh_force_apply() {
 	rest="$(_doh_other_sections)"
 	{ printf '%s\n' "$new"; [ -n "$rest" ] && printf '\n%s\n' "$rest"; } > "$_doh_file.zmtmp" && mv -f "$_doh_file.zmtmp" "$_doh_file"
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
+	[ "$want" = 0 ] && _dn_canary_fix
 	return 0
 }
 
@@ -5665,7 +5669,6 @@ _doh_provider_of() {
 		https://eu.geohide.ru/*) echo geohide_eu ;;
 		https://us.geohide.ru/*) echo geohide_us ;;
 		https://dns.malw.link/*) echo malw ;;
-		https://dns.zapret.moe/*) echo zapretmoe ;;
 		https://d.webshiftvpn.ru/*) echo webshift ;;
 		https://dns.dagami.ru/*) echo dagami ;;
 		https://dns.magicdns.ru/*|https://api.magicdns.ru/*) echo magicdns ;;
@@ -5716,6 +5719,7 @@ doh_status() {
 	fi
 	/etc/init.d/https-dns-proxy running >/dev/null 2>&1 && running=true
 	[ -f "$DOH_STOP" ] && ! _doh_pkg && rm -f "$DOH_STOP"
+	_dn_canary_fix
 	printf '{"name":"%s","installed":%s,"stopped":%s,"current":"%s","running":%s,"force_dns":%s,"force_mode":"%s","resolvers":[%s],"steer_active":%s,"steer_installed":%s,"forkozz":%s,"fk_name":"%s","bootstrap_custom":"%s","luci_boots":[%s],"hosts_extra":%s,"failover":%s,"dnsm":%s,"net":%s,"own":[%s],"zapret_doh":"%s"}\n' \
 		"$(c="$(_doh_cur_id)"; [ -n "$c" ] && esc "$(_doh_name "$c")")" "$installed" "$([ -f "$DOH_STOP" ] && echo true || echo false)" "$(esc "$current")" "$running" "$force" "$(_doh_force_mode)" "$list" \
 		"$(_doh_steer_active && echo true || echo false)" \
@@ -5790,7 +5794,6 @@ _doh_url_of() {
 		geohide_eu)    echo "https://eu.geohide.ru/dns-query" ;;
 		geohide_us)    echo "https://us.geohide.ru/dns-query" ;;
 		malw)          echo "https://dns.malw.link/dns-query" ;;
-		zapretmoe)     echo "https://dns.zapret.moe/dns-query" ;;
 		webshift)      echo "https://d.webshiftvpn.ru/dns-query" ;;
 		dagami)        echo "https://dns.dagami.ru/dns-query" ;;
 		magicdns)      echo "https://dns.magicdns.ru/dns-query" ;;
@@ -5829,7 +5832,7 @@ _doh_name() {
 		cloudflare_sec) echo "Cloudflare · Защита от угроз" ;; cloudflare_fam) echo "Cloudflare · Семейный фильтр" ;; quad9_open) echo "Quad9 · Без фильтрации" ;;
 		controld_sec) echo "Control D · Защита от угроз" ;; controld_fam) echo "Control D · Семейный фильтр" ;; dns4eu_sec) echo "DNS4EU · Защита от угроз" ;; dns4eu_fam) echo "DNS4EU · Семейный фильтр" ;;
 		yandex) echo "Яндекс" ;; yandex_family) echo "Яндекс · Семейный фильтр" ;; yandex_safe) echo "Яндекс · Защита от угроз" ;; geohide_eu) echo "GeoHide EU" ;;
-		geohide_us) echo "GeoHide US" ;; malw) echo MALW ;; zapretmoe) echo zapret.moe ;; webshift) echo WebShift ;; dagami) echo Dagami ;; magicdns) echo MagicDNS ;;
+		geohide_us) echo "GeoHide US" ;; malw) echo MALW ;; webshift) echo WebShift ;; dagami) echo Dagami ;; magicdns) echo MagicDNS ;;
 		tamaev) echo tamaev-gifts.xyz ;; zombiez) echo zombiez.ru ;; wlrus) echo wlrus.cfd ;; magicinfo) echo magicinfo.art ;; quicbest) echo quic.best ;;
 		controld) echo "Control D" ;; dns4eu) echo DNS4EU ;;
 		https://*) _doh_own_title "$1" | grep . || printf '%s' "$1" | sed 's#^https://\([^/]*\).*#\1#' ;; *) echo "$1" ;;
@@ -5873,6 +5876,7 @@ _dns_preset_map() {
 		dns.bezmezhau.com) echo "sync.bezmezhau.com" ;;
 		https://geohide.ru/*|https://dns.geohide.ru/*) echo "https://dns.comss.one/dns-query" ;;
 		https://api.magicdns.ru/*) echo "https://dns.magicdns.ru/dns-query" ;;
+		https://dns.zapret.moe/*) echo "https://dns.comss.one/dns-query" ;;
 		*) echo "$1" ;;
 	esac
 }
@@ -5892,9 +5896,35 @@ _dn_isp() {
 		return 0
 	done
 }
+# https-dns-proxy сам закрывает браузерам свой DNS (записи server=/use-application-dns.net/ и т. п.), только
+# пока он установлен, не остановлен кнопкой и перехват включён. После удаления DoH, остановки или «Не перехватывать» такие записи —
+# остаток: Firefox и Частный узел iCloud остаются выключены, а выключить это в панели нечем
+DN_CANARY_DOH="use-application-dns.net mask.icloud.com mask-h2.icloud.com"
+_dn_canary_doh_on() {
+	[ -x /etc/init.d/https-dns-proxy ] && [ -f /etc/config/https-dns-proxy ] && [ ! -f "$DOH_STOP" ] &&
+		[ "$(uci -q get https-dns-proxy.config.force_dns)" != 0 ] && [ "$(uci -q get https-dns-proxy.config.canary_domains_mozilla)" != 0 ]
+}
+_dn_canary_fix() {
+	local s o d ch=""
+	_dnsm_present && return 0
+	_dn_canary_doh_on && return 0
+	for s in $(_dn_secs); do
+		for o in server doh_backup_server doh_server; do
+			for d in $DN_CANARY_DOH; do
+				uci -q get "dhcp.$s.$o" 2>/dev/null | tr ' ' '\n' | grep -qxF "/$d/" || continue
+				uci -q del_list "dhcp.$s.$o=/$d/"; ch=1
+			done
+		done
+	done
+	[ -n "$ch" ] || return 0
+	uci -q commit dhcp
+	[ "$1" = norestart ] || /etc/init.d/dnsmasq restart >/dev/null 2>&1
+	logger -t zapret-manager "DNS: убраны оставшиеся записи DoH, закрывавшие браузерам свой DNS"
+	return 0
+}
 _dn_json() {
 	local doh=false
-	uci -q -X show dhcp 2>/dev/null | grep -E '^dhcp\.[^.]*\.server=' | grep -qF "'/use-application-dns.net/'" && doh=true
+	_dn_canary_doh_on && uci -q -X show dhcp 2>/dev/null | grep -E '^dhcp\.[^.]*\.server=' | grep -qF "'/use-application-dns.net/'" && doh=true
 	printf '{"canary":%s,"canary_doh":%s,"ru":"%s","ru_ips":"%s","isp":"%s"}' \
 		"$([ "$(_dn_get canary 0)" = 1 ] && echo true || echo false)" "$doh" "$(esc "$(_dn_get ru off)")" \
 		"$(esc "$(_dn_ru_ips | tr ' ' ',')")" "$(esc "$(_dn_isp)")"
@@ -6091,9 +6121,17 @@ _st_dnsmode() { [ "$(cat /etc/zm-steer/dns.mode 2>/dev/null)" = router ] && echo
 _st_realip() { [ "$(cat /etc/zm-steer/realip.mode 2>/dev/null)" = off ] && echo off || echo on; }
 _st_torrent() { case "$(cat /etc/zm-steer/torrent.mode 2>/dev/null)" in direct) echo direct ;; block) echo block ;; *) echo allow ;; esac; }
 _st_quic() { [ "$(cat /etc/zm-steer/quic.mode 2>/dev/null)" = block ] && echo block || echo allow; }
+# «Торренты» и «QUIC» у правила. $1 — списки srs правила, $2 — выход. Ядро отвергает эти ключи у правила со
+# списком srs (пока только domains_file и prefixes_file) и torrent: direct у выхода «напрямую» — раньше из-за
+# одного такого правила они снимались со всех правил с ложной подсказкой «обновите ядро»
 _stl_tq() {
 	[ -n "$ZM_STL_NOTQ" ] && return 0
-	[ "$(_st_torrent)" = allow ] || printf ',"torrent":"%s"' "$(_st_torrent)"
+	[ -n "$1" ] && return 0
+	case "$(_st_torrent)" in
+		allow) ;;
+		direct) case "$2" in "$ST_DIRECT_OUT"|direct) ;; *) printf ',"torrent":"direct"' ;; esac ;;
+		*) printf ',"torrent":"%s"' "$(_st_torrent)" ;;
+	esac
 	[ "$(_st_quic)" = block ] && printf ',"quic":"block"'
 	return 0
 }
@@ -8779,6 +8817,7 @@ _fk_service0() {
 	_fk_rsinit_patch
 	_fk_desync_patch
 	_fk_ksgap_patch
+	_fk_naivesni_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_subck_patch
@@ -13182,7 +13221,7 @@ _fk_dns_migrate() {
 	esac
 	[ -n "$ch" ] || return 1
 	uci -q commit netshift
-	logger -t zapret-manager "$(_fk_name): адреса DNS обновлены (Comss, Bezmezhau, GeoHide RU, MagicDNS)"
+	logger -t zapret-manager "$(_fk_name): адреса DNS обновлены (Comss, Bezmezhau, GeoHide RU, MagicDNS, zapret.moe → Comss)"
 	return 0
 }
 
@@ -14651,6 +14690,40 @@ _fk_ru_watch() {
 	return 0
 }
 
+_fk_naivesni_patch() {
+	local f=/usr/lib/netshift/sing_box_config_facade.sh tmp c a='            config=$(sing_box_cm_add_naive_outbound "$config" "$tag" "$host" "$port" "$naive_user" "$naive_pass" "$naive_quic")'
+	[ -f "$f" ] || return 0
+	grep -q '^# ZM_NAIVESNI 1$' "$f" && return 0
+	[ "$(grep -cxF "$a" "$f")" = 1 ] || return 0
+	tmp="$f.zm-naivesni"
+	cat > "$tmp.blk" << 'ZM_FK_NAIVESNI_EOF'
+            # ZM: имя сервера (SNI) из ссылки — sni= или peer=. Сервер за общим входом отвечает только на своё имя:
+            # с адресом входа вместо него TLS не сходится, и naive+quic не подключается
+            zm_sni="$(url_get_query_param "$url" "sni")"
+            [ -n "$zm_sni" ] || zm_sni="$(url_get_query_param "$url" "peer")"
+            if [ -n "$zm_sni" ] && [ "$zm_sni" != "$host" ]; then
+                config=$(echo "$config" | jq --arg t "$tag" --arg s "$zm_sni" '(.outbounds[] | select(.tag == $t) | .tls) |= ((. // {enabled: true}) + {server_name: $s})')
+            fi
+ZM_FK_NAIVESNI_EOF
+	awk -v a="$a" -v b="$tmp.blk" '
+		NR == 1 { print; print "# ZM_NAIVESNI 1"; next }
+		{ print }
+		$0 == a { while ((getline l < b) > 0) print l; c++ }
+		END { exit c == 1 ? 0 : 1 }' "$f" > "$tmp" || { rm -f "$tmp" "$tmp.blk"; return 0; }
+	rm -f "$tmp.blk"
+	sh -n "$tmp" 2>/dev/null && chmod 0644 "$tmp" && mv -f "$tmp" "$f" || { rm -f "$tmp"; return 0; }
+	# Серверы naive уже в работе — пересобираем настройки, чтобы имя сервера встало сразу, а не при обновлении подписки
+	[ "$1" = noreload ] && return 0
+	_fk_up || return 0
+	_job_running forkop && return 0
+	c="$(uci -q get netshift.settings.config_path)"; c="${c:-/etc/sing-box/config.json}"
+	[ -s "$c" ] && command -v jq >/dev/null 2>&1 || return 0
+	jq -e '[.outbounds[]? | select(.type == "naive")] | length > 0' "$c" >/dev/null 2>&1 || return 0
+	logger -t zapret-manager "Forkozz: серверы NaiveProxy берут имя сервера (sni) из ссылки — пересобираем настройки"
+	( _zm_run 180 /usr/bin/netshift reload >/dev/null 2>&1 & )
+	return 0
+}
+
 _fk_ksgap_patch() {
 	local f=/usr/bin/netshift tmp a1='    if ! kill_switch_apply; then' a2='    (exec 1000>&-; list_update) &' a3='    rm -f "$TMP_RULESET_FOLDER"/*' a4='list_update)'
 	[ -f "$f" ] && [ -f /usr/lib/netshift/kill_switch.sh ] || return 0
@@ -15514,6 +15587,7 @@ do_fk_install() {
 	_fk_rsinit_patch
 	_fk_desync_patch
 	_fk_ksgap_patch
+	_fk_naivesni_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_updl_patch
@@ -15866,6 +15940,7 @@ do_fk_lists() {
 	_fk_rsinit_patch
 	_fk_desync_patch
 	_fk_ksgap_patch
+	_fk_naivesni_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_updl_patch
@@ -16039,6 +16114,7 @@ do_fk_subs() {
 	_fk_rsinit_patch
 	_fk_desync_patch
 	_fk_ksgap_patch
+	_fk_naivesni_patch
 	_fk_fakeip_patch
 	_fk_ghdl_patch
 	_fk_updl_patch
@@ -16611,6 +16687,7 @@ forkop_action() {
 			_fk_rsinit_patch
 			_fk_desync_patch
 			_fk_ksgap_patch
+			_fk_naivesni_patch
 		_fk_fakeip_patch
 			grep -q '^# ZM_REALITY 1$' /usr/bin/netshift 2>/dev/null || { echo '{"error":"эта версия Forkozz не даёт менять настройки REALITY — обновите Forkozz"}'; return 1; }
 			b="$(printf '%s' "$arg" | _fk_ucj rlnode)"
@@ -16810,6 +16887,7 @@ zm_watch() {
 		_fk_rsinit_patch
 		_fk_desync_patch
 		_fk_ksgap_patch
+		_fk_naivesni_patch
 		_fk_dnslan_patch
 		_fk_dnsloop_patch
 		_fk_fakeip_patch
@@ -26144,6 +26222,7 @@ do_doh_remove() {
 	_zm_wipe /etc/config/https-dns-proxy /etc/config/https-dns-proxy-opkg /etc/config/https-dns-proxy.apk-new /etc/init.d/https-dns-proxy /etc/rc.d/*https-dns-proxy "$DOH_FORCE_MODE_FILE" "$DOH_BOOT_FILE" "$DOH_FO_FILE" "$DOH_FO_STATE" "$DOH_FO_EVENTS" "$DOH_OWN_FILE" "$_doh_file.zm-prev" /tmp/zm-doh-failover.lock || rc=1
 	_doh_fo_cron off
 	_zm_dns_scrub '^127\.0\.0\.1#50[0-9][0-9]$'
+	_dn_canary_fix norestart
 	for r in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)\.name='[^']*[Hh]ttps[-_ ]dns[-_ ]proxy[^']*'\$/\1/p" | sort -u); do uci -q delete "firewall.$r"; done
 	uci -q commit firewall
 	/etc/init.d/firewall reload >/dev/null 2>&1
@@ -26180,6 +26259,7 @@ doh_power() {
 			mkdir -p "$(dirname "$DOH_STOP")"; : > "$DOH_STOP"
 			/etc/init.d/https-dns-proxy stop >/dev/null 2>&1
 			/etc/init.d/https-dns-proxy disable >/dev/null 2>&1
+			_dn_canary_fix norestart
 			/etc/init.d/dnsmasq restart >/dev/null 2>&1
 			rm -f "$DOH_FO_STATE"
 			_doh_fo_event "DoH остановлен кнопкой — DNS идёт через обычные серверы, пока не нажмёте «Запустить»"
@@ -27068,7 +27148,7 @@ _doh_preset_migrate() {
 	if [ "$ch" = 2 ]; then
 		uci -q commit https-dns-proxy
 		[ -f "$DOH_STOP" ] || /etc/init.d/https-dns-proxy restart >/dev/null 2>&1
-		logger -t zapret-manager "DoH: адреса серверов обновлены (Bezmezhau, GeoHide RU, MagicDNS)"
+		logger -t zapret-manager "DoH: адреса серверов обновлены (Bezmezhau, GeoHide RU, MagicDNS, zapret.moe → Comss)"
 	fi
 	[ -n "$ch" ]
 }
@@ -27111,7 +27191,7 @@ _doh_legacy_fix() {
 	local id l u cur
 	_doh_own_dedup >/dev/null 2>&1
 	cur="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].resolver_url')"
-	case "$cur" in https://dns.bezmezhau.com/*|https://geohide.ru/*|https://dns.geohide.ru/*|https://api.magicdns.ru/*) _doh_preset_migrate >/dev/null 2>&1; cur="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].resolver_url')" ;; esac
+	case "$cur" in https://dns.bezmezhau.com/*|https://geohide.ru/*|https://dns.geohide.ru/*|https://api.magicdns.ru/*|https://dns.zapret.moe/*) _doh_preset_migrate >/dev/null 2>&1; cur="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].resolver_url')" ;; esac
 	case "$cur" in https://dns.comss.ru/*|https://dns.mafioznik.com/*|https://dns.astrakat.ru/*|https://unfiltered.adguard-dns.com/*) ;;
 		*) grep -qE '^(pref|active|chain)=(.*,)?(comss_ru|mafioznik|astracat|adguard)(,|$)' "$DOH_FO_FILE" 2>/dev/null || return 0 ;;
 	esac
@@ -27219,13 +27299,13 @@ _dn_apply() {
 }
 
 dns_net_set() {
-	local kv k v canary ru ips
+	local kv k v canary ru ips cset=""
 	_dnsm_guard || return 1
 	canary="$(_dn_get canary 0)"; ru="$(_dn_get ru off)"
 	for kv in $(printf '%s' "$1" | tr -c 'A-Za-z0-9=_-' ' '); do
 		k="${kv%%=*}"; v="${kv#*=}"
 		case "$k" in
-			canary) if [ "$v" = 1 ]; then canary=1; else canary=0; fi ;;
+			canary) cset=1; if [ "$v" = 1 ]; then canary=1; else canary=0; fi ;;
 			ru) case "$v" in off|yandex|isp) ru="$v" ;; *) echo '{"error":"неизвестный режим для российских сайтов"}'; return 1 ;; esac ;;
 		esac
 	done
@@ -27239,8 +27319,12 @@ dns_net_set() {
 		_dn_put ispips "$ips"
 	fi
 	_dn_put canary "$canary"
+	# Выключили подсказку — и DoH больше не ставит её вместе с перехватом; включили — снова ставит
+	[ -n "$cset" ] && { if [ "$canary" = 1 ]; then _dn_put canary_off 0; else _dn_put canary_off 1; fi; }
 	_dn_put ru "$ru"
 	_dn_apply
+	_doh_force_apply
+	_dn_canary_fix
 	printf '{"ok":true,"net":%s}\n' "$(_dn_json)"
 }
 
@@ -27628,7 +27712,7 @@ _stl_rule() {
 	lists="$lists${lists:+,}$(_stl_js "$lid"):{$body}"
 	x=""
 	[ "$(_st_realip)" = on ] && x=',"resolve":"realip"'
-	x="$x$(_stl_tq)"
+	x="$x$(_stl_tq "$srs" "$out")"
 	[ -z "$ZM_STL_NODNS" ] && [ "$(_st_dnsmode)" = tun ] && { x="$x,\"dns\":\"zm_tun$dnt\""; _stl_dns_need "$dnt" "$out"; }
 	local r="" top=""
 	[ -n "$cu" ] && top=1
@@ -27805,7 +27889,7 @@ _stl_spec() {
 				dvs="$dvs $b"
 				_stl_client "$b"
 				[ "$a" = byp ] || xc="$xc $STL_CID"
-				drules="$drules${drules:+,}{\"name\":$(_stl_js "$(_stl_ident "${a}_$b")"),\"for\":[\"$STL_CID\"],\"to\":\"all\",\"out\":\"$dout\",\"scope\":\"device\"$([ "$a" = byp ] || _stl_tq)}" ;;
+				drules="$drules${drules:+,}{\"name\":$(_stl_js "$(_stl_ident "${a}_$b")"),\"for\":[\"$STL_CID\"],\"to\":\"all\",\"out\":\"$dout\",\"scope\":\"device\"$([ "$a" = byp ] || _stl_tq "" "$dout")}" ;;
 			sdev)
 				[ "$b" = all ] || continue
 				dout=""; for t in $so; do [ "${t%%:*}" = "$a" ] && dout="${t#*:}"; done
@@ -27814,7 +27898,7 @@ _stl_spec() {
 				dvs="$dvs $c"
 				_stl_client "$c"
 				xc="$xc $STL_CID"
-				drules="$drules${drules:+,}{\"name\":$(_stl_js "$(_stl_ident "${a}_all_$c")"),\"for\":[\"$STL_CID\"],\"to\":\"all\",\"out\":\"$dout\",\"scope\":\"device\"$(_stl_tq)}" ;;
+				drules="$drules${drules:+,}{\"name\":$(_stl_js "$(_stl_ident "${a}_all_$c")"),\"for\":[\"$STL_CID\"],\"to\":\"all\",\"out\":\"$dout\",\"scope\":\"device\"$(_stl_tq "" "$dout")}" ;;
 		esac
 	done < "$mf"
 	_stl_rule
@@ -27877,14 +27961,18 @@ _stl_upd_hint() {
 	if [ -n "$(_stl_pin)" ]; then echo "В закреплённом ядре steer ${cur:-$STL_LEGACY} этого нет — есть в последней версии (Steer → «Сменить версию»)"
 	elif _stl_ver_ok "$new" && _stl_ver_ok "$cur" && _st_ver_lt "$cur" "$new" && { [ -z "$need" ] || ! _st_ver_lt "$new" "$need"; }; then
 		echo "Обновите ядро steer до $new"
+	elif [ -n "$need" ] && _stl_ver_ok "$cur" && ! _st_ver_lt "$cur" "$need"; then echo "Подробности — в журнале Steer"
 	elif [ -n "$need" ]; then echo "Заработает само с ядром steer ${need%.0} — сейчас стоит ${cur:-старое}"
 	else echo "Заработает само в новой версии ядра steer"; fi
 }
 
 stl_apply() {
 	local new="$STL_SPEC.zm.$$" prev="$STL_TMP/spec.prev" err w=0 i=0 ck=0 fx="" again="" plg="" x
-	local ZM_STL_NOV6T="" ZM_STL_NOCTTL="" ZM_STL_NODNS="" ZM_STL_NOFO="" ZM_STL_NOTQ=""
+	local ZM_STL_NOV6T="" ZM_STL_NOCTTL="" ZM_STL_NODNS="" ZM_STL_NOFO="" ZM_STL_NOTQ="" tqok=""
 	STL_DUP_SAID=""
+	# «Торренты» и «QUIC» ядро знает с 2.1.0: у него их не снимаем — иначе чужая ошибка (например, про
+	# hysteria2, который тоже QUIC) молча выключала бы их с ложной подсказкой «обновите ядро»
+	x="$(stl_version)"; _stl_ver_ok "$x" && ! _st_ver_lt "$x" 2.1.0 && tqok=1
 	mkdir -p "$STL_ETC" "$STL_TMP"
 	rm -f "$ST_DIR/nofam"
 	_stl_spec "$1" > "$new" || { rm -f "$new"; echo "ОШИБКА: в настройке нет ни одного списка"; return 1; }
@@ -27901,10 +27989,10 @@ stl_apply() {
 		elif [ -z "$ZM_STL_NOV6T" ] && grep -q '"kind":"tunnel"' "$new" && printf '%s' "$err" | grep -qi 'ipv6'; then ZM_STL_NOV6T=1
 		elif [ -z "$ZM_STL_NOCTTL" ] && grep -q '"cache_ttl"' "$new" && printf '%s' "$err" | grep -q 'cache_ttl'; then ZM_STL_NOCTTL=1; fx="$fx ct"
 		elif [ -z "$ZM_STL_NODNS" ] && grep -q '"zm_tun' "$new" && printf '%s' "$err" | grep -q 'zm_tun'; then ZM_STL_NODNS=1; fx="$fx dns"
-		elif [ -z "$ZM_STL_NOTQ" ] && grep -qE '"(torrent|quic)":' "$new" && printf '%s' "$err" | grep -qiE 'torrent|quic'; then ZM_STL_NOTQ=1; fx="$fx tq"
+		elif [ -z "$tqok" ] && [ -z "$ZM_STL_NOTQ" ] && grep -qE '"(torrent|quic)":' "$new" && printf '%s' "$err" | grep -qiE 'torrent|quic'; then ZM_STL_NOTQ=1; fx="$fx tq"
 		elif [ -z "$ZM_STL_NOFO" ] && grep -q '"zm_fo[0-9]' "$new" && printf '%s' "$err" | grep -qE 'zm_fo|group|members|групп'; then ZM_STL_NOFO=1; fx="$fx fo"
 		elif [ -z "$again" ]; then again=1; sleep 1; err="$(_stl_check "$new")" && ck=1; continue
-		elif [ -z "$ZM_STL_NOTQ" ] && grep -qE '"(torrent|quic)":' "$new"; then ZM_STL_NOTQ=1; fx="$fx tq"
+		elif [ -z "$tqok" ] && [ -z "$ZM_STL_NOTQ" ] && grep -qE '"(torrent|quic)":' "$new"; then ZM_STL_NOTQ=1; fx="$fx tq"
 		elif [ -z "$ZM_STL_NOFO" ] && grep -q '"zm_fo[0-9]' "$new"; then ZM_STL_NOFO=1; fx="$fx fo"
 		elif [ -z "$ZM_STL_NOCTTL" ] && grep -q '"cache_ttl"' "$new"; then ZM_STL_NOCTTL=1; fx="$fx ct"
 		elif [ -z "$ZM_STL_NODNS" ] && grep -q '"zm_tun' "$new"; then ZM_STL_NODNS=1; fx="$fx dns"
@@ -36690,7 +36778,6 @@ sync.bezmezhau.com
 eu.geohide.ru
 us.geohide.ru
 dns.malw.link
-dns.zapret.moe
 d.webshiftvpn.ru
 dns.dagami.ru
 dns.magicdns.ru
@@ -46404,7 +46491,6 @@ var PROVIDERS = [
 	{ id: 'geohide_eu', label: 'GeoHide EU', v: 'EU', d: 'европейский сервер', url: 'https://eu.geohide.ru/dns-query', k: 'geo' },
 	{ id: 'geohide_us', label: 'GeoHide US', v: 'US', d: 'американский сервер', url: 'https://us.geohide.ru/dns-query', k: 'geo' },
 	{ id: 'malw', label: 'MALW', url: 'https://dns.malw.link/dns-query', k: 'geo' },
-	{ id: 'zapretmoe', label: 'zapret.moe', url: 'https://dns.zapret.moe/dns-query', k: 'geo' },
 	{ id: 'webshift', label: 'WebShift', url: 'https://d.webshiftvpn.ru/dns-query', k: 'geo' },
 	{ id: 'dagami', label: 'Dagami', url: 'https://dns.dagami.ru/dns-query', k: 'geo' },
 	{ id: 'magicdns', label: 'MagicDNS', url: 'https://dns.magicdns.ru/dns-query', k: 'geo' },
@@ -46450,7 +46536,7 @@ var VAR_TEXT = { plain: 'только шифрование', safe: 'блокир
 
 var GROUPS = [
 	{ title: 'Без подмены', hint: 'только шифрование; у Cloudflare, Quad9, Control D, DNS4EU и Яндекса есть варианты «Защита от угроз» и «Семейный фильтр»', ids: [ 'google', 'cloudflare', 'quad9', 'controld', 'dns4eu', 'yandex' ] },
-	{ title: 'С обходом геоблокировок', hint: 'открывают сервисы, закрытые для России', ids: [ 'xbox', 'comss', 'dnsai', 'bezmezhau', 'geohide', 'malw', 'zapretmoe', 'webshift', 'dagami', 'magicdns', 'tamaev', 'zombiez', 'wlrus', 'magicinfo', 'quicbest' ] }
+	{ title: 'С обходом геоблокировок', hint: 'открывают сервисы, закрытые для России', ids: [ 'xbox', 'comss', 'dnsai', 'bezmezhau', 'geohide', 'malw', 'webshift', 'dagami', 'magicdns', 'tamaev', 'zombiez', 'wlrus', 'magicinfo', 'quicbest' ] }
 ];
 function famIds(key) { return FAMS[key] ? FAMS[key].ids : [ key ]; }
 function groupIds(g) { var out = []; g.ids.forEach(function(t) { out = out.concat(famIds(t)); }); return out; }
@@ -46781,7 +46867,7 @@ return view.extend({
 				if (c !== curCanary()) logLines.push('   → ' + (c ? 'Включаем' : 'Выключаем') + ' «Не давать браузерам свой DNS»');
 				if (r !== curRu()) logLines.push('   → Российские сайты: ' + RU_TEXT[r]);
 				zm.renderLog(logEl, logLines.join('\n'));
-				return zm.dnsNetSet('canary=' + (c ? 1 : 0) + ' ru=' + r).then(function(res) {
+				return zm.dnsNetSet((c !== curCanary() ? 'canary=' + (c ? 1 : 0) + ' ' : '') + 'ru=' + r).then(function(res) {
 					if (!res || res.error) throw new Error((res && res.error) || 'Роутер не ответил');
 					if (res.net) data.net = res.net;
 					logLines.push('   ✓ Браузеры и российские сайты: настройки применены');
@@ -47334,7 +47420,8 @@ return view.extend({
 		var RU_MODES = [ { id: 'off', label: 'Через DoH' }, { id: 'yandex', label: 'Яндекс DNS' }, { id: 'isp', label: 'DNS провайдера' } ];
 		var RU_TEXT = { off: 'через DoH, как все сайты', yandex: 'через Яндекс DNS', isp: 'через DNS провайдера' };
 		function net() { return data.net || {}; }
-		function curCanary() { return !!net().canary; }
+		// Включено, если подсказку ставит панель или DoH вместе с перехватом — выключается одной кнопкой
+		function curCanary() { return !!(net().canary || net().canary_doh); }
 		function curRu() { return net().ru || 'off'; }
 		function netPending() {
 			var n = 0;
@@ -47344,13 +47431,15 @@ return view.extend({
 		}
 		function renderNet() {
 			netCard.innerHTML = '';
-			netCard.style.display = data.dnsm ? 'none' : '';
-			if (data.dnsm) return;
-			var t = net(), auto = !!t.canary_doh && !curCanary(), can = pickCanary !== null ? pickCanary : curCanary(), ru = pickRu || curRu();
+			// Без DoH показываем, только если здесь что-то включено — чтобы это можно было выключить
+			var hide = data.dnsm || (!data.installed && !curCanary() && curRu() === 'off' && pickCanary === null && !pickRu);
+			netCard.style.display = hide ? 'none' : '';
+			if (hide) return;
+			var t = net(), viaDoh = !!t.canary_doh && !t.canary, can = pickCanary !== null ? pickCanary : curCanary(), ru = pickRu || curRu();
 			var isp = String(t.isp || '').split(',').filter(Boolean);
 			netCard.appendChild(E('h3', {}, 'Браузеры и российские сайты'));
-			netCard.appendChild(zm.swRow(can || auto, 'Не давать браузерам свой DNS', auto
-				? 'Уже включено: так работает «Перехват DNS устройств» в режиме «Авто».'
+			netCard.appendChild(zm.swRow(can, 'Не давать браузерам свой DNS', can && viaDoh && pickCanary === null
+				? 'Включено вместе с «Перехватом DNS устройств». Если из-за этого не работает приложение — выключите.'
 				: 'Firefox и Частный узел iCloud (iCloud Private Relay) на iPhone и Mac умеют узнавать адреса сайтов в обход роутера — тогда для них не работают DoH роутера, блокировка рекламы и Steer. Роутер подскажет им так не делать.',
 				function() {
 					if (busy) { zm.toast('Дождитесь завершения текущей операции', 'warning'); return; }
@@ -47358,8 +47447,8 @@ return view.extend({
 					pickCanary = v === curCanary() ? null : v;
 					render();
 					if (netPending()) applyPick('net');
-				}, auto || busy));
-			if (can || auto) netCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Подсказку не слушают только браузеры, где свой DNS включили вручную (например, Firefox в режиме «Максимальная защита»).'));
+				}, busy));
+			if (can) netCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Подсказку не слушают только браузеры, где свой DNS включили вручную (например, Firefox в режиме «Максимальная защита»).'));
 			if (!(data.installed && !data.forkozz) && curRu() === 'off' && !pickRu) return;
 			netCard.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Российские сайты — .ru, .su, .рф'));
 			netCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'У кого роутер узнаёт их адреса.'));
@@ -48842,7 +48931,7 @@ function plural(n, one, few, many) {
 	return many;
 }
 
-var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9 · Защита от угроз', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', bezmezhau: 'Bezmezhau', yandex: 'Яндекс', yandex_family: 'Яндекс · Семейный фильтр', yandex_safe: 'Яндекс · Защита от угроз', cloudflare_sec: 'Cloudflare · Защита от угроз', cloudflare_fam: 'Cloudflare · Семейный фильтр', quad9_open: 'Quad9 · Без фильтрации', controld_sec: 'Control D · Защита от угроз', controld_fam: 'Control D · Семейный фильтр', dns4eu_sec: 'DNS4EU · Защита от угроз', dns4eu_fam: 'DNS4EU · Семейный фильтр', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', malw: 'MALW', zapretmoe: 'zapret.moe', webshift: 'WebShift', dagami: 'Dagami', magicdns: 'MagicDNS', tamaev: 'tamaev-gifts.xyz', zombiez: 'zombiez.ru', wlrus: 'wlrus.cfd', magicinfo: 'magicinfo.art', quicbest: 'quic.best', controld: 'Control D', dns4eu: 'DNS4EU', multi: 'несколько серверов', other: 'свой сервер' };
+var DOHN = { cloudflare: 'Cloudflare', google: 'Google', quad9: 'Quad9 · Защита от угроз', xbox: 'XBOX', comss: 'Comss', dnsai: 'DNS-AI', bezmezhau: 'Bezmezhau', yandex: 'Яндекс', yandex_family: 'Яндекс · Семейный фильтр', yandex_safe: 'Яндекс · Защита от угроз', cloudflare_sec: 'Cloudflare · Защита от угроз', cloudflare_fam: 'Cloudflare · Семейный фильтр', quad9_open: 'Quad9 · Без фильтрации', controld_sec: 'Control D · Защита от угроз', controld_fam: 'Control D · Семейный фильтр', dns4eu_sec: 'DNS4EU · Защита от угроз', dns4eu_fam: 'DNS4EU · Семейный фильтр', geohide_eu: 'GeoHide EU', geohide_us: 'GeoHide US', malw: 'MALW', webshift: 'WebShift', dagami: 'Dagami', magicdns: 'MagicDNS', tamaev: 'tamaev-gifts.xyz', zombiez: 'zombiez.ru', wlrus: 'wlrus.cfd', magicinfo: 'magicinfo.art', quicbest: 'quic.best', controld: 'Control D', dns4eu: 'DNS4EU', multi: 'несколько серверов', other: 'свой сервер' };
 
 function verLt(a, b) {
 	var x = String(a).split('.'), y = String(b).split('.');
@@ -61792,12 +61881,14 @@ var CREDITS = [
 	{ g: 'dns', product: 'XBOX DNS (DoH)', author: 'команда XBOX DNS', url: 'https://xbox-dns.ru' },
 	{ g: 'dns', product: 'DNS-AI (DoH)', author: 'команда DNS-AI', url: 'https://dns-ai.ru' },
 	{ g: 'dns', product: 'Bezmezhau DNS (DoH)', author: 'Bezmezhau Team', url: 'https://bezmezhau.com' },
-	{ g: 'dns', product: 'zapret.moe (DoH)', author: 'zapret.moe', url: 'https://zapret.moe' },
 	{ g: 'dns', product: 'WebShift DNS (DoH)', author: 'WebShift', url: 'https://dns.webshiftvpn.ru' },
 	{ g: 'dns', product: 'Dagami DNS (DoH)', author: 'Dagami', url: 'https://dns.dagami.ru' },
 	{ g: 'dns', product: 'MagicDNS (DoH, DoT)', author: 'MagicDNS', url: 'https://magicdns.ru' },
-	{ g: 'dns', product: 'AstraCat DNS (DoH)', author: 'AstraCat', url: 'https://dns.astrakat.ru' },
-	{ g: 'dns', product: 'Mafioznik DNS (DoH)', author: 'Mafioznik', url: 'https://dns.mafioznik.com' },
+	{ g: 'dns', product: 'tamaev-gifts.xyz (DoH)', author: 'tamaev-gifts.xyz', url: 'https://tamaev-gifts.xyz' },
+	{ g: 'dns', product: 'zombiez.ru (DoH)', author: 'zombiez.ru', url: 'https://dns.zombiez.ru' },
+	{ g: 'dns', product: 'wlrus.cfd (DoH)', author: 'WL RUS', url: 'https://dns.wlrus.cfd' },
+	{ g: 'dns', product: 'magicinfo.art (DoH)', author: 'magicinfo.art', url: 'https://api.magicinfo.art' },
+	{ g: 'dns', product: 'quic.best (DoH)', author: 'QUIC.BEST', url: 'https://w.quic.best' },
 	{ g: 'dns', product: 'dns-blocklists (блокировка рекламы, TIF)', author: 'hagezi', url: 'https://github.com/hagezi/dns-blocklists' },
 	{ g: 'dns', product: 'ad-filter (реклама для sing-box)', author: 'zxc-rv', url: 'https://github.com/zxc-rv/ad-filter' },
 	{ g: 'dns', product: 'domain-list-community', author: 'v2fly', url: 'https://github.com/v2fly/domain-list-community' },
@@ -64805,7 +64896,6 @@ var DNS_CAT = {
 		{ id: 'geohide_eu', name: 'GeoHide EU', value: 'https://eu.geohide.ru/dns-query', boot: '77.88.8.8', geo: true },
 		{ id: 'geohide_us', name: 'GeoHide US', value: 'https://us.geohide.ru/dns-query', boot: '77.88.8.8', geo: true },
 		{ id: 'malw', name: 'MALW', value: 'https://dns.malw.link/dns-query', boot: '77.88.8.8', alias: [ 'dns.malw.link' ], geo: true },
-		{ id: 'zapretmoe', name: 'zapret.moe', value: 'https://dns.zapret.moe/dns-query', boot: '77.88.8.8', alias: [ 'dns.zapret.moe' ], geo: true },
 		{ id: 'webshift', name: 'WebShift', value: 'https://d.webshiftvpn.ru/dns-query', boot: '77.88.8.8', alias: [ 'd.webshiftvpn.ru' ], geo: true },
 		{ id: 'dagami', name: 'Dagami', value: 'https://dns.dagami.ru/dns-query', boot: '77.88.8.8', alias: [ 'dns.dagami.ru' ], geo: true },
 		{ id: 'magicdns', name: 'MagicDNS', value: 'https://dns.magicdns.ru/dns-query', boot: '77.88.8.8', alias: [ 'dns.magicdns.ru', 'api.magicdns.ru' ], geo: true },
