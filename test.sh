@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.087
+# Version: 5.088
 ZM_VERSION_EOF
 set -e
 
@@ -71904,7 +71904,7 @@ var ZMFX = (function () {
 				for (k = 0; k < 3; k++) {
 					A = h * (0.04 + 0.16 * lv) * (1 - k * 0.22);
 					ctx.fillStyle = cols[k]; ctx.beginPath(); ctx.moveTo(0, h);
-					for (x = 0; x <= w; x += 6) { y = base - Math.abs(Math.sin(x / w * (6 + k * 3) + t * (1.4 + k * 0.5))) * A - Math.sin(x / w * 17 - t * 3) * A * 0.25 * au.high; ctx.lineTo(x, y); }
+					for (x = 0; ; x = Math.min(w, x + 6)) { y = base - Math.abs(Math.sin(x / w * (6 + k * 3) + t * (1.4 + k * 0.5))) * A - Math.sin(x / w * 17 - t * 3) * A * 0.25 * au.high; ctx.lineTo(x, y); if (x >= w) break; }
 					ctx.lineTo(w, h); ctx.fill();
 				}
 			}
@@ -72422,14 +72422,16 @@ function dustStart(kind) {
 					var top = h, pts = [];
 					for (i = 0; i < M; i++) { var yy = h - L[q][i] * h - (q === 0 ? 0 : 6 * q); pts.push([ i / (M - 1) * w, yy ]); if (yy < top) top = yy; }
 					ctx.beginPath(); ctx.moveTo(0, h + 2); ctx.lineTo(pts[0][0], pts[0][1]);
-					for (i = 1; i < M - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+					for (i = 1; i < M - 2; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+					ctx.quadraticCurveTo(pts[M - 2][0], pts[M - 2][1], pts[M - 1][0], pts[M - 1][1]);
 					ctx.lineTo(w, pts[M - 1][1]); ctx.lineTo(w, h + 2); ctx.closePath();
 					var fg = ctx.createLinearGradient(0, top, 0, h);
 					fg.addColorStop(0, bgRgba(cols[q], dk ? 0.3 : 0.22));
 					fg.addColorStop(1, bgRgba(cols[q], dk ? 0.04 : 0.03));
 					ctx.fillStyle = fg; ctx.fill();
 					ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-					for (i = 1; i < M - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+					for (i = 1; i < M - 2; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+					ctx.quadraticCurveTo(pts[M - 2][0], pts[M - 2][1], pts[M - 1][0], pts[M - 1][1]);
 					ctx.lineWidth = q === 0 ? 2 : 1.3;
 					ctx.strokeStyle = bgRgba(cols[q], dk ? 0.75 : 0.6);
 					ctx.stroke();
