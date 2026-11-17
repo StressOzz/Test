@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.093
+# Version: 5.087
 ZM_VERSION_EOF
 set -e
 
@@ -238,9 +238,8 @@ CONF="/etc/config/zapret"
 ZM_VERSION="@ZM_VERSION@"
 ZM_SCRIPT_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/ZapretManager_LuCI.sh"
 ZM_STATS_URL="http://89.191.225.101:8787"
-ZM_STATS_OFF="/etc/zapret-manager.nostats"
 ZM_STATS_IDF="/etc/zapret-manager.id"
-ZM_STATS_NOGEO="/etc/zapret-manager.nogeo"
+ZM_STATS_MARK="/etc/zm.counter"
 ZM_TERMS_FILE="/etc/zapret-manager.terms"
 ZM_TERMS_VER=2
 GH_RAW="https://raw.githubusercontent.com"
@@ -1246,7 +1245,6 @@ _zt_sync() { _zmL test && _zt_sync "$@"; }
 system_time_set() { _zmL system && system_time_set "$@"; }
 zm_stats_hit() { _zmL system && zm_stats_hit "$@"; }
 zm_stats_get() { _zmL system && zm_stats_get "$@"; }
-zm_stats_bye() { _zmL system && zm_stats_bye "$@"; }
 zm_stats_geo() { _zmL system && zm_stats_geo "$@"; }
 _zm_job_label() { _zmL system && _zm_job_label "$@"; }
 zm_update_action() { _zmL system && zm_update_action "$@"; }
@@ -1388,6 +1386,7 @@ do_steer_dnsopt() { _zmL steer1 && do_steer_dnsopt "$@"; }
 do_steer_onfail() { _zmL steer2 && do_steer_onfail "$@"; }
 _st_lists_cron_sync() { _zmL steer2 && _st_lists_cron_sync "$@"; }
 do_steer_lists() { _zmL steer2 && do_steer_lists "$@"; }
+do_steer_rebuild() { _zmL steer2 && do_steer_rebuild "$@"; }
 do_steer_stop() { _zmL steer2 && do_steer_stop "$@"; }
 _st_need_warp() { _zmL steer2 && _st_need_warp "$@"; }
 do_steer_warp_restart() { _zmL steer2 && do_steer_warp_restart "$@"; }
@@ -5059,8 +5058,7 @@ _zm_panel_latest() {
 
 _zm_newer() { [ -n "$1" ] && _st_ver_lt "$ZM_VERSION" "$1"; }
 
-_zm_stats_on() { [ -n "$ZM_STATS_URL" ] && [ ! -e "$ZM_STATS_OFF" ] && [ -z "$ZM_NO_STATS" ]; }
-_zm_stats_terms() { local v=""; [ -s "$ZM_TERMS_FILE" ] && read -r v _ < "$ZM_TERMS_FILE"; [ "$v" = "$ZM_TERMS_VER" ]; }
+_zm_stats_on() { [ -n "$ZM_STATS_URL" ] && [ -z "$ZM_NO_STATS" ]; }
 _zm_stats_age() { local t; t="$(date -r "$1" +%s 2>/dev/null)" || { echo 999999; return; }; echo $(( $(date +%s) - t )); }
 _zm_stats_fetch() {
 	mkdir -p "$JOBS_DIR"
@@ -5078,7 +5076,11 @@ _zm_stats_cached() {
 	_zm_stats_on || { echo null; return 0; }
 	local f="$JOBS_DIR/stats.json" t
 	t="$(_zm_stats_total "$f")"
-	_zm_stats_due "$f" 60 && ( _zm_stats_fetch "$ZM_STATS_URL/count" "$f" ) >/dev/null 2>&1 </dev/null &
+	if [ ! -e "$ZM_STATS_MARK" ] && _zm_stats_due "$JOBS_DIR/stats.me.json" 0; then
+		( zm_stats_hit ) >/dev/null 2>&1 </dev/null &
+	elif _zm_stats_due "$f" 60; then
+		( _zm_stats_fetch "$ZM_STATS_URL/count" "$f" ) >/dev/null 2>&1 </dev/null &
+	fi
 	echo "${t:-null}"
 }
 
@@ -6154,15 +6156,10 @@ _rb_list_get() {
 
 _rb_say() { echo "==> $*"; }
 _rb_warn() { echo "!! $*"; }
-_rb_conf_plus() {
-	if [ -f "$ST_TCH_OFF" ] || [ ! -s "$ST_TCH_PLUS" ]; then grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; return 0; fi
-	awk -F'|' -v OFS='|' -v pf="$ST_TCH_PLUS" '
-		BEGIN { while ((getline l < pf) > 0) { i = index(l, "|"); if (i > 1) P[substr(l, 1, i - 1)] = substr(l, i + 1) } close(pf) }
-		/^#/ { next }
-		($1 in P) && P[$1] != "" && $8 != "" { n = split($8, c, ","); for (i = 1; i <= n; i++) h[c[i]] = 1; m = split(P[$1], a, ","); for (i = 1; i <= m; i++) if (a[i] != "" && !(a[i] in h)) $8 = $8 ($8 != "" ? "," : "") a[i]; delete h }
-		{ print }' "$RB_SHARE/services.conf" 2>/dev/null
-}
-_rb_svc_src() { _rb_conf_plus; cat "$ST_OWN_SVC" "$ST_OWN_CSVC" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || awk -F'|' -v skip="$ST_CAT_SKIP" -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { if (l ~ /^#/) continue; split(l, a, "|"); if (a[1] == "") continue; b[a[1]] = 1; m = split(a[8], c, ","); for (i = 1; i <= m; i++) if (c[i] != "") b[c[i]] = 1 } } $9 != "" && $9 != "Свои списки каталога" { k = $1; sub(/^c_/, "", k); if (index(skip, " " k " ")) next; if (k ~ /^itdoginfo_/ && (substr(k, 11) in b)) next; print }' "$ST_CAT_SVC" 2>/dev/null; [ -f "$ST_TCH_OFF" ] || cat "$ST_TCH_SVC" 2>/dev/null; }
+# Встроенные «Сервисы» и «Категории» — только свои списки: Tachyon Lists к ним больше не подмешивается,
+# его списки живут отдельными плитками в своём разделе
+_rb_conf_plus() { grep -hv '^#' "$RB_SHARE/services.conf" 2>/dev/null; }
+_rb_svc_src() { _rb_conf_plus; cat "$ST_OWN_SVC" "$ST_OWN_CSVC" 2>/dev/null; [ -f "$ST_CAT_OFF" ] || awk -F'|' -v skip="$ST_CAT_SKIP" -v conf="$RB_SHARE/services.conf" 'BEGIN { while ((getline l < conf) > 0) { if (l ~ /^#/) continue; split(l, a, "|"); if (a[1] == "") continue; b[a[1]] = 1; m = split(a[8], c, ","); for (i = 1; i <= m; i++) if (c[i] != "") b[c[i]] = 1 } } $9 != "" && $9 != "Свои списки каталога" { k = $1; sub(/^c_/, "", k); if (index(skip, " " k " ")) next; if (k ~ /^itdoginfo_/ && (substr(k, 11) in b)) next; print }' "$ST_CAT_SVC" 2>/dev/null; if _st_tch_on; then cat "$ST_TCH_SVC" 2>/dev/null; fi; }
 _rb_svc_field() { _rb_svc_src | awk -F'|' -v k="$1" -v n="$2" '$1 == k { print $n; exit }'; }
 _rb_svc_row() { _rb_svc_src | awk -F'|' -v k="$1" '$1 == k { print; exit }'; }
 _rb_svc_names() { local id; for id in $1; do printf '%s, ' "$(_rb_svc_field "$id" 2)"; done | sed 's/, $//'; }
@@ -6194,6 +6191,9 @@ ST_TCH_PLUS="$ST_DIR/tachyon.plus"
 ST_TCH_IDX="$ST_DIR/tachyon.idx"
 ST_TCH_META="$ST_DIR/tachyon.meta"
 ST_TCH_OFF="$ST_DIR/tachyon.off"
+ST_TCH_ON="$ST_DIR/tachyon.on"
+ST_RB_STEER="$ST_DIR/rebuild.steer"
+ST_RB_FK="$ST_DIR/rebuild.fk"
 ST_TCH_ERR="$ST_DIR/tachyon.err"
 ST_TCH_XSETS="$ST_DIR/user/exclude.sets"
 ST_TCH_REPO="https://github.com/Dushnilin/tachyon-lists"
@@ -7014,7 +7014,34 @@ _st_cat_refresh() {
 	return $rc
 }
 
-_st_tch_on() { [ ! -f "$ST_TCH_OFF" ]; }
+# Tachyon Lists по умолчанию выключен: работает, только если человек сам его включил (файл tachyon.on).
+# Со старых версий (там он был включён сам) — оставляем включённым, только если его списки уже кем-то выбраны
+_st_tch_on() {
+	[ -f "$ST_TCH_PLUS" ] && _st_tch_unplus
+	[ -f "$ST_TCH_ON" ] && return 0
+	[ -f "$ST_TCH_OFF" ] && return 1
+	_st_tch_mig
+	[ -f "$ST_TCH_ON" ]
+}
+_st_tch_steer_used() { grep -qsE '(^|[[:space:],])t_[a-z0-9_]+' "$ST_SEL" "$ST_SEC_DIR"/*/services "$ST_TCH_XSETS"; }
+_st_tch_fk_used() { grep -qsi 'Dushnilin/tachyon-lists' /etc/config/netshift; }
+_st_tch_mig() {
+	[ -d "$ST_DIR" ] || return 0
+	if _st_tch_steer_used || _st_tch_fk_used; then : > "$ST_TCH_ON"; else : > "$ST_TCH_OFF"; fi
+}
+# Раньше «добавки» Tachyon дописывались к встроенным плиткам (YouTube, TikTok…), а в Forkozz — прямо в секции.
+# Один раз убираем их: в Forkozz — из секций, Steer просим пересобрать списки
+_st_tch_unplus() {
+	local k r n
+	k="$(cut -d'|' -f1 "$ST_TCH_PLUS" 2>/dev/null | grep -E '^[a-z0-9_]+$' | tr '\n' '|')"
+	if [ -f "$FK_UC" ] && [ -f /etc/config/netshift ]; then
+		r="$(_fk_uc tchstrip plus 2>/dev/null)"
+		n="$(printf '%s' "$r" | sed -n 's/.*"dropped":\([0-9][0-9]*\).*/\1/p')"
+		[ "${n:-0}" -gt 0 ] && : > "$ST_RB_FK"
+	fi
+	if [ -n "$k" ] && _st_installed && cat "$ST_SEL" "$ST_SEC_DIR"/*/services 2>/dev/null | tr ' ,' '\n\n' | grep -qxE "(${k%|})"; then : > "$ST_RB_STEER"; fi
+	rm -f "$ST_TCH_PLUS"
+}
 
 _st_age() { echo $(( $(date +%s) - $(date -r "$1" +%s 2>/dev/null || echo 0) )); }
 
@@ -7066,9 +7093,10 @@ _st_tch_json() {
 	local d="" n=0 x=0 p=0 k=0 t=0 g=0
 	[ -s "$ST_TCH_META" ] && { d="$(sed -n 's/^version=//p' "$ST_TCH_META")"; n="$(sed -n 's/^lists=//p' "$ST_TCH_META")"; x="$(sed -n 's/^direct=//p' "$ST_TCH_META")"; p="$(sed -n 's/^plus=//p' "$ST_TCH_META")"
 		k="$(sed -n 's/^block=//p' "$ST_TCH_META")"; t="$(sed -n 's/^total=//p' "$ST_TCH_META")"; g="$(sed -n 's/^big=//p' "$ST_TCH_META")"; }
-	printf '{"on":%s,"version":"%s","lists":%s,"direct":%s,"plus":%s,"block":%s,"big":%s,"total":%s,"age":%s,"error":%s,"busy":%s,"url":"%s"}' \
+	printf '{"on":%s,"version":"%s","lists":%s,"direct":%s,"plus":%s,"block":%s,"big":%s,"total":%s,"age":%s,"error":%s,"busy":%s,"url":"%s","rb_steer":%s,"rb_fk":%s}' \
 		"$(_st_tch_on && echo true || echo false)" "$(esc "$d")" "${n:-0}" "${x:-0}" "${p:-0}" "${k:-0}" "${g:-0}" "${t:-0}" "$([ -s "$ST_TCH_META" ] && _st_age "$ST_TCH_META" || echo -1)" \
-		"$([ -f "$ST_TCH_ERR" ] && echo true || echo false)" "$(_st_tch_busy && echo true || echo false)" "$ST_TCH_REPO"
+		"$([ -f "$ST_TCH_ERR" ] && echo true || echo false)" "$(_st_tch_busy && echo true || echo false)" "$ST_TCH_REPO" \
+		"$([ -f "$ST_RB_STEER" ] && echo true || echo false)" "$([ -f "$ST_RB_FK" ] && echo true || echo false)"
 }
 
 _st_cat_bg() {
@@ -7352,8 +7380,7 @@ _st_lists_used() {
 		ids="$ids $(_st_sec_with "$s" _st_sel | tr '\n' ' ')"
 	done
 	[ -n "$(echo $ids)" ] || return 0
-	{ _rb_svc_src | awk -F'|' -v ids=" $(echo $ids) " 'index(ids, " " $1 " ") && !seen[$1]++ { print $8 }'
-	  [ -f "$ST_TCH_OFF" ] || awk -F'|' -v ids=" $(echo $ids) " 'index(ids, " " $1 " ") { print $2 }' "$ST_TCH_PLUS" 2>/dev/null; } |
+	_rb_svc_src | awk -F'|' -v ids=" $(echo $ids) " 'index(ids, " " $1 " ") && !seen[$1]++ { print $8 }' |
 		tr ',' '\n' | grep -E '^[A-Za-z0-9_-]+$' | awk '!s[$0]++'
 }
 
@@ -8118,11 +8145,23 @@ steer_action() {
 		tachyon)
 			mkdir -p "$ST_DIR"
 			case "$mode" in
-				off) touch "$ST_TCH_OFF"; _st_tch_idx_merge; printf '{"ok":true}\n' ;;
+				off)
+					touch "$ST_TCH_OFF"; rm -f "$ST_TCH_ON"; _st_tch_idx_merge
+					# выбранные списки Tachyon перестают работать после «Пересобрать списки»
+					rb=false
+					if _st_installed && _st_tch_steer_used; then : > "$ST_RB_STEER"; rb=true; fi
+					if _st_tch_fk_used; then : > "$ST_RB_FK"; rb=true; fi
+					printf '{"ok":true,"rebuild":%s}\n' "$rb" ;;
 				state) _st_tch_json; echo ;;
 				on|refresh)
 					[ "$mode" = refresh ] && ! _st_tch_on && { echo '{"error":"Tachyon Lists выключен"}'; return 1; }
 					rm -f "$ST_TCH_OFF" "$ST_TCH_ERR"
+					if [ "$mode" = on ]; then
+						: > "$ST_TCH_ON"
+						# списки, выбранные до выключения, снова в силе: Forkozz их и не убирал, Steer — пересобрать
+						rm -f "$ST_RB_FK"
+						_st_installed && _st_tch_steer_used && : > "$ST_RB_STEER"
+					fi
 					_st_tch_idx_merge
 					mkdir -p "$ST_RUN"; : > "$ST_RUN/tch.pending"
 					if [ "$mode" = on ] && [ -s "$ST_TCH_SVC" ]; then ( _st_tch_refresh; rm -f "$ST_RUN/tch.pending" ) >/dev/null 2>&1 &
@@ -8221,6 +8260,12 @@ steer_action() {
 		lists_cron)
 			_st_lists_cron_sync
 			printf '{"ok":true}\n' ;;
+		lists_rebuild)
+			_st_installed || { echo '{"error":"Steer ещё не установлен"}'; return 1; }
+			[ -z "$(_st_blocker)" ] || { echo '{"error":"ядро steer сейчас настраивает не Zapret Manager — панель его не трогает"}'; return 1; }
+			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
+			_job_running steer_lists && { echo '{"error":"идёт обновление списков — дождитесь его окончания"}'; return 1; }
+			job_start steer do_steer_rebuild ;;
 		lists_refresh)
 			_st_installed || { echo '{"error":"Steer ещё не установлен"}'; return 1; }
 			[ -z "$(_st_blocker)" ] || { echo '{"error":"ядро steer сейчас настраивает не Zapret Manager — панель его не трогает"}'; return 1; }
@@ -9405,7 +9450,6 @@ case "$cmd" in
 	zm_update_action)                     zm_update_action ;;
 	zm_stats_get)                         zm_stats_get ;;
 	zm_stats_hit)                         zm_stats_hit ;;
-	zm_stats_bye)                         zm_stats_bye ;;
 	zm_stats_geo)                         zm_stats_geo ;;
 	zm_changelog)                         case "$1" in local|remote|all) zm_changelog "$1" ;; *) echo '{"error":"неизвестный режим"}' ;; esac ;;
 	zm_changelog_seen)                    zm_changelog seen ;;
@@ -11595,7 +11639,6 @@ system_uninstall_panel() {
 	cat > "$script" << 'ZM_UNINSTALL_EOF'
 sleep 1
 /opt/zapret-manager-luci/backend.sh dns_net_gone >/dev/null 2>&1
-/opt/zapret-manager-luci/backend.sh zm_stats_bye >/dev/null 2>&1
 if [ -z "$ZM_SAVE" ] && [ -f /opt/zapret/init.d/openwrt/custom.d/30-zm-section2.sh ]; then
 	rm -f /opt/zapret/init.d/openwrt/custom.d/30-zm-section2.sh
 	pgrep -f "/opt/zapre[t]/" >/dev/null 2>&1 && /etc/init.d/zapret restart >/dev/null 2>&1
@@ -11666,7 +11709,6 @@ done
 [ -s /etc/zm-steer/owned ] || rm -rf /usr/share/zm-redbtn
 [ -z "$ZM_SAVE" ] && [ ! -s /etc/zm-steer/owned ] && rm -rf /etc/zm-steer
 [ -z "$ZM_SAVE" ] && rm -f /lib/upgrade/keep.d/zapret-manager
-[ -z "$ZM_SAVE" ] && rm -f /etc/zapret-manager.id /etc/zapret-manager.nostats /etc/zapret-manager.nogeo /etc/zapret-manager.terms
 [ -z "$ZM_SAVE" ] && [ -d /opt/zapret-manager-luci/state ] && rm -rf /opt/zapret-manager-luci/state/alloff /opt/zapret-manager-luci/state/ui.ram
 if grep -q '/opt/zapret-manager-luci/backend.sh' /etc/crontabs/root 2>/dev/null; then
 	sed -i '\#/opt/zapret-manager-luci/backend.sh#d' /etc/crontabs/root
@@ -11740,7 +11782,7 @@ _pg_inst() {
 }
 
 _pg_st_dir() {
-	if [ ! -s "$ST_OWNED" ] && _fk_installed && [ -z "$(ls -A "$ST_DIR" 2>/dev/null | grep -vxE 'services\.remote|catalog\.(idx|meta|url|off|err)|tachyon\.(svc|idx|meta|plus|direct|off|err)|own\.(svc|idx|cats|cat\.svc|cat\.idx)')" ]; then return 0; fi
+	if [ ! -s "$ST_OWNED" ] && _fk_installed && [ -z "$(ls -A "$ST_DIR" 2>/dev/null | grep -vxE 'services\.remote|catalog\.(idx|meta|url|off|err)|tachyon\.(svc|idx|meta|plus|direct|off|on|err)|rebuild\.(steer|fk)|own\.(svc|idx|cats|cat\.svc|cat\.idx)')" ]; then return 0; fi
 	echo "$ST_DIR"
 }
 
@@ -13129,59 +13171,37 @@ _zm_stats_id() {
 
 zm_stats_hit() {
 	_zm_stats_on || return 0
-	local id m=0 me="$JOBS_DIR/stats.me.json"
-	id="$(_zm_stats_id)" || return 0
-	_zm_stats_map && m=1
-	_zm_stats_fetch "$ZM_STATS_URL/hit?id=$id&v=$ZM_VERSION&m=$m" "$me" && cp -f "$me" "$JOBS_DIR/stats.json" 2>/dev/null
+	[ -e "$ZM_STATS_MARK" ] && return 0
+	local id me="$JOBS_DIR/stats.me.json" lk="$JOBS_DIR/stats.hit.lock"
+	mkdir -p "$JOBS_DIR"
+	[ -d "$lk" ] && [ "$(_zm_stats_age "$lk")" -ge 60 ] && rmdir "$lk" 2>/dev/null
+	mkdir "$lk" 2>/dev/null || return 0
+	if id="$(_zm_stats_id)" && _zm_stats_fetch "$ZM_STATS_URL/hit?id=$id&v=$ZM_VERSION" "$me"; then
+		if grep -q '"ok":true' "$me"; then
+			printf '%s %s %s\n' "$id" "$ZM_VERSION" "$(date +%s)" > "$ZM_STATS_MARK" 2>/dev/null && rm -f "$ZM_STATS_IDF"
+			cp -f "$me" "$JOBS_DIR/stats.json" 2>/dev/null
+		else
+			: > "$me.fail"
+		fi
+	fi
+	rmdir "$lk" 2>/dev/null
 	return 0
 }
 
-_zm_stats_map() { [ ! -e "$ZM_STATS_NOGEO" ] && _zm_stats_terms; }
-_zm_stats_j() { jsonfilter -i "$1" -e "@.$2" 2>/dev/null | head -n 1; }
 _zm_stats_n() {
 	local v
-	v="$(_zm_stats_j "$1" "$2")"
+	v="$(jsonfilter -i "$1" -e "@.$2" 2>/dev/null | head -n 1)"
 	case "$v" in ''|*[!0-9]*) echo null ;; *) echo "$v" ;; esac
-}
-_zm_stats_b() {
-	case "$(_zm_stats_j "$1" "$2")" in true) echo true ;; false) echo false ;; *) echo null ;; esac
-}
-
-zm_stats_bye() {
-	local id=""
-	[ -s "$ZM_STATS_IDF" ] && id="$(head -c 80 "$ZM_STATS_IDF" | tr -cd '0-9a-f' | cut -c1-64)"
-	[ -n "$ZM_STATS_URL" ] && [ -z "$ZM_NO_STATS" ] && [ "${#id}" -ge 32 ] && _zm_stats_fetch "$ZM_STATS_URL/bye?id=$id" "$JOBS_DIR/stats.bye.json"
-	rm -f "$JOBS_DIR/stats.json" "$JOBS_DIR/stats.json.fail" "$JOBS_DIR/stats.me.json" "$JOBS_DIR/stats.me.json.fail" \
-		"$JOBS_DIR/stats.geo.json" "$JOBS_DIR/stats.geo.json.fail" "$JOBS_DIR/stats.bye.json" "$JOBS_DIR/stats.bye.json.fail" "$ZM_STATS_IDF"
-	return 0
 }
 
 zm_stats_get() {
-	local f="$JOBS_DIR/stats.json" me="$JOBS_DIR/stats.me.json" mo=true tm=false t mt g n meo=null err=false
-	[ -e "$ZM_STATS_NOGEO" ] && mo=false
-	_zm_stats_terms && tm=true
-	if ! _zm_stats_on; then
-		printf '{"on":false,"map_on":%s,"terms":%s}\n' "$mo" "$tm"
-		return 0
-	fi
-	if _zm_stats_due "$me" 90000; then
-		zm_stats_hit
-		[ -e "$me.fail" ] && err=true
-	fi
-	[ "$err" = false ] && _zm_stats_due "$f" 10 && _zm_stats_fetch "$ZM_STATS_URL/count" "$f"
-	[ -e "$me.fail" ] && [ "$(_zm_stats_age "$me.fail")" -lt "$(_zm_stats_age "$me")" ] && err=true
-	t="$(_zm_stats_n "$f" total)"
+	_zm_stats_on || { echo '{"on":false}'; return 0; }
+	local f="$JOBS_DIR/stats.json" mt
+	[ ! -e "$ZM_STATS_MARK" ] && _zm_stats_due "$JOBS_DIR/stats.me.json" 0 && zm_stats_hit
+	_zm_stats_due "$f" 10 && _zm_stats_fetch "$ZM_STATS_URL/count" "$f"
 	mt="$(_zm_stats_n "$f" map)"
 	[ "$mt" = null ] && mt="$(_zm_stats_n "$f" map_total)"
-	if [ -s "$me" ]; then
-		g="$(_zm_stats_j "$me" geo)"
-		case "$g" in [A-Z][A-Z]|[A-Z][A-Z]-[A-Z][A-Z]|[A-Z][A-Z]-[A-Z][A-Z][A-Z]) g="\"$g\"" ;; *) g=null ;; esac
-		n="$(_zm_stats_j "$me" name)"
-		case "$n" in ''|null) n=null ;; *) n="\"$(esc "$n")\"" ;; esac
-		meo="$(printf '{"counted":%s,"map":%s,"geo":%s,"name":%s,"age":%s}' "$(_zm_stats_b "$me" counted)" "$(_zm_stats_b "$me" map)" "$g" "$n" "$(_zm_stats_age "$me")")"
-	fi
-	printf '{"on":true,"map_on":%s,"terms":%s,"total":%s,"map_total":%s,"since":%s,"days":%s,"err":%s,"me":%s}\n' \
-		"$mo" "$tm" "$t" "$mt" "$(_zm_stats_n "$f" since)" "$(_zm_stats_n "$f" days)" "$err" "$meo"
+	printf '{"on":true,"total":%s,"map_total":%s}\n' "$(_zm_stats_n "$f" total)" "$mt"
 }
 
 zm_stats_geo() {
@@ -16224,6 +16244,28 @@ _fk_rl_report() {
 	return 0
 }
 
+# «Пересобрать списки»: выключенный Tachyon Lists убираем из секций, затем Forkozz заново собирает
+# правила и скачивает списки (применение настроек). Встроенные сервисы, категории и каталоги не трогаем
+do_fk_rebuild() {
+	local r n
+	_fk_installed || { echo "ОШИБКА: Forkozz не установлен"; return 1; }
+	_fk_say "Пересобираем списки Forkozz — каждый источник отдельно"
+	if _st_tch_on; then
+		echo "   ✓ Tachyon Lists включён — его списки работают отдельными сервисами, к встроенным не добавляются"
+	else
+		r="$(_fk_ucj tchstrip all)" || { echo "ОШИБКА: $(printf '%s' "$r" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"; return 1; }
+		n="$(printf '%s' "$r" | sed -n 's/.*"dropped":\([0-9][0-9]*\).*/\1/p')"
+		if [ "${n:-0}" -gt 0 ]; then echo "   ✓ Tachyon Lists выключен — его списки убраны из секций: $n"
+		else echo "   ✓ Tachyon Lists выключен — его списков в секциях нет"; fi
+	fi
+	rm -f "$ST_RB_FK"
+	if ! _fk_up; then
+		_fk_say "Forkozz сейчас выключен — списки соберутся так при следующем включении"
+		return 0
+	fi
+	do_fk_service apply
+}
+
 do_fk_lists() {
 	local rc=0 out="$JOBS_DIR/forkop-lists.out"
 	_fk_installed || { echo "ОШИБКА: Forkozz не установлен"; return 1; }
@@ -16964,6 +17006,7 @@ forkop_action() {
 		start|stop|restart|apply) job_start forkop do_fk_service "$a" ;;
 		route)         fk_route_check "$arg" ;;
 		lists)         job_start forkop do_fk_lists ;;
+		rebuild)       job_start forkop do_fk_rebuild ;;
 		subs)          job_start forkop do_fk_subs ;;
 		singbox|singbox_reinstall) job_start forkop do_fk_singbox "$arg" ;;
 		singbox_remove)
@@ -18776,7 +18819,6 @@ terms_accept() {
 		echo '{"error":"не удалось сохранить отметку — проверьте свободное место на роутере"}'
 		return 1
 	}
-	_zm_stats_on && ( /opt/zapret-manager-luci/backend.sh zm_stats_hit ) >/dev/null 2>&1 </dev/null &
 	printf '{"ok":true}\n'
 }
 
@@ -30070,7 +30112,7 @@ _st_tch_build() {
 	_json_flat "$1" > "$flat" 2>/dev/null
 	grep -q '^lists\.0\.id	' "$flat" || { rm -f "$flat"; return 1; }
 	bids=" $(grep -v '^#' "$RB_SHARE/services.conf" | cut -d'|' -f1,8 | tr ',|\n' '   ') "
-	awk -F'\t' -v b="$bids" -v raw="$ST_TCH_RAW" -v svc="$ST_TCH_SVC.tmp" -v dir="$ST_TCH_DIRECT.tmp" -v idx="$ST_TCH_IDX.tmp" -v meta="$ST_TCH_META.tmp" -v plus="$ST_TCH_PLUS.tmp" '
+	awk -F'\t' -v b="$bids" -v raw="$ST_TCH_RAW" -v svc="$ST_TCH_SVC.tmp" -v dir="$ST_TCH_DIRECT.tmp" -v idx="$ST_TCH_IDX.tmp" -v meta="$ST_TCH_META.tmp" '
 		function clean(x) { gsub(/[|\t\r\n]/, " ", x); gsub(/  +/, " ", x); sub(/^ /, "", x); sub(/ $/, "", x); return x }
 		function short(x,    m, a, i, o) {
 			m = split(x, a, ", "); o = a[1]
@@ -30090,12 +30132,8 @@ _st_tch_build() {
 			G["ai"] = "ИИ и нейросети"; G["media"] = "Видео, музыка и кино"; G["social"] = "Соцсети и мессенджеры"; G["gaming"] = "Игры"
 			G["tech"] = "Технологии и разработка"; G["infra"] = "Хостинги и CDN"; G["regional"] = "Регионы и блокировки"; G["other"] = "Разное"
 			split("ai media social gaming tech infra regional other", ord, " ")
-			EN["youtube"] = "youtube"; EN["discord"] = "discord"; EN["telegram"] = "telegram"; EN["twitter"] = "x"
-			EN["tiktok"] = "tiktok"; EN["roblox"] = "roblox"; EN["google_ai"] = "google_ai"; EN["google_play"] = "google_play"
-			EN["geoblock"] = "geoblock"; EN["porn"] = "porn"; EN["russia_outside"] = "russia_outside"; EN["ukraine_inside"] = "ukraine_inside"
-			EN["whatsapp"] = "whatsapp"; EN["github"] = "github"; EN["google_meet"] = "google_meet"; EN["hdrezka"] = "hdrezka"
-			EN["anime"] = "anime"; EN["block"] = "block"; EN["news"] = "news"; EN["hodca"] = "hodca"
-			EN["cloudflare"] = "cloudflare"; EN["cloudfront"] = "cloudfront"; EN["digitalocean"] = "digitalocean"; EN["hetzner"] = "hetzner"; EN["ovh"] = "ovh"
+			# одноимённые со встроенными сервисами списки — тоже отдельными плитками, с пометкой «(Tachyon)»
+			EN["twitter"] = "x"
 			SEP["meta"] = "Meta целиком"; SEP["russia_inside"] = "Россия внутри (сводный)"
 			NM["ru_blocked"] = "Заблокированные в РФ"
 			for (e = 0; e < cnt; e++) {
@@ -30121,8 +30159,7 @@ _st_tch_build() {
 				if (act == "direct") { print "t_" id "|" nm "|" ds "|" st > dir; nx++; keepset(st); continue }
 				if (grp == "internal") grp = "regional"
 				if (!(grp in G)) grp = "other"
-				if (index(b, " " id " ")) {
-					if ((id in EN) && index(b, " " EN[id] " ")) { pl[EN[id]] = pl[EN[id]] (pl[EN[id]] != "" ? "," : "") st; np++; keepset(st); continue }
+				if (index(b, " " id " ") || ((id in EN) && index(b, " " EN[id] " "))) {
 					if (id in SEP) nm = SEP[id]
 					else nm = nm " (Tachyon)"
 				}
@@ -30131,15 +30168,13 @@ _st_tch_build() {
 			}
 			for (i = 1; i <= 8; i++) if (body[ord[i]] != "") printf "%s", body[ord[i]] > svc
 			for (k in use) print line[k] > idx
-			for (k in pl) print k "|" pl[k] > plus
-			printf "version=%s\nlists=%d\ndirect=%d\nplus=%d\nblock=%d\nbig=%d\ntotal=%d\n", substr(gen, 1, 10), ns, nx, np, nb, nbig, cnt > meta
+			printf "version=%s\nlists=%d\ndirect=%d\nplus=0\nblock=%d\nbig=%d\ntotal=%d\n", substr(gen, 1, 10), ns, nx, nb, nbig, cnt > meta
 		}
 		function keepset(x,    m, c, i) { m = split(x, c, ","); for (i = 1; i <= m; i++) use[c[i]] = 1 }
-	' "$flat" || { rm -f "$flat" "$ST_TCH_SVC.tmp" "$ST_TCH_DIRECT.tmp" "$ST_TCH_IDX.tmp" "$ST_TCH_META.tmp" "$ST_TCH_PLUS.tmp"; return 1; }
+	' "$flat" || { rm -f "$flat" "$ST_TCH_SVC.tmp" "$ST_TCH_DIRECT.tmp" "$ST_TCH_IDX.tmp" "$ST_TCH_META.tmp"; return 1; }
 	rm -f "$flat"
-	[ -s "$ST_TCH_SVC.tmp" ] && [ -s "$ST_TCH_IDX.tmp" ] || { rm -f "$ST_TCH_SVC.tmp" "$ST_TCH_DIRECT.tmp" "$ST_TCH_IDX.tmp" "$ST_TCH_META.tmp" "$ST_TCH_PLUS.tmp"; return 1; }
-	touch "$ST_TCH_DIRECT.tmp" "$ST_TCH_PLUS.tmp"
-	if cmp -s "$ST_TCH_PLUS.tmp" "$ST_TCH_PLUS" 2>/dev/null; then rm -f "$ST_TCH_PLUS.tmp"; else mv -f "$ST_TCH_PLUS.tmp" "$ST_TCH_PLUS"; fi
+	[ -s "$ST_TCH_SVC.tmp" ] && [ -s "$ST_TCH_IDX.tmp" ] || { rm -f "$ST_TCH_SVC.tmp" "$ST_TCH_DIRECT.tmp" "$ST_TCH_IDX.tmp" "$ST_TCH_META.tmp"; return 1; }
+	touch "$ST_TCH_DIRECT.tmp"
 	mv -f "$ST_TCH_IDX.tmp" "$ST_TCH_IDX"
 	mv -f "$ST_TCH_SVC.tmp" "$ST_TCH_SVC"
 	mv -f "$ST_TCH_DIRECT.tmp" "$ST_TCH_DIRECT"
@@ -30279,7 +30314,8 @@ _st_srs_get() {
 	touch "$ST_RUN/srs.$set.done"
 }
 
-_st_tch_plus_of() { [ -f "$ST_TCH_OFF" ] || awk -F'|' -v k="$1" '$1 == k { gsub(/,/, " ", $2); print $2; exit }' "$ST_TCH_PLUS" 2>/dev/null; }
+# добавок Tachyon к встроенным сервисам больше нет — каждый список сам по себе
+_st_tch_plus_of() { :; }
 
 _st_svc_lists() {
 	local id="$1" name sets set dom="" pfx="" srs="" f fmt took="" plus pfail="" pkd pkp say="" mt="" f5 f6 x
@@ -30490,6 +30526,7 @@ _st_spec_apply() {
 	grep -v '^\(lan\|main\|mif\|warp\|wpick\|vpn\|tun\|so\|stun\|xdom\|xpfx\|over\)	' "$m" | grep -v '^dev	byp	' > "$ST_DIR/model.svc" 2>/dev/null
 	rm -f "$m"
 	_st_own "steer-spec"
+	rm -f "$ST_RB_STEER"
 	if [ -z "$ZM_ST_LISTS_BG" ]; then
 		[ "$(_st_set_count fail)" -gt 0 ] && _st_lists_retry_later
 		rm -f "$ST_RUN"/fail.* "$ST_RUN"/new.* "$ST_RUN"/chg.*
@@ -31604,6 +31641,42 @@ do_steer_lists_apply() {
 	fi
 	_st_sec_with main _st_lists_full || return 1
 	_rb_say "Готово: свежие списки работают"
+}
+
+# «Пересобрать списки»: заново собираем правила из того, что выбрано сейчас. Каждый источник — сам по себе:
+# встроенные сервисы и категории, дополнительные списки, «Мои списки» и Tachyon Lists (если он включён)
+_st_rb_note() {
+	local x a=0 b=0 t=0 tx=0
+	for x in $(cat "$ST_SEL" "$ST_SEC_DIR"/*/services 2>/dev/null | tr ' ,' '\n\n' | grep -E '^[A-Za-z0-9_-]+$' | awk '!s[$0]++'); do
+		case "$x" in
+			custom) ;;
+			t_*) if _st_tch_on; then t=$((t + 1)); else tx=$((tx + 1)); fi ;;
+			c_itdoginfo_*) a=$((a + 1)) ;;
+			c_*|zmu_*|zmc[0-9]*) b=$((b + 1)) ;;
+			*) a=$((a + 1)) ;;
+		esac
+	done
+	echo "   → Сервисы и категории: $a · Дополнительные списки: $b · Tachyon Lists: $(_st_tch_on && echo "$t" || echo выключен)"
+	[ "$tx" -gt 0 ] && echo "   → Tachyon Lists выключен — отмеченные в нём списки ($tx) не работают, пока его снова не включите"
+	return 0
+}
+
+do_steer_rebuild() {
+	_st_phase rules
+	rm -f "$ST_STOP_FLAG"
+	_st_installed || { echo "ОШИБКА: Steer ещё не установлен"; return 1; }
+	[ -n "$(_st_blocker)" ] && { echo "ОШИБКА: ядро steer сейчас настраивает не Zapret Manager"; return 1; }
+	_rb_say "Пересобираем списки Steer — каждый источник отдельно"
+	_st_tch_idx_merge
+	_st_rb_note
+	if [ -f "$ST_OFF" ] || ! _st_owns "steer-spec" || ! stl_enabled; then
+		rm -f "$ST_RB_STEER"
+		_rb_say "Steer сейчас выключен — списки соберутся так при следующем включении"
+		return 0
+	fi
+	_st_sec_with main _st_lists_full || return 1
+	rm -f "$ST_RB_STEER"
+	_rb_say "Готово: списки пересобраны"
 }
 
 do_steer_lists() {
@@ -38843,18 +38916,14 @@ function idx_tokens(e, known) {
 function catalog_items(known_list) {
 	let known = {}, items = [], seen = {}, idx = {}, plus = {};
 	for (let k in known_list) known[k] = true;
-	let cat_off = !!fs.access(ST_DIR + "/catalog.off"), tch_off = !!fs.access(ST_DIR + "/tachyon.off");
+	let cat_off = !!fs.access(ST_DIR + "/catalog.off"), tch_off = !fs.access(ST_DIR + "/tachyon.on");
 	// own.idx — «Мои списки»: читаем и напрямую, на случай если общий индекс ещё не пересобран
 	for (let fn in [ "/catalog.idx", "/own.idx", "/own.cat.idx" ]) for (let l in split(s(fs.readfile(ST_DIR + fn)), "\n")) {
 		let f = split(l, "|");
 		if (length(f) >= 3 && f[0] != "" && match(f[2], /^https:\/\//))
 			idx[f[0]] = { fmt: f[1], url: f[2], kind: s(f[3]) };
 	}
-	// Tachyon Lists: более полные списки того же сервиса добавляются к встроенной плитке (как в Steer)
-	if (!tch_off) for (let l in split(s(fs.readfile(ST_DIR + "/tachyon.plus")), "\n")) {
-		let i = index(l, "|");
-		if (i > 0) plus[substr(l, 0, i)] = filter(split(substr(l, i + 1), ","), (x) => x != "" && idx[x]);
-	}
+	// Tachyon Lists к встроенным плиткам не подмешивается: его списки — отдельные сервисы в своём разделе
 	for (let l in split(s(fs.readfile(RB_CONF)), "\n")) {
 		if (l == "" || substr(l, 0, 1) == "#") continue;
 		let f = split(l, "|"), id = f[0], t = [];
@@ -42499,8 +42568,40 @@ function cmd_rllearn() {
 	out({ ok: true, alts: length(keys(alts)), tested: length(pairs), works, dead, changed: length(list), list });
 }
 
+// Убрать из всех секций списки Tachyon Lists: all — все (каталог выключен), plus — бывшие «добавки» к встроенным сервисам
+function cmd_tchstrip(how) {
+	let drop = {}, n = 0, ch = false, c = cursor();
+	if (how == "plus") {
+		let ids = {};
+		for (let l in split(s(fs.readfile(ST_DIR + "/tachyon.plus")), "\n")) {
+			let i = index(l, "|");
+			if (i > 0) for (let x in split(substr(l, i + 1), ",")) if (x != "") ids[x] = true;
+		}
+		for (let l in split(s(fs.readfile(ST_DIR + "/tachyon.idx")), "\n")) {
+			let f = split(l, "|");
+			if (length(f) >= 3 && ids[f[0]] && f[2] != "") drop[f[2]] = true;
+		}
+		if (!length(keys(drop))) { out({ ok: true, dropped: 0 }); return; }
+	}
+	else if (how != "all") fail("неизвестный режим");
+	let hit = (u) => how == "plus" ? !!drop[u] : index(lc(u), "/dushnilin/tachyon-lists") >= 0;
+	for (let x in sections(c, "section")) {
+		let sec = x[".name"];
+		for (let o in [ "zm_refs", "remote_domain_lists", "remote_subnet_lists" ]) {
+			let v = rawlist(x[o]), k = filter(v, (e) => !hit(o == "zm_refs" ? substr(e, 2) : e));
+			if (length(k) == length(v)) continue;
+			if (o == "zm_refs") n += length(v) - length(k);
+			set_list(c, sec, o, k);
+			ch = true;
+		}
+	}
+	if (ch) { c.save(CFG); c.commit(CFG); }
+	out({ ok: true, dropped: n });
+}
+
 let mode = ARGV[0] || "";
 let sec = ARGV[1] || "";
+if (mode == "tchstrip") { cmd_tchstrip(ARGV[1] || ""); exit(0); }
 if (mode == "reality") { cmd_reality(ARGV[1], ARGV[2]); exit(1); }
 if (mode == "rs_initial") cmd_rs_initial(ARGV[1], ARGV[2]);
 if (mode == "rs_cap") cmd_rs_cap(ARGV[1], ARGV[2]);
@@ -44010,7 +44111,7 @@ function termsScreen(view) {
 					sec('3. Ограничение ответственности', 'Автор и участники проекта не отвечают за прямой или косвенный ущерб: неработоспособность роутера, потерю настроек и данных, перерывы в работе интернета, блокировку сервисов, требования третьих лиц, штрафы и упущенную выгоду.'),
 					sec('4. Отказ от претензий', 'Принимая условия, вы отказываетесь от претензий к автору и участникам проекта, связанных с программой, в той мере, в какой это допускает закон.'),
 					sec('5. Программы других авторов', 'Zapret, sing-box, Mihomo, WARP и другие компоненты принадлежат своим авторам и распространяются по своим лицензиям. Панель только скачивает их из официальных источников и настраивает.'),
-					E('div', { 'class': 'zm-tm-sec' }, [ E('h3', {}, '6. Данные'), E('p', {}, 'Личные данные не собираются. Для счётчика панель раз в сутки отправляет автору случайный номер роутера и версию панели. Для карты на странице «Спасибо» сервер по IP-адресу роутера определяет регион или страну и хранит только их — сам адрес не сохраняется. Регион, где меньше пяти роутеров, показывается без точного числа. При удалении панели номер роутера стирается и на сервере.'), E('p', {}, [ 'Не учитывать роутер совсем: файл ', E('code', {}, '/etc/zapret-manager.nostats'), '. Не показывать регион на карте: файл ', E('code', {}, '/etc/zapret-manager.nogeo'), '.' ]) ]),
+					E('div', { 'class': 'zm-tm-sec' }, [ E('h3', {}, '6. Данные'), E('p', {}, 'Личные данные не собираются. Для счётчика установок панель один раз — при первом запуске на роутере — отправляет автору случайный номер роутера и версию панели. По IP-адресу сервер определяет регион для карты на странице «Спасибо» и хранит только его, сам адрес не сохраняется. После этого на роутере остаётся файл /etc/zm.counter, и больше панель ничего не отправляет.') ]),
 					sec('7. Изменение условий', 'Новая редакция условий покажется при следующем входе в панель.')
 				]),
 				E('div', { 'class': 'zm-tm-foot' }, foot)
@@ -44936,15 +45037,15 @@ function tachyonBlock(t, o) {
 		if (sec < 86400) return 'обновлён ' + Math.round(sec / 3600) + ' ч назад';
 		return 'обновлён ' + Math.round(sec / 86400) + ' дн. назад';
 	}
-	var on = t.on !== false, have = (+t.lists || 0) > 0, busy = on && (!!t.busy || !!(tchPoll && tchPoll.user));
-	var state = !on ? 'выключен — его списков нет в «Дополнительных списках»'
+	var on = t.on === true, have = (+t.lists || 0) > 0, busy = on && (!!t.busy || !!(tchPoll && tchPoll.user));
+	var state = !on ? 'выключен — включите, и его списки появятся выше своими группами'
 		: busy ? (have ? 'обновляется — Steer и Forkozz тем временем работают со списками, что уже есть' : 'скачиваем каталог — это может занять до пары минут')
-		: have ? [ 'списков: ' + ((+t.lists || 0) + (+t.direct || 0) + (+t.plus || 0) + (+t.block || 0)), ago(+t.age), t.error ? 'последнее обновление не удалось' : '' ].filter(Boolean).join(' · ')
+		: have ? [ 'списков: ' + ((+t.lists || 0) + (+t.direct || 0) + (+t.block || 0)), ago(+t.age), t.error ? 'последнее обновление не удалось' : '' ].filter(Boolean).join(' · ')
 		: t.error ? 'не скачался — проверьте доступ к GitHub' : 'скачиваем каталог…';
 	var cls = !on ? 'zm-off' : busy ? 'zm-warn zm-busy' : t.error && !have ? 'zm-warn' : have ? 'zm-ok' : 'zm-off';
 	box.appendChild(E('div', { 'class': 'zm-cat-src-info' }, [
 		E('div', { 'class': 'zm-cat-src-title' }, [ 'Tachyon Lists ', E('span', { 'class': 'zm-badge ' + cls }, [ busy ? E('span', { 'class': 'zm-dot' }) : E([]), !on ? 'выключен' : busy ? 'обновляется' : have ? 'работает' : t.error ? 'ошибка' : 'скачивается' ]) ]),
-		E('div', { 'class': 'zm-cat-src-state', 'title': on && have && !busy ? (+t.lists || 0) + ' — отдельными сервисами в «Дополнительных списках», ' + (+t.plus || 0) + ' — добавлены к встроенным (YouTube, TikTok, Telegram и другим), ' + (+t.direct || 0) + ' — для «Мимо Steer»' + (+t.block ? ', ' + t.block + ' — в «Блокировке рекламы»' : '') + (+t.big ? '. Огромные (больше 100 тыс. записей) не используются: ' + t.big : '') : '' }, state),
+		E('div', { 'class': 'zm-cat-src-state', 'title': on && have && !busy ? (+t.lists || 0) + ' — отдельными сервисами в разделе «Tachyon Lists» (к встроенным сервисам не добавляются), ' + (+t.direct || 0) + ' — для «Мимо Steer»' + (+t.block ? ', ' + t.block + ' — в «Блокировке рекламы»' : '') + (+t.big ? '. Огромные (больше 100 тыс. записей) не используются: ' + t.big : '') : '' }, state),
 		E('div', { 'class': 'zm-cat-src-url' }, [ E('a', { 'href': t.url || 'https://github.com/Dushnilin/tachyon-lists', 'target': '_blank', 'rel': 'noopener' }, 'github.com/Dushnilin/tachyon-lists') ])
 	]));
 	function start(m) {
@@ -44963,7 +45064,7 @@ function tachyonBlock(t, o) {
 		if (!on) { start('on'); return; }
 		callSteerAction('tachyon', 'off').then(function(res) {
 			if (!res || res.error) { toast((res && res.error) || 'Роутер не ответил', 'error'); o.reload(); return; }
-			toast('Tachyon Lists выключен', 'info');
+			toast(res.rebuild ? 'Tachyon Lists выключен — нажмите «Пересобрать списки», чтобы его отмеченные списки перестали работать' : 'Tachyon Lists выключен', res.rebuild ? 'warning' : 'info');
 			o.reload();
 		}).catch(function() { toast('Роутер не ответил', 'error'); });
 	} }, on ? 'Выключить каталог' : 'Включить каталог'));
@@ -44971,6 +45072,39 @@ function tachyonBlock(t, o) {
 	if (busy && !tchPoll) { tchPoll = { user: false, t0: Date.now(), o: o, box: box }; setTimeout(tchTick, 2500); }
 	else if (tchPoll) { tchPoll.box = box; tchPoll.o = o; }
 	return box;
+}
+
+// Группа из каталога Tachyon Lists: у неё в названии «(Tachyon Lists)»
+function isTchGroup(g) { return /\(Tachyon Lists\)\s*$/.test(String(g || '')); }
+
+// Раздел «Tachyon Lists» — отдельно от сервисов, категорий и других каталогов: заголовок, свои группы и управление каталогом
+function tachyonSection(t, o) {
+	t = t || {};
+	var on = t.on === true, groups = o.groups || [], n = +o.picked || 0;
+	var wrap = E('div', { 'class': 'zm-tch-sec' });
+	wrap.appendChild(E('h4', { 'style': 'margin:0 0 4px' }, [ 'Tachyon Lists ', on
+		? E('span', { 'class': 'zm-badge ' + (n ? 'zm-ok' : 'zm-off') }, n ? 'выбрано ' + n : 'включён')
+		: E('span', { 'class': 'zm-badge zm-off' }, 'выключен') ]));
+	wrap.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, on
+		? 'Отдельный каталог: его списки не смешиваются с сервисами, категориями и другими списками — работают только те, что отмечены здесь.'
+		: 'Отдельный каталог готовых списков. По умолчанию выключен: к сервисам и категориям выше ничего не добавляет.'));
+	groups.forEach(function(g) { wrap.appendChild(g); });
+	wrap.appendChild(tachyonBlock(t, o));
+	return wrap;
+}
+
+// Строка «Списки сервисов»: «Обновить списки сейчас» и «Пересобрать списки». need — после включения/выключения
+// Tachyon Lists отмеченное ещё не пересобрано
+function listsNowRow(o) {
+	var tip = 'Заново собрать правила из того, что отмечено сейчас: сервисы, категории, дополнительные списки и Tachyon Lists — каждый отдельно';
+	return E('div', { 'class': 'zm-lists-now' + (o.need ? ' zm-lists-need' : '') }, [
+		E('div', { 'class': 'zm-lists-now-text' }, [
+			E('b', {}, o.need ? 'Списки нужно пересобрать' : 'Списки сервисов'),
+			E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, o.need ? 'Tachyon Lists включили или выключили — нажмите «Пересобрать списки», и правила соберутся заново, каждый источник отдельно.' : o.text)
+		]),
+		E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': o.refreshOff ? '' : null, 'title': o.refreshTitle || '', 'click': o.refresh }, o.refreshLabel || 'Обновить списки сейчас'),
+		E('button', { 'class': 'cbi-button ' + (o.need ? 'cbi-button-positive' : 'cbi-button-neutral'), 'disabled': o.rebuildOff ? '' : null, 'title': o.rebuildTitle || tip, 'click': o.rebuild }, 'Пересобрать списки')
+	]);
 }
 
 function tchTick() {
@@ -46368,6 +46502,9 @@ return baseclass.extend({
 	svcGrid: svcGrid,
 	svcGroup: svcGroup,
 	tachyonBlock: tachyonBlock,
+	tachyonSection: tachyonSection,
+	isTchGroup: isTchGroup,
+	listsNowRow: listsNowRow,
 	catalogBlock: catalogBlock,
 	ownBlock: ownBlock,
 	OWN_GROUP: OWN_GROUP,
@@ -50870,6 +51007,10 @@ return view.extend({
 				}).catch(function() { renderLists(); });
 			});
 		}
+		function listsRebuild() {
+			if (busy || listsBusy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
+			act('lists_rebuild', '', 'Пересобираем списки — ход работы виден в окне вывода', null, true);
+		}
 		function listsRefresh() {
 			if (busy || listsBusy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 			zm.steerAction('lists_refresh', '').then(function(res) {
@@ -50920,37 +51061,44 @@ return view.extend({
 				if (sel.russia_inside) listCard.appendChild(zm.riNote(list, sel));
 				else listCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё сразу» — полный список Russia inside: все категории и сервисы одним набором. Он большой, на слабых роутерах лучше включать отдельные пункты.'));
 			}
-			var groups = [];
-			remote.forEach(function(s) { if (groups.indexOf(s.group) < 0) groups.push(s.group); });
-			if (groups.length) {
-				listCard.appendChild(E('h4', { 'style': 'margin:20px 0 4px' }, 'Дополнительные списки'));
-				listCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, 'Готовые наборы доменов и подсетей из каталогов и ваши «Мои списки». Разверните источник и отметьте нужное.'));
-			}
-			groups.forEach(function(g) {
+			// Источники не смешиваются: каталоги и «Мои списки» — в «Дополнительных списках», Tachyon Lists — своим разделом
+			var groups = [], tGroups = [];
+			remote.forEach(function(s) { var to = zm.isTchGroup(s.group) ? tGroups : groups; if (to.indexOf(s.group) < 0) to.push(s.group); });
+			function groupEl(g) {
 				var items = remote.filter(function(s) { return s.group === g; });
 				var on = items.filter(function(s) { return sel[s.id]; }).length;
 				var m = /^(.*?)\s*\((.*)\)\s*$/.exec(g);
-				var gTitle = m ? m[1] : g, gSub = m ? m[2] : '';
-				listCard.appendChild(zm.svcGroup({
+				var tch = zm.isTchGroup(g), gTitle = m ? m[1] : g, gSub = m && !tch ? m[2] : '';
+				return zm.svcGroup({
 					name: gTitle, sub: gSub, key: g,
 					open: g in openGroups ? openGroups[g] : on > 0,
 					badge: E('span', { 'class': 'zm-badge ' + (on ? 'zm-ok' : 'zm-off') }, on ? 'выбрано ' + on + ' из ' + items.length : String(items.length)),
 					body: zm.svcGrid(items.map(tile)),
 					toggle: function(o) { openGroups[g] = o; }
-				}));
-			});
+				});
+			}
+			listCard.appendChild(E('h4', { 'style': 'margin:20px 0 4px' }, 'Дополнительные списки'));
+			listCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, 'Готовые наборы доменов и подсетей из каталога списков и ваши «Мои списки». Разверните источник и отметьте нужное.'));
+			groups.forEach(function(g) { listCard.appendChild(groupEl(g)); });
 			listCard.appendChild(zm.catalogBlock(data.catalog, { reload: function() { refresh(); } }));
-			listCard.appendChild(zm.tachyonBlock((data.catalog || {}).tachyon, { reload: function() { refresh(); } }));
 			listCard.appendChild(zm.ownBlock(data.catalog, { reload: function() { refresh(); }, added: function(g) { openGroups[g] = true; } }));
+			var tchT = (data.catalog || {}).tachyon || {};
+			listCard.appendChild(zm.tachyonSection(tchT, {
+				groups: tGroups.map(groupEl),
+				picked: remote.filter(function(s) { return zm.isTchGroup(s.group) && sel[s.id]; }).length,
+				reload: function() { refresh(); }
+			}));
 			var canRun = data.installed && !data.stopped && secIds().some(function(id) { return secWork(id) && secExit(id) !== 'none'; });
 			var li = data.lists || {}, lBusy = !!li.busy || listsBusy;
-			listCard.appendChild(E('div', { 'class': 'zm-lists-now' }, [
-				E('div', { 'class': 'zm-lists-now-text' }, [
-					E('b', {}, 'Списки сервисов'),
-					E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, !canRun ? 'Скачаются, когда Steer включён, выбраны сервисы и подключён WARP или VPN.' : lBusy ? 'Обновляются в фоне — Steer тем временем работает как обычно.' : listsText(li))
-				]),
-				E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': !canRun || busy || lBusy || changed ? '' : null, 'title': changed ? 'Сначала сохраните изменения' : '', 'click': listsRefresh }, lBusy ? 'Обновляются…' : 'Обновить списки сейчас')
-			]));
+			listCard.appendChild(zm.listsNowRow({
+				need: !!tchT.rb_steer && data.installed && !data.stopped,
+				text: !canRun ? 'Скачаются, когда Steer включён, выбраны сервисы и подключён WARP или VPN.' : lBusy ? 'Обновляются в фоне — Steer тем временем работает как обычно.' : listsText(li),
+				refresh: listsRefresh, refreshLabel: lBusy ? 'Обновляются…' : 'Обновить списки сейчас',
+				refreshOff: !canRun || busy || lBusy || changed, refreshTitle: changed ? 'Сначала сохраните изменения' : '',
+				rebuild: listsRebuild,
+				rebuildOff: !data.installed || data.stopped || busy || lBusy || changed,
+				rebuildTitle: changed ? 'Сначала сохраните изменения' : !data.installed ? 'Steer ещё не установлен' : data.stopped ? 'Steer выключен — списки соберутся при включении' : ''
+			}));
 			listCard.appendChild(listsLog);
 			var bar = zm.saveBar({
 				saveLabel: data.installed && !data.stopped ? 'Сохранить и применить' : 'Сохранить',
@@ -51104,7 +51252,7 @@ return view.extend({
 		function renderXsets() {
 			xsetCard.innerHTML = '';
 			var list = data.xsets || [], t = (data.catalog || {}).tachyon || {};
-			var show = !data.blocker && list.length > 0 && t.on !== false;
+			var show = !data.blocker && list.length > 0 && t.on === true;
 			xsetCard.style.display = show ? '' : 'none';
 			if (!show) return;
 			var cur = {};
@@ -58659,8 +58807,8 @@ html.zm-theme-dark .zm-kv-tg, html.zm-theme-dark .zm-kv-web { box-shadow: none; 
 .zm-sp-count p { margin: 0; font-size: 14.5px; opacity: .8; }
 .zm-sp-count b { font-variant-numeric: tabular-nums; }
 .zm-sp-count[hidden] { display: none; }
-.zm-mp { --zm-mp-0: #e8ecf2; --zm-mp-line: #ffffff; --zm-mp-b1: #cfe0f7; --zm-mp-b2: #9cc2f0; --zm-mp-b3: #5c9be3; --zm-mp-b4: #2f73cf; --zm-mp-b5: #1b4c99; --zm-mp-few-bg: #e8ecf2; --zm-mp-few-ln: #b3c8e8; --zm-mp-hl: #0f172a; --zm-mp-me: #f59e0b; display: flex; flex-direction: column; gap: 14px; }
-html.zm-theme-dark .zm-mp { --zm-mp-0: rgba(255,255,255,.07); --zm-mp-line: rgba(0,0,0,.5); --zm-mp-b1: #1f3554; --zm-mp-b2: #1f5c9c; --zm-mp-b3: #2f7fe0; --zm-mp-b4: #5aa6ff; --zm-mp-b5: #a9d1ff; --zm-mp-few-bg: rgba(255,255,255,.07); --zm-mp-few-ln: rgba(90,166,255,.42); --zm-mp-hl: #ffffff; --zm-mp-me: #fbbf24; }
+.zm-mp { --zm-mp-0: #e8ecf2; --zm-mp-line: #ffffff; --zm-mp-b1: #cfe0f7; --zm-mp-b2: #9cc2f0; --zm-mp-b3: #5c9be3; --zm-mp-b4: #2f73cf; --zm-mp-b5: #1b4c99; --zm-mp-few-bg: #e8ecf2; --zm-mp-few-ln: #b3c8e8; --zm-mp-hl: #0f172a; display: flex; flex-direction: column; gap: 14px; }
+html.zm-theme-dark .zm-mp { --zm-mp-0: rgba(255,255,255,.07); --zm-mp-line: rgba(0,0,0,.5); --zm-mp-b1: #1f3554; --zm-mp-b2: #1f5c9c; --zm-mp-b3: #2f7fe0; --zm-mp-b4: #5aa6ff; --zm-mp-b5: #a9d1ff; --zm-mp-few-bg: rgba(255,255,255,.07); --zm-mp-few-ln: rgba(90,166,255,.42); --zm-mp-hl: #ffffff; }
 .zm-mp-head { display: flex; flex-direction: column; gap: 4px; }
 .zm-mp-big { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
 .zm-mp-big b { font-size: 34px; line-height: 1.15; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
@@ -58681,9 +58829,8 @@ html.zm-theme-dark .zm-mp { --zm-mp-0: rgba(255,255,255,.07); --zm-mp-line: rgba
 .zm-mp-svg .zm-mp-few { fill: url(#zm-mp-hatch); }
 .zm-mp-svg .zm-mp-few-bg { fill: var(--zm-mp-few-bg); stroke: none; }
 .zm-mp-svg .zm-mp-few-ln { fill: var(--zm-mp-few-ln); stroke: none; }
-.zm-mp-svg .zm-mp-hl, .zm-mp-svg .zm-mp-mine { fill: none; pointer-events: none; transition: none; }
+.zm-mp-svg .zm-mp-hl { fill: none; pointer-events: none; transition: none; }
 .zm-mp-svg .zm-mp-hl { stroke: var(--zm-mp-hl); stroke-width: 1.8; }
-.zm-mp-svg .zm-mp-mine { stroke: var(--zm-mp-me); stroke-width: 1.8; stroke-dasharray: 4 3; }
 .zm-mp-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 12px)); pointer-events: none; display: flex; flex-direction: column; gap: 2px; padding: 7px 11px; border-radius: 10px; background: rgba(15,23,42,.94); color: #f8fafc; font-size: 12.5px; line-height: 1.35; white-space: nowrap; box-shadow: 0 8px 24px -8px rgba(0,0,0,.45); }
 .zm-mp-tip.zm-mp-tip-down { transform: translate(-50%, 14px); }
 .zm-mp-tip[hidden] { display: none; }
@@ -58698,7 +58845,6 @@ html.zm-theme-dark .zm-mp { --zm-mp-0: rgba(255,255,255,.07); --zm-mp-line: rgba
 .zm-mp-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; font-size: 13px; }
 .zm-mp-row[data-k]:hover { background: rgba(127,127,127,.09); }
 .zm-mp-side .zm-mp-row { cursor: pointer; }
-.zm-mp-row-me { box-shadow: inset 3px 0 0 var(--zm-mp-me); }
 .zm-mp-row-i { font-size: 12px; opacity: .55; text-align: center; font-variant-numeric: tabular-nums; }
 .zm-mp-cc .zm-mp-row-i { font-size: 17px; opacity: 1; }
 .zm-mp-row-n { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -59741,6 +59887,8 @@ html.zm-theme-dark .zm-stopbar { background: #2a1416; color: #fecaca; border-col
 .zm-sb-left { border-color: rgba(207,34,46,.3); background: rgba(207,34,46,.05); }
 .zm-sb-left-text, .zm-lists-now-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px; min-width: 0; }
 .zm-sb-left .cbi-button, .zm-lists-now .cbi-button { margin: 0; flex-shrink: 0; }
+.zm-lists-now.zm-lists-need { border-color: rgba(210,153,34,.55); background: rgba(210,153,34,.08); }
+.zm-tch-sec { margin-top: 22px; padding-top: 16px; border-top: 1px dashed rgba(110,118,129,.35); }
 .zm-dock { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9999; width: min(860px, calc(100vw - 32px)); display: none; flex-direction: column; gap: 10px; pointer-events: none; }
 .zm-dock.zm-dock-on { display: flex; }
 .zm-dock > * { pointer-events: auto; }
@@ -62706,17 +62854,6 @@ var SP_MAP = {"w":1000,"h":547,"r":[["RU-SA","Якутия","M808 126l1 1-1-1-2 
 var SP_DBIP = 'https://db-ip.com';
 var SP_SMALL = { 'RU-MOW': 1, 'RU-SPE': 1, 'RU-SEV': 1 };
 function spNum(n) { return (+n || 0).toLocaleString('ru-RU'); }
-function spDate(t) {
-	var d = new Date(t * 1000), p = function(n) { return (n < 10 ? '0' : '') + n; };
-	return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
-}
-function spAgo(s) {
-	s = +s || 0;
-	if (s < 90) return 'только что';
-	if (s < 5400) return spPl(Math.round(s / 60), 'минуту', 'минуты', 'минут') + ' назад';
-	if (s < 129600) return spPl(Math.round(s / 3600), 'час', 'часа', 'часов') + ' назад';
-	return spPl(Math.round(s / 86400), 'день', 'дня', 'дней') + ' назад';
-}
 var spCc = (function() {
 	var dn = null;
 	try { dn = new Intl.DisplayNames([ 'ru' ], { type: 'region' }); } catch (e) {}
@@ -62776,28 +62913,19 @@ function spMapCard(sysData) {
 	function drawHead() {
 		head.innerHTML = '';
 		if (!st) { head.appendChild(E('p', { 'class': 'zm-mp-lead' }, 'Загружаем счётчик…')); return; }
-		if (!st.on) {
-			head.appendChild(E('div', { 'class': 'zm-mp-big' }, [ E('span', { 'class': 'zm-mp-t' }, 'Счётчик выключен') ]));
-			head.appendChild(E('p', { 'class': 'zm-mp-lead' }, 'Панель ничего не отправляет на сервер счётчика и не загружает с него карту.'));
-			return;
-		}
 		var t = +st.total;
-		if (!(t > 0) && st.err) {
-			head.appendChild(E('div', { 'class': 'zm-mp-big' }, [ E('span', { 'class': 'zm-mp-t' }, 'Сервер счётчика не отвечает') ]));
-			head.appendChild(E('p', { 'class': 'zm-mp-lead' }, 'Попробуем снова при следующей ежедневной отметке.'));
+		if (!st.on || !(t > 0)) {
+			head.appendChild(E('div', { 'class': 'zm-mp-big' }, [ E('span', { 'class': 'zm-mp-t' }, st.on ? 'Сервер счётчика не отвечает' : 'Счётчик недоступен') ]));
+			if (st.on) head.appendChild(E('p', { 'class': 'zm-mp-lead' }, 'Загляните на эту страницу позже.'));
 			return;
 		}
 		var a = t % 10, b = t % 100;
 		head.appendChild(E('div', { 'class': 'zm-mp-big' }, [
-			E('span', { 'class': 'zm-mp-t' }, 'Zapret Manager работает на'),
-			E('b', {}, t > 0 ? spNum(t) : '—'),
+			E('span', { 'class': 'zm-mp-t' }, 'Zapret Manager установлен на'),
+			E('b', {}, spNum(t)),
 			E('span', { 'class': 'zm-mp-t' }, a === 1 && b !== 11 ? 'роутере' : 'роутерах')
 		]));
-		var sub = [];
-		if (+st.days > 0) sub.push('Считаем роутеры, которые отметились за последние ' + spPl(+st.days, 'день', 'дня', 'дней'));
-		if (+st.since > 0) sub.push('подсчёт с ' + spDate(+st.since));
-		if (+st.map_total > 0) sub.push('на карте — ' + spNum(+st.map_total));
-		if (sub.length) head.appendChild(E('p', { 'class': 'zm-mp-lead' }, sub.join(' · ')));
+		if (+st.map_total > 0) head.appendChild(E('p', { 'class': 'zm-mp-lead' }, 'На карте — ' + spNum(+st.map_total)));
 	}
 
 	function drawTabs() {
@@ -62812,14 +62940,13 @@ function spMapCard(sysData) {
 	function drawNote() {
 		note.innerHTML = '';
 		if (!st || !st.on) return;
-		note.appendChild(document.createTextNode('Регион определяет сервер по IP-адресу роутера и хранит только его. Меньше 5 роутеров в регионе — без точного числа. Крым и Севастополь — регионы России. '));
 		if (geo && geo.src) note.appendChild(E('a', { 'href': SP_DBIP, 'target': '_blank', 'rel': 'noreferrer' }, 'IP Geolocation by DB-IP'));
 	}
 
-	function bars(rows, max, onPick, mine) {
+	function bars(rows, max, onPick) {
 		return E('div', { 'class': 'zm-mp-list' }, rows.map(function(r, i) {
 			var w = max > 0 && r.n > 0 ? Math.max(3, Math.round(r.n / max * 100)) : 3;
-			var at = { 'class': 'zm-mp-row' + (mine && r.k === mine ? ' zm-mp-row-me' : ''), 'data-k': r.k };
+			var at = { 'class': 'zm-mp-row', 'data-k': r.k };
 			if (onPick) at.click = function() { onPick(r.k); };
 			return E('div', at, [
 				E('span', { 'class': 'zm-mp-row-i' }, r.icon || String(i + 1)),
@@ -62834,11 +62961,10 @@ function spMapCard(sysData) {
 		if (!st || !st.on || st.pre) return;
 		if (!geo) { body.appendChild(E('p', { 'class': 'zm-mp-empty' }, 'Загружаем карту…')); return; }
 		if (geo.error) { body.appendChild(E('p', { 'class': 'zm-mp-empty' }, 'Карта появится, когда сервер счётчика начнёт её отдавать.')); return; }
-		var mine = st.me && st.me.map && st.me.geo || null;
 		if (tab === 'cc') {
 			var cc = (geo.cc || []).filter(function(x) { return x && /^[A-Z]{2}$/.test(x[0]) && +x[1] > 0; }).map(function(x) { return { k: x[0], n: +x[1], name: spCc(x[0]), icon: spFlag(x[0]) }; });
 			if (!cc.length) { body.appendChild(E('p', { 'class': 'zm-mp-empty' }, 'Пока ни в одной стране не набралось 5 роутеров на карте.')); return; }
-			var box = E('div', { 'class': 'zm-mp-cc' }, [ bars(cc, cc[0].n, null, mine && mine.indexOf('RU-') === 0 ? 'RU' : mine) ]);
+			var box = E('div', { 'class': 'zm-mp-cc' }, [ bars(cc, cc[0].n, null) ]);
 			if (+geo.cc_other > 0) box.appendChild(E('p', { 'class': 'zm-mp-more' }, 'И ещё ' + spPl(+geo.cc_other, 'страна', 'страны', 'стран') + ', где пока меньше 5 роутеров на карте.'));
 			body.appendChild(box);
 			return;
@@ -62857,21 +62983,20 @@ function spMapCard(sysData) {
 		SP_MAP.r.forEach(function(r) { html += '<path data-k="' + r[0] + '" class="' + bucket(regVal(r[0])) + '" d="' + r[2] + '"></path>'; });
 		html += '</g><g class="zm-mp-dots">';
 		Object.keys(centers).forEach(function(k) { html += '<circle data-k="' + k + '" class="' + bucket(regVal(k)) + '" cx="' + centers[k][0].toFixed(1) + '" cy="' + centers[k][1].toFixed(1) + '" r="5.5"></circle>'; });
-		html += '</g><path class="zm-mp-mine" d=""></path><path class="zm-mp-hl" d=""></path></svg>';
+		html += '</g><path class="zm-mp-hl" d=""></path></svg>';
 		var map = E('div', { 'class': 'zm-mp-map' });
 		map.innerHTML = html;
 		var tip = E('div', { 'class': 'zm-mp-tip', 'hidden': '' });
 		map.appendChild(tip);
-		var svg = map.firstChild, hl = svg.querySelector('.zm-mp-hl'), mineEl = svg.querySelector('.zm-mp-mine');
+		var svg = map.firstChild, hl = svg.querySelector('.zm-mp-hl');
 		var pathOf = {};
 		Array.prototype.forEach.call(svg.querySelectorAll('.zm-mp-regs path'), function(p) { pathOf[p.getAttribute('data-k')] = p; });
-		if (mine && pathOf[mine]) mineEl.setAttribute('d', pathOf[mine].getAttribute('d'));
 		function show(k, x, y) {
 			if (!k || !pathOf[k]) { tip.hidden = true; hl.setAttribute('d', ''); return; }
 			hl.setAttribute('d', pathOf[k].getAttribute('d'));
 			tip.innerHTML = '';
 			tip.appendChild(E('b', {}, names[k] || k));
-			tip.appendChild(E('span', {}, spRouters(regVal(k)) + (k === mine ? ' · ваш регион' : '')));
+			tip.appendChild(E('span', {}, spRouters(regVal(k))));
 			tip.hidden = false;
 			var rc = map.getBoundingClientRect(), w = tip.offsetWidth || 160;
 			var left = Math.max(w / 2 + 4, Math.min(rc.width - w / 2 - 4, x));
@@ -62902,12 +63027,8 @@ function spMapCard(sysData) {
 		var side = E('div', { 'class': 'zm-mp-side' });
 		if (top.length) {
 			side.appendChild(E('div', { 'class': 'zm-mp-side-h' }, 'Больше всего роутеров'));
-			side.appendChild(bars(top.slice(0, 8), top[0].n, function(k) { pinned = k; at(k); }, mine));
+			side.appendChild(bars(top.slice(0, 8), top[0].n, function(k) { pinned = k; at(k); }));
 		} else side.appendChild(E('p', { 'class': 'zm-mp-empty' }, 'Пока ни в одном регионе не набралось 5 роутеров на карте.'));
-		if (mine && mine.indexOf('RU-') === 0 && !top.slice(0, 8).some(function(r) { return r.k === mine; })) {
-			side.appendChild(E('div', { 'class': 'zm-mp-side-h' }, 'Ваш регион'));
-			side.appendChild(bars([ { k: mine, n: regVal(mine), name: names[mine] || mine, icon: '★' } ], top.length ? top[0].n : 0, function(k) { pinned = k; at(k); }, mine));
-		}
 		var leg = E('div', { 'class': 'zm-mp-leg' });
 		leg.appendChild(E('span', {}, [ E('i', { 'class': 'zm-mp-few' }), '1–4' ]));
 		steps.forEach(function(v, i) {
@@ -62930,13 +63051,13 @@ function spMapCard(sysData) {
 		}).catch(function() { geo = { error: 'bad' }; drawBody(); drawNote(); });
 	}
 
-	if (sysData && +sysData.zm_total > 0) st = { on: true, total: +sysData.zm_total, map_on: true, terms: true, me: null, pre: true };
+	if (sysData && +sysData.zm_total > 0) st = { on: true, total: +sysData.zm_total, pre: true };
 	drawAll();
 	zm.statsGet().then(function(r) {
 		st = r && typeof r === 'object' && !r.error ? r : { on: false };
 		drawAll();
 		loadGeo();
-	}).catch(function() { st = { on: true, err: true, total: st && st.total || null }; drawAll(); loadGeo(); });
+	}).catch(function() { st = { on: true, total: st && st.total || null }; drawAll(); loadGeo(); });
 	return card;
 }
 
@@ -65811,7 +65932,7 @@ function refNorm(t) {
 function refLabel(t) {
 	if (t.indexOf('c:') === 0) return OLD_NAMES[t.slice(2)] || t.slice(2);
 	var b = t.slice(2).replace(/[?#].*$/, '').replace(/^.*\//, '').replace(/\.(srs|json|lst)$/i, '');
-	return /b4geoip/i.test(t) ? b + ' (b4geoip)' : (b || t.slice(2));
+	return /b4geoip/i.test(t) ? b + ' (b4geoip)' : /\/dushnilin\/tachyon-lists\//i.test(t) ? b + ' (Tachyon Lists)' : (b || t.slice(2));
 }
 
 function pickFromCfg(c) {
@@ -66068,13 +66189,13 @@ var WARN = {
 
 var ACT_TEXT = {
 	install: 'Устанавливаем Forkozz', update: 'Обновляем Forkozz', reinstall: 'Переустанавливаем Forkozz', remove: 'Удаляем Forkozz', stop: 'Выключаем Forkozz',
-	start: 'Включаем Forkozz', restart: 'Перезапускаем Forkozz', apply: 'Применяем настройки', lists: 'Обновляем списки сервисов',
+	start: 'Включаем Forkozz', restart: 'Перезапускаем Forkozz', apply: 'Применяем настройки', lists: 'Обновляем списки сервисов', rebuild: 'Пересобираем списки',
 	subs: 'Обновляем серверы подписки', tsc_clean: 'Убираем остатки удалённого доступа', src_fix: 'Исправляем источники трафика', dns_fix: 'Чиним DNS роутера', singbox: 'Меняем sing-box', singbox_reinstall: 'Переустанавливаем sing-box', singbox_remove: 'Удаляем sing-box'
 };
 
 var DONE_TEXT = {
 	install: 'Forkozz установлен', update: 'Forkozz обновлён', reinstall: 'Forkozz переустановлен', remove: 'Forkozz удалён', stop: 'Forkozz выключен',
-	start: 'Forkozz включён', restart: 'Forkozz перезапущен', apply: 'Настройки применены', lists: 'Списки сервисов обновлены',
+	start: 'Forkozz включён', restart: 'Forkozz перезапущен', apply: 'Настройки применены', lists: 'Списки сервисов обновлены', rebuild: 'Списки пересобраны',
 	subs: 'Серверы подписки обновлены', tsc_clean: 'Остатки удалённого доступа убраны', src_fix: 'Источники трафика исправлены', dns_fix: 'DNS роутера починен', singbox: 'sing-box заменён', singbox_reinstall: 'sing-box переустановлен', singbox_remove: 'sing-box удалён'
 };
 
@@ -67723,14 +67844,14 @@ return view.extend({
 		}
 
 		function listsNow() {
-			var ok = configured() && st.running;
-			return E('div', { 'class': 'zm-lists-now' }, [
-				E('div', { 'class': 'zm-lists-now-text' }, [
-					E('b', {}, 'Списки сервисов'),
-					E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, ok ? 'Обновляются сами раз в ' + ((LIST_IV.filter(function(x) { return x.id === ((cfg && cfg.list_interval) || '1d'); })[0] || {}).label || '24 ч') + '. Можно скачать заново сейчас — в окне вывода будет видно, что скачалось, применилось и работает.' : 'Скачиваются, когда Forkozz включён.')
-				]),
-				E('button', { 'class': 'cbi-button cbi-button-action', 'disabled': !ok || busy || dirty ? '' : null, 'title': dirty ? 'Сначала сохраните изменения' : '', 'click': function() { act('lists'); } }, 'Обновить списки сейчас')
-			]);
+			var ok = configured() && st.running, t = (((cfg && cfg.catalog && cfg.catalog.meta) || {}).tachyon) || {};
+			return zm.listsNowRow({
+				need: !!t.rb_fk && configured(),
+				text: ok ? 'Обновляются сами раз в ' + ((LIST_IV.filter(function(x) { return x.id === ((cfg && cfg.list_interval) || '1d'); })[0] || {}).label || '24 ч') + '. Можно скачать заново сейчас — в окне вывода будет видно, что скачалось, применилось и работает.' : 'Скачиваются, когда Forkozz включён.',
+				refresh: function() { act('lists'); }, refreshOff: !ok || busy || dirty, refreshTitle: dirty ? 'Сначала сохраните изменения' : '',
+				rebuild: function() { act('rebuild'); }, rebuildOff: !configured() || busy || dirty,
+				rebuildTitle: dirty ? 'Сначала сохраните изменения' : ''
+			});
 		}
 
 		var takenMemo = null;
@@ -68125,33 +68246,37 @@ return view.extend({
 				if (sel.russia_inside && takenMemo && takenMemo.shadow.length) svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ «Всё сразу» здесь перекроет: ' + takenMemo.shadow.join(', ') + '. Эта секция выше, поэтому такие сервисы пойдут через неё.'));
 				else svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '«Всё сразу» — полный список Russia inside: все категории и сервисы одним набором. Он большой, на слабых роутерах лучше включать отдельные пункты.'));
 			}
-			var groups = [];
-			remote.forEach(function(s) { if (groups.indexOf(s.group) < 0) groups.push(s.group); });
+			if (sel.discord && (sel.cloudflare || sel.c_itdoginfo_cloudflare))
+				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord вместе с Cloudflare уводят в Forkozz много лишнего, даже торренты.'));
+			// Источники не смешиваются: каталоги и «Мои списки» — в «Дополнительных списках», Tachyon Lists — своим разделом
+			var groups = [], tGroups = [];
+			remote.forEach(function(s) { var to = zm.isTchGroup(s.group) ? tGroups : groups; if (to.indexOf(s.group) < 0) to.push(s.group); });
 			groups.sort(function(a, b) { return (a === OLD_GROUP) - (b === OLD_GROUP); });
-			if (groups.length) {
-				svcCard.appendChild(E('h4', { 'style': 'margin:20px 0 4px' }, 'Дополнительные списки'));
-				svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, 'Готовые наборы доменов и подсетей из каталогов и ваши «Мои списки». Разверните источник и отметьте нужное.'));
-			}
-			groups.forEach(function(g) {
+			function groupEl(g) {
 				var items = remote.filter(function(s) { return s.group === g; });
 				var on = items.filter(function(s) { return sel[s.id]; }).length;
-				var m = /^(.*?)\s*\((.*)\)\s*$/.exec(g);
-				svcCard.appendChild(zm.svcGroup({
-					name: m ? m[1] : g, sub: m ? m[2] : '', key: g,
+				var m = /^(.*?)\s*\((.*)\)\s*$/.exec(g), tch = zm.isTchGroup(g);
+				return zm.svcGroup({
+					name: m ? m[1] : g, sub: m && !tch ? m[2] : '', key: g,
 					open: g in openGroups ? openGroups[g] : on > 0,
 					badge: E('span', { 'class': 'zm-badge ' + (on ? 'zm-ok' : 'zm-off') }, on ? 'выбрано ' + on + ' из ' + items.length : String(items.length)),
 					body: zm.svcGrid(items.map(svcTile)),
 					toggle: function(o) { openGroups[g] = o; }
-				}));
-			});
+				});
+			}
+			svcCard.appendChild(E('h4', { 'style': 'margin:20px 0 4px' }, 'Дополнительные списки'));
+			svcCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0 0 10px' }, 'Готовые наборы доменов и подсетей из каталога списков и ваши «Мои списки». Разверните источник и отметьте нужное.'));
+			groups.forEach(function(g) { svcCard.appendChild(groupEl(g)); });
 			if (groups.indexOf(OLD_GROUP) >= 0)
 				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти списки были выбраны раньше, но их нет в каталоге. Они продолжают работать; выключите ненужные и сохраните.'));
-			if (sel.discord && (sel.cloudflare || sel.c_itdoginfo_cloudflare))
-				svcCard.appendChild(E('p', { 'class': 'zm-hint' }, '⚠ Discord вместе с Cloudflare уводят в Forkozz много лишнего, даже торренты.'));
 			var catMeta = (cfg && cfg.catalog && cfg.catalog.meta) || {};
 			svcCard.appendChild(zm.catalogBlock(catMeta, { reload: function() { reload(); } }));
-			svcCard.appendChild(zm.tachyonBlock(catMeta.tachyon, { reload: function() { reload(); } }));
 			svcCard.appendChild(zm.ownBlock(catMeta, { reload: function() { reload(); }, added: function(g) { openGroups[g] = true; } }));
+			svcCard.appendChild(zm.tachyonSection(catMeta.tachyon, {
+				groups: tGroups.map(groupEl),
+				picked: remote.filter(function(s) { return zm.isTchGroup(s.group) && sel[s.id]; }).length,
+				reload: function() { reload(); }
+			}));
 			svcCard.appendChild(listsNow());
 			if (domOpen && !domCards[domOpen]) domOpen = null;
 			domPlace();
@@ -76315,6 +76440,8 @@ html.zm-theme-dark .zm-find { background: var(--surface-solid, #1c2128); color: 
 .zmw-modal.zm-find .zm-find-input, .zmw-modal.zm-find .zm-find-input:focus { width: auto; height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 19px; }
 @media (max-width: 600px) { .zmw-modal.zm-find { max-height: calc(100vh - 24px); border-radius: 18px; } .zmw-modal.zm-find .zm-find-input { font-size: 16px; } }
 #zmw-view .zm-sb-left, #zmw-view .zm-lists-now { background: var(--surface-2); border-color: var(--border); border-radius: var(--radius-sm); color: var(--text); }
+#zmw-view .zm-lists-now.zm-lists-need { border-color: rgba(210,153,34,.55) !important; background: rgba(210,153,34,.08) !important; }
+#zmw-view .zm-tch-sec { border-top-color: var(--border); }
 #zmw-view .zm-sb-left { background: var(--bad-bg); border-color: rgba(239,68,68,.3); }
 .zm-stopbar .cbi-button.zm-stopbar-btn { padding: 10px 18px; border-radius: 12px; font-size: 14px; line-height: 1.2; box-shadow: 0 8px 20px -10px rgba(220,38,38,.8); }
 @media (min-width: 961px) {
@@ -77307,11 +77434,7 @@ else
 	case "$_zm_wl" in *' # zm-rpcd-watch') ;; *) _zm_wl='*/2 * * * * /opt/zapret-manager-luci/backend.sh zm_watch >/dev/null 2>&1 # zm-rpcd-watch' ;; esac
 	echo "$_zm_wl" >> /etc/crontabs/root 2>/dev/null || true
 fi
-if ! grep -q ' # zm-stats$' /etc/crontabs/root 2>/dev/null; then
-	_zm_r="$(hexdump -n 2 -e '1/2 "%u"' /dev/urandom 2>/dev/null || true)"
-	case "$_zm_r" in ''|*[!0-9]*) _zm_r="$$" ;; esac
-	echo "$((_zm_r % 60)) $((_zm_r / 60 % 24)) * * * /opt/zapret-manager-luci/backend.sh zm_stats_hit >/dev/null 2>&1 # zm-stats" >> /etc/crontabs/root 2>/dev/null || true
-fi
+grep -q ' # zm-stats$' /etc/crontabs/root 2>/dev/null && sed -i '/ # zm-stats$/d' /etc/crontabs/root 2>/dev/null
 ZM_NO_CRON_RESTART=1 /opt/zapret-manager-luci/backend.sh versions_cron_sync >/dev/null 2>&1 || true
 ZM_NO_CRON_RESTART=1 /opt/zapret-manager-luci/backend.sh steer_action lists_cron x >/dev/null 2>&1 || true
 case "$(uci -q get system.@system[0].cronloglevel)" in
