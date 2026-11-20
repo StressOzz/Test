@@ -7126,6 +7126,17 @@ _st_tch_on() {
 }
 _st_tch_steer_used() { grep -qsE '(^|[[:space:],])t_[a-z0-9_]+' "$ST_SEL" "$ST_SEC_DIR"/*/services "$ST_TCH_XSETS"; }
 _st_tch_fk_used() { grep -qsi 'Dushnilin/tachyon-lists' /etc/config/netshift; }
+_st_tch_fk_heal() {
+	local r f d
+	_fk_installed && _st_tch_fk_used || return 0
+	r="$(_fk_uc tchheal 2>/dev/null)" || return 0
+	case "$r" in *'"changed":true'*) ;; *) return 0 ;; esac
+	f="$(printf '%s' "$r" | sed -n 's/.*"fixed":\([0-9]*\).*/\1/p')"
+	d="$(printf '%s' "$r" | sed -n 's/.*"dropped":\([0-9]*\).*/\1/p')"
+	logger -t zapret-manager "Tachyon Lists: в Forkozz обновлены ссылки на списки, которые автор перенёс${f:+ — исправлено $f}${d:+, убрано $d}"
+	: > "$ST_RB_FK" 2>/dev/null
+	return 0
+}
 _st_tch_mig() {
 	[ -d "$ST_DIR" ] || return 0
 	if _st_tch_steer_used || _st_tch_fk_used; then : > "$ST_TCH_ON"; else : > "$ST_TCH_OFF"; fi
@@ -7168,6 +7179,7 @@ _st_tch_refresh() {
 	if { _st_fetch "$ST_TCH_RAW/release/catalog.json" "$m" || _st_fetch "$ST_TCH_CDN/release/catalog.json" "$m"; } && _st_tch_build "$m"; then
 		rm -f "$ST_TCH_ERR"
 		_st_tch_idx_merge
+		_st_tch_fk_heal
 	else
 		date +%s > "$ST_TCH_ERR"
 		rc=1
@@ -16353,6 +16365,7 @@ do_fk_rebuild() {
 	_fk_say "Пересобираем списки Forkozz — каждый источник отдельно"
 	if _st_tch_on; then
 		echo "   ✓ Tachyon Lists включён — его списки работают отдельными сервисами, к встроенным не добавляются"
+		_st_tch_refresh force >/dev/null 2>&1 || _st_tch_fk_heal
 	else
 		r="$(_fk_ucj tchstrip all)" || { echo "ОШИБКА: $(printf '%s' "$r" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"; return 1; }
 		n="$(printf '%s' "$r" | sed -n 's/.*"dropped":\([0-9][0-9]*\).*/\1/p')"
@@ -42792,8 +42805,50 @@ function cmd_tchstrip(how) {
 	out({ ok: true, dropped: n });
 }
 
+// Автор Tachyon Lists меняет состав файлов списков (например, у cloudflare остались только подсети).
+// В секциях лежат URL, сохранённые при выборе, — сверяем их с текущим каталогом (tachyon.idx)
+// и подменяем устаревшие на актуальные того же списка; списки, которых в каталоге больше нет, убираем.
+function cmd_tchheal() {
+	let byId = {}, ok = {}, nl = 0, c = cursor(), ch = false, fixed = 0, dropped = 0;
+	let norm = (u) => replace(s(u), /^https:\/\/cdn\.jsdelivr\.net\/gh\/Dushnilin\/tachyon-lists@main\//i, "https://raw.githubusercontent.com/Dushnilin/tachyon-lists/main/");
+	for (let l in split(s(fs.readfile(ST_DIR + "/tachyon.idx")), "\n")) {
+		let f = split(l, "|");
+		if (length(f) < 3 || f[1] != "lst" || index(lc(f[2]), "/dushnilin/tachyon-lists/") < 0) continue;
+		let id = replace(replace(f[0], /^t_/, ""), /_ip$/, "");
+		ok[f[2]] = true; nl++;
+		byId[id] = uniq([ ...(byId[id] || []), f[2] ]);
+	}
+	if (nl < 20) { out({ ok: true, skipped: true, fixed: 0, dropped: 0 }); return; }
+	let tch = (u) => index(lc(u), "/dushnilin/tachyon-lists/") >= 0 && match(lc(u), /\.lst$/);
+	let fix = (u) => {
+		if (!tch(u) || ok[norm(u)]) return null;
+		let m = match(u, /\/([a-z0-9_]+)\.lst$/i), id = m ? lc(m[1]) : "";
+		return byId[id] || [];
+	};
+	for (let x in sections(c, "section")) {
+		let sec = x[".name"];
+		for (let o in [ "zm_refs", "remote_domain_lists", "remote_subnet_lists" ]) {
+			let v = rawlist(x[o]), r = [], hit = false;
+			for (let e in v) {
+				let k = o == "zm_refs" && substr(e, 1, 1) == ":" ? substr(e, 0, 2) : "";
+				let to = fix(k != "" ? substr(e, 2) : e);
+				if (to == null) { push(r, e); continue; }
+				hit = true;
+				if (o == "zm_refs") { if (length(to)) fixed++; else dropped++; }
+				for (let u in to) push(r, k + u);
+			}
+			if (!hit) continue;
+			set_list(c, sec, o, uniq(r));
+			ch = true;
+		}
+	}
+	if (ch) { c.save(CFG); c.commit(CFG); }
+	out({ ok: true, fixed, dropped, changed: ch });
+}
+
 let mode = ARGV[0] || "";
 let sec = ARGV[1] || "";
+if (mode == "tchheal") { cmd_tchheal(); exit(0); }
 if (mode == "tchstrip") { cmd_tchstrip(ARGV[1] || ""); exit(0); }
 if (mode == "reality") { cmd_reality(ARGV[1], ARGV[2]); exit(1); }
 if (mode == "rs_initial") cmd_rs_initial(ARGV[1], ARGV[2]);
@@ -55812,7 +55867,10 @@ return view.extend({
 			function zcMark(cls, text, title) { return E('span', { 'class': 'zm-badge ' + cls, 'title': title || '' }, [ E('span', { 'class': 'zm-dot' }), text ]); }
 			function zcNum(n) { return String(+n).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0'); }
 			function zcParts(label) {
-				return String(label).split(/\s+/).filter(function(t) { return t && !/^(QUIC|DoH|wssize)$/.test(t); }).map(function(t) {
+				// скобки — часть имени (Flowseal: «general (SIMPLE FAKE ALT2)»), резать внутри них нельзя
+				var toks = String(label).match(/[^\s(]+(?:\s*\([^)]*\)?)?|\([^)]*\)?/g) || [];
+				return toks.map(function(t) { return t.replace(/\s+/g, ' ').trim(); }).filter(function(t) { return t && !/^(QUIC|DoH|wssize)$/.test(t); }).map(function(t) {
+					if (/^general\b/i.test(t)) return [ t, 'Flowseal' ];
 					if (/^v\d+/i.test(t)) return [ t, 'основная' ];
 					if (/^Yv\d+z?$/.test(t)) return [ t.replace(/z$/, ''), 'YouTube' ];
 					if (/^gVideo\d+$/.test(t)) return [ t, 'googlevideo' ];
@@ -58908,7 +58966,7 @@ html.zm-theme-dark .zm-card {
 .zm-zr-set .zm-seg { flex-wrap: wrap; }
 .zm-zc-vals { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
 .zm-zc-acts { margin: 0 !important; justify-content: flex-end; }
-.zm-zc-part { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border-radius: 9px; border: 1px solid rgba(127,127,127,.25); background: rgba(127,127,127,.07); font-weight: 600; }
+.zm-zc-part { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px; max-width: 100%; padding: 4px 10px; border-radius: 9px; border: 1px solid rgba(127,127,127,.25); background: rgba(127,127,127,.07); font-weight: 600; overflow-wrap: anywhere; }
 .zm-zc-part small { font-weight: 400; font-size: 12px; opacity: .7; }
 @media (max-width: 760px) { .zm-zc-row { grid-template-columns: 1fr; gap: 6px; } .zm-zc-label { padding-top: 0; } }
 .zm-row > span:last-child { overflow-wrap: anywhere; }
@@ -60961,9 +61019,7 @@ html.zm-theme-dark .zm-mon-xtip { background: #1c2128; }
 .zm-mon-nleg-row b { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; white-space: nowrap; font-weight: 600; }
 .zm-mon-nleg-row small { opacity: .6; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; text-align: right; }
 .zm-mon-nlg-rx { color: var(--zm-acc2); } .zm-mon-nlg-tx { color: var(--zm-c-mem); }
-.zm-mon-netheadd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .zm-mon-netsel { font-size: 12.5px; padding: 3px 8px; height: auto; max-width: 60%; }
-.zm-mon-netiv { max-width: none; }
 .zm-mon-fan { gap: 6px; }
 .zm-mon-fan svg { width: 14px; height: 14px; flex: none; }
 .zm-mon-fan.zm-ok svg { animation: zm-mon-spin 1.4s linear infinite; }
@@ -63030,7 +63086,7 @@ var SP_PAY = [
 	{ id: 'tb', title: 'ТБанк донаты', url: 'https://pay.cloudtips.ru/p/0d41f298' },
 	{ id: 'oz', title: 'Ozon донаты', url: 'https://finance.ozon.ru/apps/sbp/ozonbankpay/019f8e08-d609-710b-ab0e-47fae3a07547?attempt=1' }
 ];
-var SP_KVN_BOT = 'https://t.me/StressKVN_bot';
+var SP_KVN_BOT = 'https://t.me/stresskvn_bot?start=zm_bot';
 var SP_KVN_SITE = 'http://stresskvn.lol/';
 var SP_KVN_ICO = {
 	shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
@@ -64514,30 +64570,19 @@ return view.extend({
 		]);
 
 		var netBox = E('div', {}), sensBox = E('div', {}), infoBox = E('div', {});
-		var NET_WIN = 120, NW = 300, NH = 84, NET_KEY = 'zm-mon-net', NET_IV_KEY = 'zm-mon-netiv';
-		var netHist = {}, netPick = '', netList = '', netIv = 1;
+		var NET_WIN = 120, NW = 300, NH = 84, NET_KEY = 'zm-mon-net';
+		var netHist = {}, netPick = '', netList = '';
 		try { netPick = localStorage.getItem(NET_KEY) || ''; } catch (e) { netPick = ''; }
-		try { netIv = parseInt(localStorage.getItem(NET_IV_KEY), 10) || 1; } catch (e) { netIv = 1; }
-		if (netIv !== 1 && netIv !== 2 && netIv !== 5) netIv = 1;
 		var netSel = E('select', { 'class': 'cbi-input-select zm-mon-netsel', 'aria-label': 'Какую сеть показывать', 'change': function() {
 			netPick = netSel.value;
 			try { localStorage.setItem(NET_KEY, netPick); } catch (e) {}
 			renderSnap();
 		} });
-		var netIvSel = E('select', { 'class': 'cbi-input-select zm-mon-netsel zm-mon-netiv', 'title': 'Как часто обновлять скорость приёма и отдачи', 'aria-label': 'Как часто обновлять скорость', 'change': function() {
-			netIv = parseInt(netIvSel.value, 10) || 1;
-			if (netIv !== 1 && netIv !== 2 && netIv !== 5) netIv = 1;
-			try { localStorage.setItem(NET_IV_KEY, String(netIv)); } catch (e) {}
-			netFast.prev = null; netFast.base = null;
-			clearTimeout(netFast.timer);
-			netPoll();
-		} }, [ E('option', { 'value': '1' }, '1 с'), E('option', { 'value': '2' }, '2 с'), E('option', { 'value': '5' }, '5 с') ]);
-		netIvSel.value = String(netIv);
 		var pRx = svg('path', { 'class': 'zm-mon-nrx zm-mon-narea' }), pTx = svg('path', { 'class': 'zm-mon-ntx zm-mon-narea' });
 		var lRx = svg('path', { 'class': 'zm-mon-nrx zm-mon-nline' }), lTx = svg('path', { 'class': 'zm-mon-ntx zm-mon-nline' });
 		var nChart = svg('svg', { viewBox: '0 0 ' + NW + ' ' + NH, preserveAspectRatio: 'none', 'class': 'zm-mon-nchart', role: 'img', 'aria-label': 'Загрузка и отдача за 2 минуты' }, [ pRx, pTx, lRx, lTx ]);
 		var nLeg = E('div', { 'class': 'zm-mon-nleg' });
-		var netCard = E('div', { 'class': 'zm-card' }, [ E('div', { 'class': 'zm-mon-cardhead' }, [ E('h3', { 'style': 'margin:0' }, 'Сеть сейчас'), E('div', { 'class': 'zm-mon-netheadd' }, [ netIvSel, netSel ]) ]), nChart, nLeg, netBox ]);
+		var netCard = E('div', { 'class': 'zm-card' }, [ E('div', { 'class': 'zm-mon-cardhead' }, [ E('h3', { 'style': 'margin:0' }, 'Сеть сейчас'), netSel ]), nChart, nLeg, netBox ]);
 		function netCur(s) {
 			var l = (s && s.net && s.net.ifs) || [];
 			return l.filter(function(x) { return x.n === netPick; })[0] || l.filter(function(x) { return x.i; })[0] || l.filter(function(x) { return x.n === 'wan'; })[0] || l[0] || null;
@@ -64566,7 +64611,7 @@ return view.extend({
 		function netPoll() {
 			clearTimeout(netFast.timer);
 			if (!alive()) return;
-			netFast.timer = setTimeout(netPoll, netIv * 1000);
+			netFast.timer = setTimeout(netPoll, 1000);
 			if (!netFastOn() || netFast.busy || !zm.netNow) return;
 			var dev = netFast.dev;
 			netFast.busy = true;
@@ -64590,7 +64635,7 @@ return view.extend({
 			if (!h.length) { [ pRx, pTx, lRx, lTx ].forEach(function(p) { p.setAttribute('d', ''); }); return; }
 			var last = h[h.length - 1], mx = 1, pk = { rx: 0, tx: 0 };
 			h.forEach(function(q) { mx = Math.max(mx, q.rx, q.tx); pk.rx = Math.max(pk.rx, q.rx); pk.tx = Math.max(pk.tx, q.tx); });
-			var smooth = dt > 0 && netIv <= 1, kf = smooth ? Math.min(1, dt * 4) : 1;
+			var smooth = dt > 0, kf = smooth ? Math.min(1, dt * 4) : 1;
 			netFast.mx += (mx * 1.1 - netFast.mx) * (smooth ? Math.min(1, dt * 3) : 1);
 			netFast.rx += (last.rx - netFast.rx) * kf;
 			netFast.tx += (last.tx - netFast.tx) * kf;
@@ -64608,7 +64653,7 @@ return view.extend({
 			}
 		}
 		function netAnim() {
-			if (netFast.raf || netIv > 1 || !netFastOn() || !window.requestAnimationFrame) { if (!netFast.raf) netDraw(0); return; }
+			if (netFast.raf || !netFastOn() || !window.requestAnimationFrame) { if (!netFast.raf) netDraw(0); return; }
 			netFast.last = 0;
 			netFast.raf = requestAnimationFrame(function step(ts) {
 				netFast.raf = 0;
