@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.087
+# Version: 5.088
 ZM_VERSION_EOF
 set -e
 
@@ -2537,7 +2537,7 @@ status() {
 		_zl_used exclude && zs_hzu=true
 		zs_gv="$(_zo_gv_cur)"
 	fi
-	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"rkn_src":"%s","wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","gv":"%s","gv_want":"%s","gv_list":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s","hdrezka":%s,"hdrezka_used":%s,"main_off":%s,"main_fam":"%s","vpnskip":%s,"vpnskip_ifs":"%s","zapret_boot":%s,"zapret2_boot":%s}\n' \
+	printf '{"pkg":"%s","zapret":"%s","zapret_running":%s,"zapret_version":"%s","zapret2":"%s","zapret2_running":%s,"strategy":"%s","flowseal":"%s","yv_off":%s,"quic_yt":%s,"expert":%s,"rkn":%s,"rkn_on":%s,"rkn_fits":%s,"rkn_count":%s,"rkn_src":"%s","wssize":%s,"ulist":%s,"ulist_on":%s,"ulist_count":%s,"testing":%s,"test_now":"%s","ipid":%s,"ipid_want":"%s","gv":"%s","gv_want":"%s","gv_list":"%s","yt_tcp":%s,"z2_luci":"%s","zdoh":%s,"zdoh_on":%s,"zdoh_doms":"%s","zdoh_own":%s,"s2":%s,"pending":%s,"pending_was":"%s","hdrezka":%s,"hdrezka_used":%s,"main_off":%s,"main_fam":"%s","vpnskip":%s,"vpnskip_ifs":"%s","zapret_boot":%s,"zapret2_boot":%s,"zapret2_ver":"%s","zapret2_latest":"%s","zapret2_upd":%s}\n' \
 		"$PKG" "$zr" "$zr_running" "$(esc "$zr_ver")" "$zr2" "$zr2_running" "$(esc "$strat")" "$(esc "$fs_marker")" \
 		"$zs_yv" "$zs_qy" "$zs_ex" "$zs_rk" "$zs_rko" "$zs_rkf" \
 		"$(_zo_rkn_count)" "$(_zo_rkn_src)" \
@@ -2545,7 +2545,8 @@ status() {
 		"$zs_ip" "$(_yv_ipid_want)" "$zs_gv" "$(_zo_gv_want)" "$(_gv_ids | tr '\n' ' ' | sed 's/ $//')" \
 		"$zs_yt" "$(esc "$zr2_luci")" "$zs_zd" "$zs_zdon" "$(esc "$zdd")" "$zdo" "$zs_s2" "$zs_pd" "$zs_pw" "$zs_hz" "$zs_hzu" "$zs_mo" "$zs_mf" \
 		"$(_zm_zskip_on && echo true || echo false)" "$(_zm_zskip_on && [ -f "$ZSKIP_NFT" ] && sed -n 's/^.*oifname "\([^"]*\)".*$/\1/p' "$ZSKIP_NFT" | tr '\n' ' ' | sed 's/ $//')" \
-		"$(_zm_boot zapret && echo true || echo false)" "$(_zm_boot zapret2 && echo true || echo false)"
+		"$(_zm_boot zapret && echo true || echo false)" "$(_zm_boot zapret2 && echo true || echo false)" \
+		"$(esc "$(_z2_inst_ver)")" "$(esc "$(_z2_latest_cache)")" "$(_z2_upd_avail && echo true || echo false)"
 }
 _zm_boot() {
 	local f
@@ -2559,6 +2560,100 @@ _z2_luci_path() {
 
 _z2_arch() { awk -F\' '/DISTRIB_ARCH/ {print $2}' /etc/openwrt_release 2>/dev/null; }
 _z2_arch_ok() { case "$(_z2_arch)" in aarch64_*) return 0 ;; esac; return 1; }
+
+# ---- Zapret2: свежая версия из репозитория Routerich (пакет ставится файлом, в фидах opkg/apk его нет) ----
+Z2_REPO_OLD="https://packages.routerich.ru/24.10/mediatek/filogic/routerich/"
+Z2_REPO_NEW="https://packages.routerich.ru/25.12/mediatek/filogic/routerich/"
+Z2_IDX_TTL=21600
+
+_z2_repo_url() { if [ "$PKG" = apk ]; then printf '%s\n' "$Z2_REPO_NEW"; else printf '%s\n' "$Z2_REPO_OLD"; fi; }
+
+_z2_index() {
+	local idx="$JOBS_DIR/z2.index" ts="$JOBS_DIR/z2.index.ts" now age=999999999
+	mkdir -p "$JOBS_DIR" 2>/dev/null
+	now="$(date +%s)"
+	[ -s "$ts" ] && age=$(( now - $(sed -n '1p' "$ts" 2>/dev/null || echo 0) ))
+	if [ -s "$idx" ] && [ "$age" -lt "$Z2_IDX_TTL" ] 2>/dev/null; then cat "$idx"; return 0; fi
+	if _zm_fetch "$(_z2_repo_url)" "$idx.zm" 20 && _zm_dl_sane "$idx.zm"; then
+		mv -f "$idx.zm" "$idx" && printf '%s\n' "$now" > "$ts"
+		cat "$idx"; return 0
+	fi
+	rm -f "$idx.zm" 2>/dev/null
+	[ -s "$idx" ] && { cat "$idx"; return 0; }
+	return 1
+}
+
+_z2_idx_ver() {
+	local f="$1" n
+	case "$PKG" in
+		apk)
+			n="$(_z2_index 2>/dev/null | tr '<' '\n' | sed -n "s/.*href=\"\($f-[0-9][^\"]*\.apk\)\".*/\1/p" | head -n1)"
+			n="${n#"$f"-}"
+			printf '%s' "${n%.apk}" ;;
+		*)
+			n="$(_z2_index 2>/dev/null | tr '<' '\n' | sed -n "s/.*href=\"\(${f}_[0-9][^\"]*\.ipk\)\".*/\1/p" | head -n1)"
+			n="${n#"$f"_}"
+			printf '%s' "${n%%_*}" ;;
+	esac
+}
+
+# "1.0.7-r2" -> "1.0.7.2": ревизия учитывается как ещё одно число
+_z2_vnum() {
+	printf '%s' "$1" | sed 's/^[[:space:]]*[vV]//' | awk -F'-r' '{
+		v = $1; r = ($2 == "" ? 0 : $2 + 0)
+		gsub(/[^0-9.]/, ".", v); gsub(/\.+/, ".", v)
+		sub(/^\./, "", v); sub(/\.$/, "", v)
+		if (v == "") v = "0"
+		print v "." r
+	}'
+}
+
+# _z2_newer A B — истина, если B старше A
+_z2_newer() {
+	awk -v a="$(_z2_vnum "$1")" -v b="$(_z2_vnum "$2")" 'BEGIN {
+		if (a == "" || b == "") exit 1
+		n = split(a, x, "."); m = split(b, y, "."); k = n > m ? n : m
+		for (i = 1; i <= k; i++) {
+			if ((x[i] + 0) < (y[i] + 0)) exit 0
+			if ((x[i] + 0) > (y[i] + 0)) exit 1
+		}
+		exit 1
+	}'
+}
+
+_z2_inst_ver() { _awg_pkg_ver zapret2 2>/dev/null; }
+_z2_latest_cache() { [ -s "$ZM_STATE_DIR/z2.latest" ] && sed -n '1p' "$ZM_STATE_DIR/z2.latest"; return 0; }
+
+_z2_latest() {
+	local c="$ZM_STATE_DIR/z2.latest" v
+	v="$(_z2_idx_ver zapret2)"
+	if [ -n "$v" ]; then
+		mkdir -p "$ZM_STATE_DIR" 2>/dev/null
+		printf '%s\n' "$v" > "$c.zm" 2>/dev/null && mv -f "$c.zm" "$c" 2>/dev/null
+		printf '%s' "$v"; return 0
+	fi
+	[ -s "$c" ] && sed -n '1p' "$c"
+	return 0
+}
+
+# Фоновая проверка, если версия ещё ни разу не записана (не чаще раза в 30 минут)
+_z2_kick() {
+	local m="$JOBS_DIR/z2.kick"
+	[ -s "$ZM_STATE_DIR/z2.latest" ] && return 0
+	[ -n "$(find "$m" -mmin -30 2>/dev/null)" ] && return 0
+	mkdir -p "$JOBS_DIR" 2>/dev/null; : > "$m" 2>/dev/null
+	( sleep 2; _z2_latest >/dev/null 2>&1 ) >/dev/null 2>&1 </dev/null &
+	return 0
+}
+
+_z2_upd_avail() {
+	local i l
+	[ -f /etc/init.d/zapret2 ] || return 1
+	i="$(_z2_inst_ver)"; l="$(_z2_latest_cache)"
+	if [ -n "$i" ] && [ -n "$l" ]; then _z2_newer "$i" "$l"; return $?; fi
+	_z2_kick
+	return 1
+}
 
 ZM_STR_DIR="$ZM_STATE_DIR/str"
 ZM_STR_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files"
@@ -3762,7 +3857,16 @@ _zpg_prune() {
 	for f in $(_zpg_files "$id"); do rm -f "$f"; done
 	[ "$id" = bytetube ] && rmdir /www/luci-static/resources/bytetube /www/luci-static/resources/view/bytetube 2>/dev/null
 	_zpg_stub "$id"
-	logger -t zapret-manager "Компоненты панели: страница «$(_zpg_f "$id" 2)» убрана"
+	# Здесь не пишем в лог: страница перезаписывается при каждом обновлении панели — это штатная работа, а не событие.
+	# О том, что страница убрана, пишем один раз — когда пользователь меняет выбор в «Компонентах панели».
+	return 0
+}
+_zpg_log_diff() {
+	local id o="$1" n="$2" hid="" shown=""
+	for id in $n; do case " $o " in *" $id "*) ;; *) hid="$hid${hid:+, }$(_zpg_f "$id" 2)" ;; esac; done
+	for id in $o; do case " $n " in *" $id "*) ;; *) shown="$shown${shown:+, }$(_zpg_f "$id" 2)" ;; esac; done
+	[ -n "$hid" ] && logger -t zapret-manager "Компоненты панели: убрано из меню — $hid"
+	[ -n "$shown" ] && logger -t zapret-manager "Компоненты панели: возвращено в меню — $shown"
 	return 0
 }
 _zpg_enforce() {
@@ -18318,14 +18422,54 @@ _pc_table() {
 }
 
 _pc_cut() {
-	local ip
+	local m="$1" ip ips
 	command -v conntrack >/dev/null 2>&1 || return 0
-	for ip in $(ip neigh show 2>/dev/null | awk -v m="$1" 'tolower($0) ~ ("lladdr " m) { print $1 }'); do
+	ips="$( { ip neigh show 2>/dev/null; ip -6 neigh show 2>/dev/null; } | awk -v m="$m" 'tolower($0) ~ ("lladdr " m) { print $1 }' | sort -u)"
+	for ip in $ips; do
 		conntrack -D -s "$ip" >/dev/null 2>&1
 		conntrack -D -d "$ip" >/dev/null 2>&1
 	done
+	return 0
 }
 
+_pc_offload_state() { printf '%s\n' "$ZM_STATE_DIR/pc.offload"; }
+_pc_offload_off() {
+	local f hw sw ch=""
+	f="$(_pc_offload_state)"
+	if [ ! -s "$f" ]; then
+		mkdir -p "$ZM_STATE_DIR" 2>/dev/null
+		hw="$(uci -q get firewall.@defaults[0].flow_offloading_hw)"; [ -n "$hw" ] || hw=0
+		sw="$(uci -q get firewall.@defaults[0].flow_offloading)"; [ -n "$sw" ] || sw=0
+		printf 'hw=%s\nsw=%s\n' "$hw" "$sw" > "$f" 2>/dev/null
+	fi
+	hw="$(uci -q get firewall.@defaults[0].flow_offloading_hw)"
+	sw="$(uci -q get firewall.@defaults[0].flow_offloading)"
+	if [ "$hw" = 1 ]; then uci -q set firewall.@defaults[0].flow_offloading_hw='0'; ch=1; fi
+	if [ "$sw" = 1 ]; then uci -q set firewall.@defaults[0].flow_offloading='0'; ch=1; fi
+	[ -n "$ch" ] || return 0
+	uci -q commit firewall
+	/etc/init.d/firewall reload >/dev/null 2>&1
+	logger -t zapret-manager "Родительский контроль: аппаратное ускорение потока выключено — без этого уже открытые соединения обходят блокировку"
+	return 0
+}
+_pc_offload_restore() {
+	local f hw sw
+	f="$(_pc_offload_state)"
+	[ -s "$f" ] || return 0
+	hw="$(sed -n 's/^hw=//p' "$f" | head -n1)"
+	sw="$(sed -n 's/^sw=//p' "$f" | head -n1)"
+	rm -f "$f"
+	if [ "$hw" = 1 ] || [ "$sw" = 1 ]; then
+		[ "$hw" = 1 ] && uci -q set firewall.@defaults[0].flow_offloading_hw='1'
+		[ "$sw" = 1 ] && uci -q set firewall.@defaults[0].flow_offloading='1'
+		uci -q commit firewall
+		/etc/init.d/firewall reload >/dev/null 2>&1
+		logger -t zapret-manager "Родительский контроль: ускорение потока снова включено"
+		# если стоят Zapret/Zapret2 — пусть их правила снова решают, нужно ли ускорение им
+		{ [ -x /etc/init.d/zapret ] || [ -x /etc/init.d/zapret2 ]; } && _ft_zapret_sync >/dev/null 2>&1
+	fi
+	return 0
+}
 _pc_cron() {
 	local want="" t h m
 	if [ -s "$PC_FILE" ]; then
@@ -18350,10 +18494,12 @@ _pc_sync() {
 	local want cur m
 	if [ ! -s "$PC_FILE" ]; then
 		nft delete table inet "$PC_NFT" >/dev/null 2>&1
+		_pc_offload_restore
 		_pc_cron
 		return 0
 	fi
 	want="$(_pc_eval | awk -F'\t' '$2 == 1 { print $1 }' | sort)"
+	if [ -n "$want" ]; then _pc_offload_off; else _pc_offload_restore; fi
 	if ! nft list table inet "$PC_NFT" >/dev/null 2>&1; then
 		_pc_table >/dev/null || { logger -t zapret-manager "Родительский контроль: таблица nftables не создалась"; return 1; }
 	fi
@@ -18367,10 +18513,11 @@ _pc_sync() {
 }
 
 _pc_json() {
-	local live=false cut=false
+	local live=false cut=false hw=false
 	nft list table inet "$PC_NFT" >/dev/null 2>&1 && live=true
 	command -v conntrack >/dev/null 2>&1 && cut=true
-	printf '"parental":{"live":%s,"cut":%s,"now":"%s","max":%s,"list":[' "$live" "$cut" "$(date +%H:%M)" "$PC_MAX"
+	[ -s "$(_pc_offload_state)" ] && hw=true
+	printf '"parental":{"live":%s,"cut":%s,"hw":%s,"now":"%s","max":%s,"list":[' "$live" "$cut" "$hw" "$(date +%H:%M)" "$PC_MAX"
 	[ -s "$PC_FILE" ] && _pc_eval | awk -F'\t' -v f="$PC_FILE" '
 		function j(s) { gsub(/[\\"]/, "", s); gsub(/[\001-\037]/, " ", s); return s }
 		BEGIN { while ((getline l < f) > 0) { split(l, a, "|"); L[a[1]] = l } }
@@ -20358,6 +20505,8 @@ _do_install_zapret2_core() {
 	/etc/init.d/zapret2 restart >/dev/null 2>&1
 
 	cd /; rm -rf "$tmp"
+	rm -f "$JOBS_DIR/z2.index.ts" 2>/dev/null
+	_z2_latest >/dev/null 2>&1 || true
 	echo "==> Готово, Zapret2 установлен"
 }
 
@@ -20387,7 +20536,7 @@ zapret2_action() {
 			if [ ! -f /etc/init.d/zapret2 ] && [ -f /etc/init.d/zapret ] && [ ! -f "$EXPERT_MODE_FILE" ]; then
 				echo '{"error":"Стоит Zapret — он несовместим с Zapret2. Чтобы поставить Zapret2, удалите Zapret."}'; return 1
 			fi
-			if [ "$action" = install ] && ! _z2_arch_ok; then
+			if ! _z2_arch_ok; then
 				printf '{"error":"%s"}\n' "$(esc "Zapret2 работает только на 64-битных ARM-роутерах (aarch64), у этого роутера — $(_z2_arch)")"; return 1
 			fi
 			job_start install_zapret2 do_install_zapret2 ;;
@@ -21607,6 +21756,7 @@ zm_pages() {
 			mkdir -p "$ZM_STATE_DIR"
 			if [ -n "$off" ]; then printf '%s\n' "$off" > "$ZPG_OFF"; else rm -f "$ZPG_OFF"; fi
 			_zpg_enforce
+			[ "$off" = "$was" ] || _zpg_log_diff "$was" "$off"
 			if [ -n "$gone" ]; then ( zm_cleanup after ) >/dev/null 2>&1 </dev/null & fi
 			for id in $ZPG_IDS; do _zpg_is_off "$id" || _zpg_have "$id" || need=1; done
 			if [ -n "$need" ]; then
@@ -23488,6 +23638,16 @@ _ver_item() {
 	printf '{"name":"%s","installed":"%s","latest":"%s"}' "$(esc "$1")" "$(esc "$cur")" "$(esc "$latest")"
 }
 
+_ver_item_z2() {
+	local cur lat
+	cur="$(printf '%s' "$2" | tr -d '[:space:]')"
+	lat="$(printf '%s' "$3" | tr -d '[:space:]')"
+	[ -n "$cur" ] || return 0
+	[ -n "$lat" ] || lat="$(printf '%s' "$(_ver_old "$1")" | tr -d '[:space:]')"
+	if [ -z "$lat" ] || ! _z2_newer "$cur" "$lat"; then lat="$cur"; fi
+	printf '{"name":"%s","installed":"%s","latest":"%s"}' "$(esc "$1")" "$(esc "$cur")" "$(esc "$lat")"
+}
+
 _jf() { jsonfilter -s "$1" -e "$2" 2>/dev/null; }
 
 _vl() { [ -n "$ZM_VER_LOCAL" ] && return 0; "$@"; }
@@ -23529,8 +23689,11 @@ do_versions_refresh() {
 		esac
 	fi
 	if [ -f /etc/init.d/zapret2 ]; then
-		v="$(_awg_pkg_ver zapret2)"
-		add "$(_ver_item Zapret2 "$v" "$(_vl _ver_feed_latest zapret2)")"
+		local z2i z2l
+		z2i="$(_awg_pkg_ver zapret2)"
+		if [ -n "$ZM_VER_LOCAL" ]; then z2l="$(_z2_latest_cache)"; else z2l="$(_z2_latest)"; fi
+		[ -n "$z2l" ] || z2l="$(_vl _ver_feed_latest zapret2)"
+		add "$(_ver_item_z2 Zapret2 "$z2i" "$z2l")"
 	fi
 	if [ -x /usr/bin/ciadpi ] || [ -x /usr/bin/byedpi ]; then
 		add "$(_ver_item ByeDPI "$(_awg_pkg_ver byedpi)" "$(_vl _ver_gh_latest "$BYEDPI_REPO")")"
@@ -23714,7 +23877,7 @@ _au_wait_free() {
 	return 0
 }
 
-_au_vnorm() { _ver_norm "$1" | tr - .; }
+_au_vnorm() { _z2_vnum "$1"; }
 
 _au_inst() {
 	sed 's/},{/}\n{/g' "$VERSIONS_CACHE" 2>/dev/null |
@@ -27265,9 +27428,37 @@ _doh_wait_local() {
 		[ $(( $(date +%s) - t0 )) -ge 8 ] && return 1
 	done
 }
+_doh_boot_probe() {
+	local host b k=0 d pids=""
+	command -v nslookup >/dev/null 2>&1 || return 0
+	host="$(_doh_url_host "$1")"
+	case "$host" in *[!0-9.]*) ;; *) return 0 ;; esac
+	d="/tmp/zm-dohbp.$$"; rm -rf "$d"; mkdir -p "$d" 2>/dev/null
+	for b in $(printf '%s' "$2" | tr ',;' '  '); do
+		case "$b" in ''|*[!0-9A-Fa-f:.]*) continue ;; esac
+		k=$((k + 1)); [ "$k" -gt 8 ] && break
+		( if _doh_t 3 nslookup -type=a "$host" "$b" 2>/dev/null | awk '/^Name:/ { f = 1 } f && /^Address/ { for (i = 2; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $i != "0.0.0.0" && $i != "127.0.0.1") { e = 1 } } END { exit !e }'; then echo "$b" 1; else echo "$b" 0; fi ) > "$d/$k" 2>/dev/null &
+		pids="$pids $!"
+	done
+	[ -n "$pids" ] && wait $pids 2>/dev/null
+	cat "$d"/* 2>/dev/null
+	rm -rf "$d"
+	return 0
+}
+
+_doh_boot_json() {
+	local r b ok out="" sep=""
+	for r in $(_doh_boot_probe "$1" "$2"); do
+		case "$r" in *" "*) ;; *) continue ;; esac
+		b="${r% *}"; ok="${r##* }"
+		out="$out$sep{\"ip\":\"$(esc "$b")\",\"ok\":$([ "$ok" = 1 ] && echo true || echo false)}"
+		sep=","
+	done
+	printf '[%s]' "$out"
+}
 
 doh_check() {
-	local url port boots loc=false r pp t="/tmp/zm-doh.$$"
+	local url port boots loc=false r pp bp bj t="/tmp/zm-doh.$$"
 	url="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].resolver_url')"
 	if [ -z "$url" ] || ! /etc/init.d/https-dns-proxy running >/dev/null 2>&1; then
 		echo '{"skip":true}'
@@ -27276,13 +27467,18 @@ doh_check() {
 	port="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].listen_port')"
 	boots="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].bootstrap_dns')"
 	[ -n "$boots" ] || boots="$(_doh_boots_for "$(_doh_provider_of "$url")")"
+	_doh_boot_json "$url" "$boots" > "$t.b" 2>/dev/null &
+	bp=$!
 	_doh_probe "$url" "$boots" "$t" > "$t.r" 2>/dev/null &
 	pp=$!
 	{ _doh_live "${port:-5053}" || { sleep 1; _doh_live "${port:-5053}"; }; } && loc=true
 	wait "$pp" 2>/dev/null
+	wait "$bp" 2>/dev/null
 	r="$(cat "$t.r" 2>/dev/null)"
-	rm -f "$t.r"
-	printf '{"local":%s,%s}\n' "$loc" "$(_doh_res_json "${r:-fail connect}")"
+	bj="$(cat "$t.b" 2>/dev/null)"
+	[ -n "$bj" ] || bj='[]'
+	printf '{"local":%s,%s,"boot_list":"%s","boots":%s}\n' "$loc" "$(_doh_res_json "${r:-fail connect}")" "$(esc "$boots")" "$bj"
+	rm -f "$t.r" "$t.b"
 }
 
 doh_set() {
@@ -47277,6 +47473,7 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var busy = false, pickProv = null, pickForce = null, bootOwn = !!data.bootstrap_custom;
 		var probe = {}, probing = false, subs = {}, health = null, healthSeq = 0, own = [], blocked = 0;
+		var bootLive = null;
 		var openFam = null, mirrors = {};
 		var svcBox = E('span', { 'class': 'zm-doh-svc' });
 		var probeBtn = E('button', { 'class': 'cbi-button', 'click': runProbe }, 'Проверить все');
@@ -47474,6 +47671,7 @@ return view.extend({
 				if (mine !== healthSeq) return;
 				health = r;
 				paintHealth();
+				paintBootLive();
 			});
 		}
 		var bar = zm.saveBar({
@@ -47830,6 +48028,7 @@ return view.extend({
 		});
 
 		function renderBoot(sel) {
+			bootLive = null;
 			var m = bootOwn ? 'own' : 'auto', l = data.resolvers || [], p = prov(sel), now;
 			card.appendChild(E('h4', { 'style': 'margin:18px 0 4px' }, 'Bootstrap DNS'));
 			card.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:0' }, 'Обычный DNS, через который роутер узнаёт адрес самого DoH-сервера.'));
@@ -47858,8 +48057,29 @@ return view.extend({
 				card.appendChild(auto ? line('После сохранения: ', auto, ' — адреса ' + name + '.') : none('После сохранения задан не будет'));
 			} else if (bootKey(now) === bootKey(auto) || (p && bootKey(now) === bootKey(p.boot))) card.appendChild(line('Сейчас: ', now, ' — адреса ' + name + '.'));
 			else card.appendChild(line('Сейчас: ', now, ' — заданы вручную в настройках https-dns-proxy (LuCI), панель их не меняет, пока вы не смените сервер.'));
+			bootLive = E('div', { 'style': 'margin:6px 0 0' });
+			card.appendChild(bootLive);
+			paintBootLive();
 		}
 
+		function paintBootLive() {
+			if (!bootLive) return;
+			bootLive.innerHTML = '';
+			if (health === 'wait') {
+				bootLive.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Проверяем, отвечают ли адреса Bootstrap DNS…'));
+				return;
+			}
+			var bl = (health && health.boots) || [];
+			if (!bl.length) return;
+			var okN = 0, strip = E('div', { 'style': 'display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12.5px; margin-top:2px' }, [ E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Проверка адресов:') ]);
+			bl.forEach(function(x) {
+				if (x.ok) okN++;
+				strip.appendChild(E('span', { 'class': 'zm-badge ' + (x.ok ? 'zm-ok' : 'zm-bad'), 'title': x.ok ? 'отвечает' : 'не отвечает — этот адрес DoH не поможет' }, [ E('span', { 'class': 'zm-dot' }), String(x.ip) ]));
+			});
+			bootLive.appendChild(strip);
+			if (!okN) bootLive.appendChild(E('p', { 'class': 'zm-hint zm-dlg-warn', 'style': 'margin:6px 0 0' }, '⚠ Ни один адрес Bootstrap DNS не отвечает — вот почему DoH не работает: роутер не может узнать IP самого DoH-сервера. Задайте свои адреса (например 77.88.8.8 и 8.8.8.8) или выберите сервер, чьи адреса отвечают.'));
+			else if (okN < bl.length) bootLive.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' }, 'Часть адресов не отвечает — это нормально: https-dns-proxy берёт первый рабочий.'));
+		}
 		var foCard = E('div', { 'class': 'zm-card', 'style': 'display:none' }), foDraft = null, foPicking = false, foLats = {};
 		var FO_MAX = 3;
 		var KIND_TEXT = { plain: 'Без фильтрации — только шифрование', safe: 'Защита от угроз', geo: 'С обходом геоблокировок', family: 'Семейный фильтр', own: 'Свой сервер' };
@@ -58492,6 +58712,11 @@ return view.extend({
 					'class': 'cbi-button',
 					'click': function() { view.doAction2('restart'); }
 				}, 'Перезапустить'));
+				if (d.zapret2_upd) z2Actions.push(E('button', {
+					'class': 'cbi-button cbi-button-action',
+					'title': 'Скачать и поставить версию из репозитория Routerich',
+					'click': function() { view.doAction2('update'); }
+				}, 'Обновить'));
 			} else {
 				z2Actions.push(E('button', {
 					'class': 'cbi-button cbi-button-positive',
@@ -58512,6 +58737,13 @@ return view.extend({
 					d.zapret2 === 'installed'
 						? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
 						: zm.badge(false, '', 'не установлен')
+				]),
+				E('div', { 'class': 'zm-row' }, [
+					E('span', { 'class': 'zm-label' }, 'Версия'),
+					E('span', {}, [
+						String(d.zapret2_ver || '—'),
+						(d.zapret2 === 'installed' && d.zapret2_upd) ? E('span', { 'class': 'zm-badge zm-warn', 'style': 'margin-left:8px', 'title': 'В репозитории есть версия новее' }, [ E('span', { 'class': 'zm-dot' }), 'есть ' + String(d.zapret2_latest || 'новее') ]) : ''
+					])
 				]),
 				E('p', { 'class': 'zm-hint' }, 'Только для 64-битных ARM-роутеров (aarch64). Несовместим с основным Zapret.'),
 				E('div', { 'class': 'zm-actions' }, z2Actions)
@@ -60718,14 +60950,20 @@ html.zm-theme-dark .zm-mon-xtip { background: #1c2128; }
 .zm-mon-nrx, .zm-mon-ntx { stroke-width: 1.8; stroke-linejoin: round; vector-effect: non-scaling-stroke; fill-opacity: .2; }
 .zm-mon-nrx { stroke: var(--zm-acc2); fill: var(--zm-acc2); }
 .zm-mon-ntx { stroke: var(--zm-c-mem); fill: var(--zm-c-mem); }
-.zm-mon-nleg { display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; margin: 0 0 14px; }
-.zm-mon-nleg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.zm-mon-nleg { display: grid; grid-template-columns: 1fr; gap: 2px; font-size: 13px; margin: 0 0 12px; }
+.zm-mon-nleg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; flex: none; }
 .zm-mon-nchart { overflow: hidden; }
 .zm-mon-nchart .zm-mon-narea { stroke: none; }
 .zm-mon-nchart .zm-mon-nline { fill: none; }
 .zm-mon-nleg i.zm-mon-nrx { background: var(--zm-acc2); } .zm-mon-nleg i.zm-mon-ntx { background: var(--zm-c-mem); }
-.zm-mon-nleg small { opacity: .6; margin-left: 6px; }
+.zm-mon-nleg-row { display: grid; grid-template-columns: 8px 13px minmax(9.5ch, 1fr) minmax(11ch, auto); align-items: center; column-gap: 7px; line-height: 21px; min-height: 21px; }
+.zm-mon-nleg-ar { font-size: 12px; opacity: .85; }
+.zm-mon-nleg-row b { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; white-space: nowrap; font-weight: 600; }
+.zm-mon-nleg-row small { opacity: .6; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; text-align: right; }
+.zm-mon-nlg-rx { color: var(--zm-acc2); } .zm-mon-nlg-tx { color: var(--zm-c-mem); }
+.zm-mon-netheadd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .zm-mon-netsel { font-size: 12.5px; padding: 3px 8px; height: auto; max-width: 60%; }
+.zm-mon-netiv { max-width: none; }
 .zm-mon-fan { gap: 6px; }
 .zm-mon-fan svg { width: 14px; height: 14px; flex: none; }
 .zm-mon-fan.zm-ok svg { animation: zm-mon-spin 1.4s linear infinite; }
@@ -63871,6 +64109,7 @@ return view.extend({
 			]));
 			if (list.length && pc.live === false) pcCard.appendChild(E('p', { 'class': 'zm-hint zm-dlg-warn' }, '⚠ Правило файрвола сейчас не загружено — роутер вернёт его сам в течение пары минут.'));
 			if (list.length) pcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Устройство узнаётся по MAC-адресу: на телефоне или планшете ребёнка отключите «случайный MAC-адрес» для этой сети Wi-Fi, иначе ограничение его не увидит.' + (pc.cut === false ? ' Уже открытые соединения могут доработать несколько минут после начала перерыва.' : '')));
+			if (list.length && pc.hw) pcCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Аппаратное ускорение потока сейчас выключено — иначе уже открытые соединения обходят блокировку. Вернётся само, когда ни одно устройство не будет отключено.'));
 		}
 		renderParental();
 		put('parental', pcCard);
@@ -64275,19 +64514,30 @@ return view.extend({
 		]);
 
 		var netBox = E('div', {}), sensBox = E('div', {}), infoBox = E('div', {});
-		var NET_WIN = 120, NW = 300, NH = 84, NET_KEY = 'zm-mon-net';
-		var netHist = {}, netPick = '', netList = '';
+		var NET_WIN = 120, NW = 300, NH = 84, NET_KEY = 'zm-mon-net', NET_IV_KEY = 'zm-mon-netiv';
+		var netHist = {}, netPick = '', netList = '', netIv = 1;
 		try { netPick = localStorage.getItem(NET_KEY) || ''; } catch (e) { netPick = ''; }
+		try { netIv = parseInt(localStorage.getItem(NET_IV_KEY), 10) || 1; } catch (e) { netIv = 1; }
+		if (netIv !== 1 && netIv !== 2 && netIv !== 5) netIv = 1;
 		var netSel = E('select', { 'class': 'cbi-input-select zm-mon-netsel', 'aria-label': 'Какую сеть показывать', 'change': function() {
 			netPick = netSel.value;
 			try { localStorage.setItem(NET_KEY, netPick); } catch (e) {}
 			renderSnap();
 		} });
+		var netIvSel = E('select', { 'class': 'cbi-input-select zm-mon-netsel zm-mon-netiv', 'title': 'Как часто обновлять скорость приёма и отдачи', 'aria-label': 'Как часто обновлять скорость', 'change': function() {
+			netIv = parseInt(netIvSel.value, 10) || 1;
+			if (netIv !== 1 && netIv !== 2 && netIv !== 5) netIv = 1;
+			try { localStorage.setItem(NET_IV_KEY, String(netIv)); } catch (e) {}
+			netFast.prev = null; netFast.base = null;
+			clearTimeout(netFast.timer);
+			netPoll();
+		} }, [ E('option', { 'value': '1' }, '1 с'), E('option', { 'value': '2' }, '2 с'), E('option', { 'value': '5' }, '5 с') ]);
+		netIvSel.value = String(netIv);
 		var pRx = svg('path', { 'class': 'zm-mon-nrx zm-mon-narea' }), pTx = svg('path', { 'class': 'zm-mon-ntx zm-mon-narea' });
 		var lRx = svg('path', { 'class': 'zm-mon-nrx zm-mon-nline' }), lTx = svg('path', { 'class': 'zm-mon-ntx zm-mon-nline' });
 		var nChart = svg('svg', { viewBox: '0 0 ' + NW + ' ' + NH, preserveAspectRatio: 'none', 'class': 'zm-mon-nchart', role: 'img', 'aria-label': 'Загрузка и отдача за 2 минуты' }, [ pRx, pTx, lRx, lTx ]);
 		var nLeg = E('div', { 'class': 'zm-mon-nleg' });
-		var netCard = E('div', { 'class': 'zm-card' }, [ E('div', { 'class': 'zm-mon-cardhead' }, [ E('h3', { 'style': 'margin:0' }, 'Сеть сейчас'), netSel ]), nChart, nLeg, netBox ]);
+		var netCard = E('div', { 'class': 'zm-card' }, [ E('div', { 'class': 'zm-mon-cardhead' }, [ E('h3', { 'style': 'margin:0' }, 'Сеть сейчас'), E('div', { 'class': 'zm-mon-netheadd' }, [ netIvSel, netSel ]) ]), nChart, nLeg, netBox ]);
 		function netCur(s) {
 			var l = (s && s.net && s.net.ifs) || [];
 			return l.filter(function(x) { return x.n === netPick; })[0] || l.filter(function(x) { return x.i; })[0] || l.filter(function(x) { return x.n === 'wan'; })[0] || l[0] || null;
@@ -64316,7 +64566,7 @@ return view.extend({
 		function netPoll() {
 			clearTimeout(netFast.timer);
 			if (!alive()) return;
-			netFast.timer = setTimeout(netPoll, 1000);
+			netFast.timer = setTimeout(netPoll, netIv * 1000);
 			if (!netFastOn() || netFast.busy || !zm.netNow) return;
 			var dev = netFast.dev;
 			netFast.busy = true;
@@ -64340,7 +64590,7 @@ return view.extend({
 			if (!h.length) { [ pRx, pTx, lRx, lTx ].forEach(function(p) { p.setAttribute('d', ''); }); return; }
 			var last = h[h.length - 1], mx = 1, pk = { rx: 0, tx: 0 };
 			h.forEach(function(q) { mx = Math.max(mx, q.rx, q.tx); pk.rx = Math.max(pk.rx, q.rx); pk.tx = Math.max(pk.tx, q.tx); });
-			var smooth = dt > 0, kf = smooth ? Math.min(1, dt * 4) : 1;
+			var smooth = dt > 0 && netIv <= 1, kf = smooth ? Math.min(1, dt * 4) : 1;
 			netFast.mx += (mx * 1.1 - netFast.mx) * (smooth ? Math.min(1, dt * 3) : 1);
 			netFast.rx += (last.rx - netFast.rx) * kf;
 			netFast.tx += (last.tx - netFast.tx) * kf;
@@ -64358,7 +64608,7 @@ return view.extend({
 			}
 		}
 		function netAnim() {
-			if (netFast.raf || !netFastOn() || !window.requestAnimationFrame) { if (!netFast.raf) netDraw(0); return; }
+			if (netFast.raf || netIv > 1 || !netFastOn() || !window.requestAnimationFrame) { if (!netFast.raf) netDraw(0); return; }
 			netFast.last = 0;
 			netFast.raf = requestAnimationFrame(function step(ts) {
 				netFast.raf = 0;
@@ -64386,10 +64636,11 @@ return view.extend({
 			if (!netFast.legRx || cur.d !== was) {
 				var h = netHist[cur.d] || [], lst = h[h.length - 1];
 				netFast.rx = lst ? lst.rx : 0; netFast.tx = lst ? lst.tx : 0; netFast.mx = 1;
-				netFast.legRx = E('b', {}, '…'); netFast.legTx = E('b', {}, '…'); netFast.pkRx = E('small', {}); netFast.pkTx = E('small', {});
+				netFast.legRx = E('b', { 'class': 'zm-mon-nlg-rx' }, '…'); netFast.legTx = E('b', { 'class': 'zm-mon-nlg-tx' }, '…');
+				netFast.pkRx = E('small', {}); netFast.pkTx = E('small', {});
 				nLeg.innerHTML = '';
-				nLeg.appendChild(E('span', {}, [ E('i', { 'class': 'zm-mon-nrx' }), '↓ ', netFast.legRx, netFast.pkRx ]));
-				nLeg.appendChild(E('span', {}, [ E('i', { 'class': 'zm-mon-ntx' }), '↑ ', netFast.legTx, netFast.pkTx ]));
+				nLeg.appendChild(E('div', { 'class': 'zm-mon-nleg-row' }, [ E('i', { 'class': 'zm-mon-nrx' }), E('span', { 'class': 'zm-mon-nleg-ar' }, '↓'), netFast.legRx, netFast.pkRx ]));
+				nLeg.appendChild(E('div', { 'class': 'zm-mon-nleg-row' }, [ E('i', { 'class': 'zm-mon-ntx' }), E('span', { 'class': 'zm-mon-nleg-ar' }, '↑'), netFast.legTx, netFast.pkTx ]));
 			}
 			if (netFastOn()) netAnim(); else netDraw(0);
 		}
