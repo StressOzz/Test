@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.091
+# Version: 5.107
 ZM_VERSION_EOF
 set -e
 
@@ -59303,13 +59303,14 @@ function z2StratCard(view) {
 			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:8px 0 0' });
 			var list = E('div', { 'class': 'zm-z2-list' });
 			var search = E('input', { 'type': 'search', 'class': 'zm-z2-search', 'placeholder': 'Поиск по названию', 'input': function() { query = search.value.trim().toLowerCase(); draw(); } });
-			var saveB = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { save(); } }, 'Сохранить и применить');
-			var resetB = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { return load(false); }); } }, 'Сбросить к файлу');
+			var saveB = E('button', { 'class': 'cbi-button cbi-button-action zm-z2-save', 'click': function() { save(); } }, 'Сохранить и применить');
+			var resetB = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { return load(false); }); } }, 'Отменить изменения');
 			function isDirty() { return JSON.stringify(items) !== JSON.stringify(orig); }
 			function say(t, bad) { note.textContent = t || ''; note.style.color = bad ? '#b00020' : ''; }
 			function sync() {
 				saveB.disabled = busy || settling || !isDirty();
-				resetB.disabled = busy || settling;
+        saveB.classList.toggle('zm-z2-dirty', !saveB.disabled);
+				resetB.disabled = busy || settling || !isDirty();
 				search.disabled = busy || settling;
 				count.textContent = 'Включено ' + items.filter(function(x) { return x.on; }).length + ' из ' + items.length;
 			}
@@ -59522,7 +59523,7 @@ function z2StratCard(view) {
 			}
 			var node = E('div', { 'class': 'zm-card zm-z2-editor zm-z2-strat' }, [
 				E('div', { 'class': 'zm-z2-head' }, [ E('h3', {}, 'Стратегии Zapret2'), count ]),
-				E('p', { 'class': 'zm-hint' }, 'Перетащите стратегию за ⋮⋮ или мышью за любое место строки; стрелки ▲ ▼ — для точной подстройки. Поиск отключает перетаскивание. После сохранения список пересчитывается.'),
+				E('p', { 'class': 'zm-hint' }, 'Перетащите стратегию за ⋮⋮ или за любое место строки. Стрелки ▲ ▼ — для точной подстройки. Поиск отключает перетаскивание.'),
 				E('div', { 'class': 'zm-z2-tools' }, [ search ]),
 				sumLine,
 				list,
@@ -59541,13 +59542,14 @@ function z2StratCard(view) {
 			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:8px 0 0' });
 			var box = E('div', { 'class': 'zm-z2-groups' });
 			var sumLine = E('p', { 'class': 'zm-hint zm-z2-sum' });
-			var outBox = E('pre', { 'class': 'zm-z2-out', 'style': 'display:none' });
-			function showOut(text) { outBox.textContent = text || ''; outBox.style.display = text ? '' : 'none'; }
+			var outBox = E('pre', { 'class': 'zm-z2-out' });
+			var outWrap = E('div', { 'class': 'zm-z2-outwrap', 'style': 'display:none' }, [ E('div', { 'class': 'zm-z2-outhead' }, [ E('span', {}, 'Журнал проверки'), E('button', { 'class': 'zm-z2-x', 'title': 'Закрыть', 'click': function() { outWrap.style.display = 'none'; } }, '×') ]), outBox ]);
+			function showOut(text) { outBox.textContent = text || ''; }
 			var search = E('input', { 'type': 'search', 'class': 'zm-z2-search', 'placeholder': 'Поиск по имени блоба', 'input': function() { query = search.value.trim().toLowerCase(); draw(); } });
 			var onlyCb = E('input', { 'type': 'checkbox', 'class': 'zm-z2-cb', 'change': function() { onlyOn = onlyCb.checked; draw(); } });
-			var saveB = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { save(); } }, 'Сохранить и применить');
+			var saveB = E('button', { 'class': 'cbi-button cbi-button-action zm-z2-save', 'click': function() { save(); } }, 'Сохранить и применить');
 			var checkB = E('button', { 'class': 'cbi-button', 'click': function() { check(); } }, 'Проверить и докачать');
-			var resetB = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { return load(false); }); } }, 'Сбросить к файлу');
+			var resetB = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { return load(false); }); } }, 'Отменить изменения');
 			function isDirty() { return JSON.stringify(items) !== JSON.stringify(orig); }
 			function say(t, bad) { note.textContent = t || ''; note.style.color = bad ? '#b00020' : ''; }
 			function gkey(name) { return /^blob_tls_/.test(name) ? 'tls' : (/^blob_quic_/.test(name) ? 'quic' : 'other'); }
@@ -59555,7 +59557,8 @@ function z2StratCard(view) {
 			function onCount() { return items.filter(function(x) { return x.on; }).length; }
 			function sync() {
 				saveB.disabled = busy || !isDirty();
-				resetB.disabled = busy;
+        saveB.classList.toggle('zm-z2-dirty', !saveB.disabled);
+				resetB.disabled = busy || !isDirty();
 				search.disabled = busy;
 				onlyCb.disabled = busy;
 				checkB.disabled = busy;
@@ -59650,6 +59653,7 @@ function z2StratCard(view) {
 				return zm.z2BlobCheck().then(function(res) {
 					if (res.error) { report(res); return; }
 					say('Проверяем файлы блобов… список обновится сам');
+					outWrap.style.display = '';
 					showOut('Проверка запущена…');
 					return poll(0);
 				}, fail);
@@ -59693,11 +59697,11 @@ function z2StratCard(view) {
 			}
 			var node = E('div', { 'class': 'zm-card zm-z2-editor zm-z2-blobs' }, [
 				E('div', { 'class': 'zm-z2-head' }, [ E('h3', {}, 'Блобы'), count ]),
-				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий. Метка «используется» — блоб указан во включённой стратегии; «в выключенных» — только в выключенных. «Проверить и докачать» сверяет файлы на роутере и докачивает недостающие из Flowseal, bol-van и Zapret Manager; если их нет нигде — будет предупреждение. Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
+				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены для стратегий. «Проверить и докачать» сверяет файлы и докачивает недостающие. Флажок включает блоб (enabled в /etc/config/zapret2).'),
 				E('div', { 'class': 'zm-z2-tools' }, [ search, E('label', { 'class': 'zm-z2-toggle' }, [ onlyCb, E('span', {}, 'Только включённые') ]) ]),
 				sumLine,
 				box,
-				outBox,
+				outWrap,
 				E('div', { 'class': 'zm-actions' }, [ saveB, checkB, resetB ]),
 				note
 			]);
@@ -59713,7 +59717,7 @@ function z2StratCard(view) {
 			var bar = zm.editorBar(ta, {
 				saveLabel: 'Сохранить и применить',
 				text: 'Файл изменён и не сохранён',
-				onSave: function(v) { return z2Write(zm.z2ConfSet(v), 'Сохранено'); }
+				onSave: function(v) { return z2Write(zm.z2ConfSet(v), 'Сохранено', 'Сохраняем конфиг'); }
 			});
 			function sync() { Object.keys(btn).forEach(function(k) { btn[k].disabled = busy; }); }
 			function say(t, bad) { note.textContent = t || ''; note.style.color = bad ? '#b00020' : ''; }
@@ -59733,26 +59737,28 @@ function z2StratCard(view) {
 					if (!silent) zm.toast('Файл перечитан с диска', 'info');
 				}, fail);
 			}
-			function z2Write(p, msg) {
-				busy = true; sync();
-				return p.then(function(res) {
-					busy = false; sync();
-					if (res.error) { say(res.error, true); zm.toast(res.error, 'error'); return false; }
-					var t = res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 остановлен — запустите его кнопкой выше';
-					say(t);
-					zm.toast(t, res.running ? 'info' : 'warning');
-					zm.changed({ svc: 'zapret2' });
-					if (view.z2StratLoad) view.z2StratLoad();
-					if (view.z2BlobLoad) view.z2BlobLoad();
-					return true;
-				}, function() { fail(); return false; });
-			}
+			function z2Write(p, msg, start) {
+        busy = true; sync();
+        zm.toast(start + ', затем перезапуск Zapret2…', 'info');
+        return p.then(function(res) {
+          busy = false; sync();
+          if (res.error) { say(res.error, true); zm.toast('Ошибка: ' + res.error, 'error'); return false; }
+          say(res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 остановлен — запустите его кнопкой выше', !res.running);
+          zm.toast(msg, 'info');
+          if (res.running) zm.toast('Zapret2 перезапущен, ошибок нет', 'info');
+          else zm.toast('Zapret2 остановлен, ошибок нет — запустите его вручную', 'warning');
+          zm.changed({ svc: 'zapret2' });
+          if (view.z2StratLoad) view.z2StratLoad();
+          if (view.z2BlobLoad) view.z2BlobLoad();
+          return true;
+        }, function() { fail(); return false; });
+      }
 			function restore() {
 				var q = 'Скачать стандартный конфиг Zapret2 с GitHub, заменить /etc/config/zapret2 и перезапустить Zapret2?';
 				if (/#nochange/.test(ta.value)) q = 'В конфиге есть маркер #nochange (стратегия помечена как «не трогать») — он будет потерян. ' + q;
 				return zm.ask(q).then(function(ok) {
 					if (!ok) return;
-					return z2Write(zm.z2ConfRestore(), 'Восстановлено из GitHub').then(function(done) { if (done) return load(true); });
+					return z2Write(zm.z2ConfRestore(), 'Восстановлено из GitHub', 'Скачиваем стандартный конфиг').then(function(done) { if (done) return load(true); });
 				});
 			}
 			function onFile() {
@@ -59764,7 +59770,7 @@ function z2StratCard(view) {
 				rd.onload = function() {
 					zm.ask('Заменить /etc/config/zapret2 содержимым файла «' + f.name + '» и перезапустить Zapret2?').then(function(ok) {
 						if (!ok) return;
-						return z2Write(zm.z2ConfSet(String(rd.result || '')), 'Файл загружен').then(function(done) { if (done) return load(true); });
+						return z2Write(zm.z2ConfSet(String(rd.result || '')), 'Файл загружен', 'Файл загружается').then(function(done) { if (done) return load(true); });
 					});
 				};
 				rd.readAsText(f);
@@ -59783,7 +59789,7 @@ function z2StratCard(view) {
 			btn.restore = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { guard(restore); } }, 'Восстановить файл');
 			var panel = E('div', { 'class': 'zm-card zm-z2-editor' }, [
 				E('h3', {}, 'Редактор конфига Zapret2'),
-				E('p', { 'class': 'zm-hint' }, 'Файл /etc/config/zapret2 целиком: стратегии, списки и параметры Zapret2. «Сохранить и применить» записывает файл и перезапускает Zapret2, если он запущен; если с новым файлом Zapret2 не запускается, вернётся предыдущая версия. «Восстановить файл» скачивает стандартный конфиг с GitHub и применяет его.'),
+				E('p', { 'class': 'zm-hint' }, 'Файл /etc/config/zapret2 целиком. «Сохранить и применить» записывает файл и перезапускает Zapret2.'),
 				E('div', { 'class': 'zm-actions' }, [ btn.reload, btn.upload, btn.save, btn.restore ]),
 				ta, bar, note, fileIn
 			]);
@@ -60497,6 +60503,16 @@ html.zm-theme-dark .zm-z2-out { background: rgba(255,255,255,.04); border-color:
 html.zm-theme-dark .zm-z2-edit-state { color: #94a3b8; }
 .zm-z2-file-off { background: rgba(245,158,11,.18); color: #b45309; }
 html.zm-theme-dark .zm-z2-file-off { background: rgba(251,191,36,.16); color: #fcd34d; }
+.zm-z2-save.zm-z2-dirty { background: #dc2626 !important; border-color: #b91c1c !important; color: #fff !important; }
+.zm-z2-save.zm-z2-dirty:hover { background: #b91c1c !important; }
+.zm-z2-outwrap { margin: 8px 0 0; border-radius: 8px; border: 1px solid rgba(15,23,42,.07); background: rgba(15,23,42,.04); }
+.zm-z2-outwrap .zm-z2-out { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.zm-z2-outhead { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(15,23,42,.07); }
+.zm-z2-x { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 6px; color: inherit; opacity: .7; }
+.zm-z2-x:hover { opacity: 1; background: rgba(15,23,42,.08); }
+html.zm-theme-dark .zm-z2-outwrap { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); }
+html.zm-theme-dark .zm-z2-outhead { border-bottom-color: rgba(255,255,255,.08); }
+html.zm-theme-dark .zm-z2-x:hover { background: rgba(255,255,255,.1); }
 .zm-z2-ta { display: block; width: 100%; box-sizing: border-box; min-height: 440px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; resize: vertical; }
 .zm-z2-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .zm-z2-head h3 { margin: 0 0 12px 0; }
