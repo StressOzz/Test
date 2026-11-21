@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.093
+# Version: 5.094
 ZM_VERSION_EOF
 set -e
 
@@ -1111,6 +1111,9 @@ do_remove_zapret() { _zmL zapret && do_remove_zapret "$@"; }
 zapret_action() { _zmL zapret && zapret_action "$@"; }
 do_remove_zapret2() { _zmL zapret && do_remove_zapret2 "$@"; }
 zapret2_action() { _zmL zapret && zapret2_action "$@"; }
+z2_conf_get() { _zmL zapret && z2_conf_get "$@"; }
+z2_conf_set() { _zmL zapret && z2_conf_set "$@"; }
+z2_conf_restore() { _zmL zapret && z2_conf_restore "$@"; }
 do_str_refresh() { _zmL zapret && do_str_refresh "$@"; }
 str_refresh() { _zmL zapret && str_refresh "$@"; }
 _v_ok() { _zmL zapret && _v_ok "$@"; }
@@ -9486,6 +9489,9 @@ case "$cmd" in
 	log_tail)                  log_tail "$1" ;;
 	zapret_action)              zapret_action "$1" ;;
 	zapret2_action)              zapret2_action "$1" ;;
+	z2_conf_get)                                    z2_conf_get ;;
+	z2_conf_set)                                    z2_conf_set "$1" ;;
+	z2_conf_restore)                                z2_conf_restore ;;
 	strategy_list_v)            strategy_list_v ;;
 	strategy_set_v)              strategy_set_v "$1" ;;
 	strategy_list_flowseal)       strategy_list_flowseal "$1" ;;
@@ -20571,6 +20577,76 @@ do_remove_zapret2() {
 	/etc/init.d/firewall reload >/dev/null 2>&1
 	_ft_zapret_gone
 	_zm_rm_done "$rc" "Zapret2"
+}
+
+Z2_CONF=/etc/config/zapret2
+Z2_BAK="$ZM_STATE_DIR/zapret2.conf.bak"
+
+_z2c_valid() {
+	local f="$1" d rc=0 q
+	grep -q "^config zapret2 'main'" "$f" 2>/dev/null || return 1
+	q="$(tr -cd "'" < "$f" | wc -c | tr -d ' ')"
+	[ $((q % 2)) -eq 0 ] || return 1
+	command -v uci >/dev/null 2>&1 || return 0
+	d="/tmp/zm-z2c.$$"
+	mkdir -p "$d" && cp "$f" "$d/zapret2" || { rm -rf "$d"; return 1; }
+	uci -q -c "$d" show zapret2 >/dev/null 2>&1 || rc=1
+	[ "$rc" = 0 ] && [ "$(uci -q -c "$d" get zapret2.main 2>/dev/null)" = zapret2 ] || rc=1
+	rm -rf "$d"
+	return $rc
+}
+
+_z2c_up() { /etc/init.d/zapret2 status >/dev/null 2>&1; }
+
+_z2c_apply() {
+	local i=0
+	/etc/init.d/zapret2 restart >/dev/null 2>&1
+	while [ "$i" -lt 8 ]; do _z2c_up && return 0; sleep 1; i=$((i + 1)); done
+	return 1
+}
+
+_z2c_put() {
+	local src="$1" keep="$2" prev="$ZM_STATE_DIR/zapret2.prev" run=false
+	mkdir -p "$ZM_STATE_DIR"
+	_z2c_up && run=true
+	cp "$Z2_CONF" "$prev" 2>/dev/null || { echo '{"error":"не удалось сохранить резервную копию"}'; return 1; }
+	cat "$src" > "$Z2_CONF" || { cat "$prev" > "$Z2_CONF"; echo '{"error":"не удалось записать /etc/config/zapret2"}'; return 1; }
+	if [ "$run" = true ] && ! _z2c_apply; then
+		cat "$prev" > "$Z2_CONF"
+		_z2c_apply >/dev/null 2>&1
+		echo '{"error":"Zapret2 не запустился с новым файлом — вернул предыдущую версию"}'
+		return 1
+	fi
+	[ "$keep" = keep ] && cp "$prev" "$Z2_BAK"
+	printf '{"ok":true,"running":%s}\n' "$run"
+}
+
+z2_conf_get() {
+	local c bak=false run=false
+	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	[ -s "$Z2_BAK" ] && bak=true
+	_z2c_up && run=true
+	c="$(tr -d '\r' < "$Z2_CONF"; echo x)"
+	c="${c%x}"
+	printf '{"content":"%s","bak":%s,"running":%s}\n' "$(esc_ml "$c")" "$bak" "$run"
+}
+
+z2_conf_set() {
+	local new="$ZM_STATE_DIR/zapret2.new" rc=0
+	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	[ -n "$1" ] || { echo '{"error":"файл пустой — сохранять нечего"}'; return 1; }
+	mkdir -p "$ZM_STATE_DIR"
+	printf '%s' "$1" > "$new"
+	_z2c_valid "$new" || { rm -f "$new"; echo '{"error":"это не похоже на конфиг Zapret2: нет секции zapret2 main или не закрыты кавычки"}'; return 1; }
+	_z2c_put "$new" keep || rc=1
+	rm -f "$new"
+	return $rc
+}
+
+z2_conf_restore() {
+	[ -s "$Z2_BAK" ] || { echo '{"error":"нет сохранённой копии — восстанавливать нечего"}'; return 1; }
+	_z2c_valid "$Z2_BAK" || { echo '{"error":"сохранённая копия повреждена — восстанавливать нечего"}'; return 1; }
+	_z2c_put "$Z2_BAK" none
 }
 
 zapret2_action() {
@@ -43199,6 +43275,9 @@ list_methods() {
 	json_add_object "zapret_list_set";             json_add_string "id" "string"; json_add_string "content" "string"; json_close_object
 	json_add_object "zapret_list_restore";         json_add_string "id" "string"; json_close_object
 	json_add_object "nfqws_opt_set";               json_add_string "content" "string"; json_close_object
+	json_add_object "z2_conf_get";                   json_close_object
+	json_add_object "z2_conf_set";                   json_add_string "content" "string"; json_close_object
+	json_add_object "z2_conf_restore";               json_close_object
 	json_add_object "tg_status";                   json_close_object
 	json_add_object "tg_action";                   json_add_string "variant" "string"; json_add_string "action" "string"; json_close_object
 	json_add_object "tg_restart_all";              json_close_object
@@ -43393,6 +43472,9 @@ call_method() {
 		zapret_list_set)               json_get_var id id; json_get_var content content; printf '%s' "$content" | "$BACKEND" zapret_list_set "$id" @stdin ;;
 		zapret_list_restore)           json_get_var id id; "$BACKEND" zapret_list_restore "$id" ;;
 		nfqws_opt_set)                 json_get_var content content; printf '%s' "$content" | "$BACKEND" nfqws_opt_set @stdin ;;
+		z2_conf_get)                   "$BACKEND" z2_conf_get ;;
+		z2_conf_set)                   json_get_var content content; printf '%s' "$content" | "$BACKEND" z2_conf_set @stdin ;;
+		z2_conf_restore)               "$BACKEND" z2_conf_restore ;;
 		tg_status)                     "$BACKEND" tg_status ;;
 		tg_action)                     json_get_var variant variant; json_get_var action action; "$BACKEND" tg_action "$variant" "$action" ;;
 		tg_restart_all)                "$BACKEND" tg_restart_all ;;
@@ -43548,6 +43630,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"mirror_status",
 					"exclusions_status",
 					"nfqws_opt_get",
+					"z2_conf_get",
 					"zapret_ports_get",
 					"zapret_lists_status",
 					"zapret_list_get",
@@ -43652,6 +43735,8 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"exclusions_set",
 					"zapret_pending",
 					"nfqws_opt_set",
+					"z2_conf_set",
+					"z2_conf_restore",
 					"zapret_list_set",
 					"zapret_list_restore",
 					"tg_action",
@@ -43981,6 +44066,9 @@ var callZapretListSet = zmDeclare({ object: 'zapret-manager', method: 'zapret_li
 var callZapretListRestore = zmDeclare({ object: 'zapret-manager', method: 'zapret_list_restore', params: ['id'], expect: {} });
 var callNfqwsOptGet = zmDeclare({ object: 'zapret-manager', method: 'nfqws_opt_get', expect: {} });
 var callNfqwsOptSet = zmDeclare({ object: 'zapret-manager', method: 'nfqws_opt_set', params: ['content'], expect: {} });
+var callZ2ConfGet = zmDeclare({ object: 'zapret-manager', method: 'z2_conf_get', expect: {} });
+var callZ2ConfSet = zmDeclare({ object: 'zapret-manager', method: 'z2_conf_set', params: ['content'], expect: {} });
+var callZ2ConfRestore = zmDeclare({ object: 'zapret-manager', method: 'z2_conf_restore', expect: {} });
 var callTgStatus = zmDeclare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
 var callTgAction = zmDeclare({ object: 'zapret-manager', method: 'tg_action', params: ['variant', 'action'], expect: {} });
 var callTgRestartAll = zmDeclare({ object: 'zapret-manager', method: 'tg_restart_all', expect: {} });
@@ -46898,6 +46986,9 @@ return baseclass.extend({
 	zapretListSet: bigArg2(callZapretListSet),
 	zapretListRestore: callZapretListRestore,
 	nfqwsOptSet: bigText(callNfqwsOptSet),
+	z2ConfGet: callZ2ConfGet,
+	z2ConfSet: bigText(callZ2ConfSet),
+	z2ConfRestore: callZ2ConfRestore,
 	tgStatus: callTgStatus,
 	tgAction: callTgAction,
 	tgRestartAll: callTgRestartAll,
@@ -58866,6 +58957,92 @@ return view.extend({
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var bannerEl = E('div', {});
 
+function z2ConfCard(view) {
+			var busy = false, hasBak = false;
+			var card = E('div', { 'class': 'zm-card' });
+			var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
+			var bar = zm.editorBar(ta, {
+				saveLabel: 'Сохранить и применить',
+				text: 'Файл изменён и не сохранён',
+				onSave: function(v) { return z2Write(zm.z2ConfSet(v), 'Сохранено'); }
+			});
+			function sync() {
+				reloadBtn.disabled = busy; uploadBtn.disabled = busy; closeBtn.disabled = busy;
+				restoreBtn.disabled = busy || !hasBak;
+			}
+			function guard(fn) {
+				if (!bar.dirty()) return fn();
+				return zm.ask('Есть несохранённые изменения. Отбросить их?').then(function(ok) { if (ok) fn(); });
+			}
+			function load(silent) {
+				busy = true; sync();
+				return zm.z2ConfGet().then(function(res) {
+					busy = false;
+					if (res.error) { zm.toast(res.error, 'error'); sync(); return; }
+					hasBak = !!res.bak;
+					bar.reset(res.content || '');
+					sync();
+					if (!silent) zm.toast('Файл перечитан с диска', 'info');
+				}).catch(function() { busy = false; sync(); zm.toast('Роутер не ответил', 'error'); });
+			}
+			function z2Write(p, msg) {
+				busy = true; sync();
+				return p.then(function(res) {
+					busy = false; sync();
+					if (res.error) { zm.toast(res.error, 'error'); return false; }
+					zm.toast(res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 сейчас остановлен — запустите его кнопкой выше', res.running ? 'info' : 'warning');
+					zm.changed({ svc: 'zapret2' });
+					hasBak = true; sync();
+					return true;
+				}).catch(function() { busy = false; sync(); zm.toast('Роутер не ответил', 'error'); return false; });
+			}
+			function restore() {
+				return zm.ask('Вернуть версию файла до последнего сохранения или загрузки и перезапустить Zapret2?').then(function(ok) {
+					if (!ok) return;
+					return z2Write(zm.z2ConfRestore(), 'Восстановлено').then(function(done) { if (done) return load(true); });
+				});
+			}
+			function onFile() {
+				var f = fileIn.files && fileIn.files[0];
+				fileIn.value = '';
+				if (!f) return;
+				if (f.size > 262144) { zm.toast('Файл слишком большой для конфига Zapret2', 'error'); return; }
+				var rd = new FileReader();
+				rd.onload = function() {
+					var txt = String(rd.result || '');
+					zm.ask('Заменить /etc/config/zapret2 содержимым файла «' + f.name + '» и перезапустить Zapret2?').then(function(ok) {
+						if (!ok) return;
+						return z2Write(zm.z2ConfSet(txt), 'Файл загружен').then(function(done) { if (done) return load(true); });
+					});
+				};
+				rd.readAsText(f);
+			}
+			function open() {
+				openBtn.style.display = 'none'; editBox.style.display = ''; actBox.style.display = '';
+				load(true);
+			}
+			function close() {
+				bar.reset('');
+				editBox.style.display = 'none'; actBox.style.display = 'none'; openBtn.style.display = '';
+			}
+			var reloadBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { load(false); }); } }, 'Перечитать файл');
+			var uploadBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { fileIn.click(); }); } }, 'Загрузить файл');
+			var restoreBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(restore); } }, 'Восстановить файл');
+			var closeBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(close); } }, 'Свернуть');
+			var openBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': open }, 'Открыть редактор');
+			var fileIn = E('input', { 'type': 'file', 'accept': '.conf,.txt,text/plain', 'style': 'display:none', 'change': onFile });
+			var actBox = E('div', { 'class': 'zm-actions', 'style': 'display:none' }, [ reloadBtn, uploadBtn, restoreBtn, closeBtn ]);
+			var editBox = E('div', { 'style': 'display:none' }, [ ta, bar ]);
+			card.appendChild(E('h3', {}, 'Редактировать текущую стратегию'));
+			card.appendChild(E('p', { 'class': 'zm-hint' }, 'Файл /etc/config/zapret2 целиком: стратегии, списки и параметры Zapret2. «Сохранить и применить» пишет файл и перезапускает Zapret2, если он запущен. Если с новым файлом Zapret2 не запускается, панель вернёт предыдущую версию.'));
+			card.appendChild(E('div', { 'class': 'zm-actions' }, [ openBtn ]));
+			card.appendChild(actBox);
+			card.appendChild(fileIn);
+			card.appendChild(editBox);
+			card.appendChild(E('p', { 'class': 'zm-hint' }, '«Восстановить файл» вернёт версию до последнего сохранения или загрузки.'));
+			return card;
+		}
+
 		function renderCards(d) {
 			cards.innerHTML = '';
 
@@ -58967,6 +59144,10 @@ return view.extend({
 			}
 
 			cards.appendChild(z2Card);
+			if (d.zapret2 === 'installed') {
+				if (!view.z2ConfCard) view.z2ConfCard = z2ConfCard(view);
+				cards.appendChild(view.z2ConfCard);
+			}
 		}
 
 		renderCards(data);
