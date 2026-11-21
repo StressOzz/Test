@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.096
+# Version: 5.097
 ZM_VERSION_EOF
 set -e
 
@@ -59019,7 +59019,7 @@ return view.extend({
 		var bannerEl = E('div', {});
 
 function z2StratCard(view) {
-			var items = [], orig = [], busy = false, query = '';
+			var items = [], orig = [], busy = false, settling = false, query = '', drag = null, landed = '';
 			var count = E('span', { 'class': 'zm-z2-count' });
 			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:8px 0 0' });
 			var list = E('div', { 'class': 'zm-z2-list' });
@@ -59029,8 +59029,8 @@ function z2StratCard(view) {
 			function isDirty() { return JSON.stringify(items) !== JSON.stringify(orig); }
 			function say(t, bad) { note.textContent = t || ''; note.style.color = bad ? '#b00020' : ''; }
 			function sync() {
-				saveB.disabled = busy || !isDirty();
-				resetB.disabled = busy;
+				saveB.disabled = busy || settling || !isDirty();
+				resetB.disabled = busy || settling;
 				search.disabled = busy;
 				count.textContent = 'Включено ' + items.filter(function(x) { return x.on; }).length + ' из ' + items.length;
 			}
@@ -59038,9 +59038,11 @@ function z2StratCard(view) {
 				var j = i + d;
 				if (j < 0 || j >= items.length) return;
 				var t = items[i]; items[i] = items[j]; items[j] = t;
+				landed = t.name;
 				draw();
 			}
 			function draw() {
+				list.classList.remove('zm-z2-sorting');
 				list.innerHTML = '';
 				var shown = 0;
 				items.forEach(function(it, i) {
@@ -59053,15 +59055,89 @@ function z2StratCard(view) {
 					var dn = E('button', { 'class': 'cbi-button zm-z2-mv', 'title': 'Ниже', 'click': function() { move(i, 1); } }, '▼');
 					up.disabled = busy || i === 0;
 					dn.disabled = busy || i === items.length - 1;
-					list.appendChild(E('div', { 'class': 'zm-z2-row' + (it.on ? '' : ' zm-z2-off') }, [
+					var row = E('div', {
+						'class': 'zm-z2-row' + (it.on ? '' : ' zm-z2-off') + (landed === it.name ? ' zm-z2-landed' : ''),
+						'pointerdown': function(ev) { rowDown(ev, row); },
+						'pointermove': rowMove,
+						'pointerup': rowUp,
+						'pointercancel': rowCancel
+					}, [
+						E('span', { 'class': 'zm-z2-grip', 'title': 'Перетащить' }, '⋮⋮'),
 						cb,
 						E('span', { 'class': 'zm-z2-num' }, String(i + 1)),
 						E('span', { 'class': 'zm-z2-name', 'title': it.name }, it.name),
 						E('span', { 'class': 'zm-z2-mv-box' }, [ up, dn ])
-					]));
+					]);
+					list.appendChild(row);
 				});
 				if (!shown) list.appendChild(E('p', { 'class': 'zm-hint' }, items.length ? 'Ничего не найдено' : 'Стратегий в файле нет'));
+				if (landed) { var l = landed; setTimeout(function() { if (landed === l) landed = ''; }, 800); }
 				sync();
+			}
+			function canDrag() { return !busy && !settling && !query && items.length > 1; }
+			function rowDown(ev, row) {
+				if (!canDrag() || ev.button) return;
+				var t = ev.target || {};
+				var tag = String(t.tagName || '').toUpperCase();
+				if (tag === 'INPUT' || tag === 'BUTTON') return;
+				var onGrip = !!(t.classList && t.classList.contains('zm-z2-grip'));
+				if (ev.pointerType !== 'mouse' && !onGrip) return;
+				var rows = Array.prototype.slice.call(list.children);
+				var idx = rows.indexOf(row);
+				if (idx < 0) return;
+				drag = { row: row, rows: rows, idx: idx, slot: rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top, y0: ev.clientY, s0: list.scrollTop, pid: ev.pointerId, on: false, target: idx };
+			}
+			function dragStart() {
+				drag.on = true;
+				drag.row.classList.add('zm-z2-drag');
+				list.classList.add('zm-z2-sorting');
+				if (drag.row.setPointerCapture) drag.row.setPointerCapture(drag.pid);
+			}
+			function autoScroll(y) {
+				var r = list.getBoundingClientRect();
+				if (y < r.top + 36) list.scrollTop -= 8;
+				else if (y > r.bottom - 36) list.scrollTop += 8;
+			}
+			function rowMove(ev) {
+				if (!drag || ev.pointerId !== drag.pid) return;
+				if (!drag.on) {
+					if (Math.abs(ev.clientY - drag.y0) < 5) return;
+					dragStart();
+				}
+				if (ev.preventDefault) ev.preventDefault();
+				autoScroll(ev.clientY);
+				var dy = ev.clientY - drag.y0 + (list.scrollTop - drag.s0);
+				var from = drag.idx, n = drag.rows.length;
+				var t = Math.max(0, Math.min(n - 1, from + Math.round(dy / drag.slot)));
+				drag.target = t;
+				drag.row.style.transform = 'translateY(' + dy + 'px)';
+				drag.rows.forEach(function(r, j) {
+					if (j === from) return;
+					var sh = 0;
+					if (from < t && j > from && j <= t) sh = -drag.slot;
+					if (from > t && j < from && j >= t) sh = drag.slot;
+					r.style.transform = sh ? 'translateY(' + sh + 'px)' : '';
+				});
+			}
+			function rowUp(ev) { finish(ev, false); }
+			function rowCancel(ev) { finish(ev, true); }
+			function finish(ev, cancel) {
+				if (!drag || ev.pointerId !== drag.pid) return;
+				var d = drag; drag = null;
+				if (!d.on) return;
+				var from = d.idx, t = cancel ? from : d.target;
+				settling = true; sync();
+				d.row.classList.add('zm-z2-settle');
+				d.row.style.transform = 'translateY(' + ((t - from) * d.slot) + 'px)';
+				setTimeout(function() {
+					if (t !== from) {
+						var m = items.splice(from, 1)[0];
+						items.splice(t, 0, m);
+						landed = m.name;
+					}
+					settling = false;
+					draw();
+				}, cancel ? 0 : 200);
 			}
 			function fail() { busy = false; draw(); zm.toast('Роутер не ответил', 'error'); }
 			function load(silent) {
@@ -59097,13 +59173,13 @@ function z2StratCard(view) {
 			}
 			var node = E('div', { 'class': 'zm-card zm-z2-editor zm-z2-strat' }, [
 				E('div', { 'class': 'zm-z2-head' }, [ E('h3', {}, 'Стратегии Zapret2'), count ]),
-				E('p', { 'class': 'zm-hint' }, 'Отметьте стратегии, которые должны работать, и расставьте их стрелками ▲ ▼. Список читается из /etc/config/zapret2: после любого сохранения он пересчитывается заново.'),
+				E('p', { 'class': 'zm-hint' }, 'Перетащите стратегию за ⋮⋮ или мышью за любое место строки; стрелки ▲ ▼ — для точной подстройки. Поиск отключает перетаскивание. После сохранения список пересчитывается.'),
 				E('div', { 'class': 'zm-z2-tools' }, [ search ]),
 				list,
 				E('div', { 'class': 'zm-actions' }, [ saveB, resetB ]),
 				note
 			]);
-			view.z2StratLoad = function() { if (!isDirty()) load(true); };
+			view.z2StratLoad = function() { if (!isDirty() && !drag) load(true); };
 			load(true);
 			return node;
 		}
@@ -59846,7 +59922,19 @@ html.zm-theme-dark .zm-fo-sub.zm-fo-warn { color: #d29922; }
 .zm-z2-tools { margin: 4px 0 12px; }
 .zm-z2-search { width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(15,23,42,.14); font: inherit; background: transparent; color: inherit; }
 .zm-z2-list { display: flex; flex-direction: column; gap: 6px; max-height: 560px; overflow-y: auto; padding-right: 4px; }
-.zm-z2-row { display: grid; grid-template-columns: 18px 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(15,23,42,.07); background: rgba(15,23,42,.025); }
+.zm-z2-row { display: grid; grid-template-columns: 14px 18px 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(15,23,42,.07); background: rgba(15,23,42,.025); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; position: relative; }
+.zm-z2-row button, .zm-z2-row input { cursor: pointer; }
+.zm-z2-grip { color: #94a3b8; font-size: 15px; line-height: 1; letter-spacing: -3px; text-align: center; cursor: grab; touch-action: none; padding: 6px 0; }
+.zm-z2-sorting .zm-z2-row { transition: transform .18s ease; }
+.zm-z2-sorting, .zm-z2-sorting * { cursor: grabbing !important; }
+.zm-z2-row.zm-z2-drag { z-index: 3; background: #ffffff; border-color: #3b82f6; box-shadow: 0 10px 26px rgba(15,23,42,.18), 0 0 0 3px rgba(59,130,246,.18); transition: none; }
+.zm-z2-row.zm-z2-drag .zm-z2-grip { color: #3b82f6; }
+.zm-z2-row.zm-z2-drag .zm-z2-name { font-weight: 600; }
+.zm-z2-row.zm-z2-settle { transition: transform .18s ease, box-shadow .18s ease; }
+.zm-z2-row.zm-z2-landed { animation: zmZ2Land .7s ease; }
+@keyframes zmZ2Land { from { box-shadow: 0 0 0 3px rgba(59,130,246,.35); } to { box-shadow: 0 0 0 3px rgba(59,130,246,0); } }
+html.zm-theme-dark .zm-z2-row.zm-z2-drag { background: #1e293b; border-color: #60a5fa; box-shadow: 0 10px 26px rgba(0,0,0,.45), 0 0 0 3px rgba(96,165,250,.22); }
+html.zm-theme-dark .zm-z2-row.zm-z2-drag .zm-z2-grip { color: #60a5fa; }
 .zm-z2-row.zm-z2-off .zm-z2-name { color: #94a3b8; }
 .zm-z2-cb { margin: 0; width: 16px; height: 16px; cursor: pointer; }
 .zm-z2-num { font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; }
