@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.103
+# Version: 5.104
 ZM_VERSION_EOF
 set -e
 
@@ -20777,6 +20777,25 @@ _z2_blob_fetch() {
 	return 1
 }
 
+z2_blob_get() {
+	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	local name pth en used onu lst sep=""
+	printf '{"items":['
+	while read -r name pth en used onu lst; do
+		[ -n "$name" ] || continue
+		[ "$pth" = - ] && pth=""
+		printf '%s{"name":"%s","on":%s,"path":"%s","used":[%s],"usedOn":%s,"have":%s}' "$sep" "$name" \
+			"$([ "$en" = 1 ] && echo true || echo false)" "$pth" \
+			"$(_z2_blob_json_list "$lst")" \
+			"$([ "$onu" = 1 ] && echo true || echo false)" \
+			"$([ -s "$Z2_FAKE_DIR/${pth##*/}" ] && echo true || echo false)"
+		sep=","
+	done <<-EOF
+	$(_z2_blob_scan)
+	EOF
+	printf ']}\n'
+}
+
 _z2_blob_check_run() {
 	local out="$JOBS_DIR/z2_blobs.json" tmp="$JOBS_DIR/z2_blobs.json.tmp" scan="$JOBS_DIR/z2_blobs.scan"
 	local name pth en used onu lst st json="" sep="" got=0 miss=0 off=0 n=0 missn=""
@@ -20784,7 +20803,7 @@ _z2_blob_check_run() {
 	_z2_blob_scan > "$scan" 2>/dev/null
 	while read -r name pth en used onu lst; do
 		[ "$used" = 1 ] && [ "$pth" != - ] || continue
-		n=$((n + 1))
+		n=$((n + 1)); Z2_BLOB_SRC=""
 		if [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then
 			st=ok; echo "   ✓ ${pth##*/}"
 		elif _z2_blob_fetch "$pth"; then
