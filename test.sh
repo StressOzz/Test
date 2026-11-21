@@ -58957,12 +58957,13 @@ return view.extend({
 		var view = this;
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var cards = E('div', { 'class': 'zm-cards' });
+		var z2PanelBox = E('div', { 'class': 'zm-z2-panel', 'style': 'display:none' });
 		var logEl = E('pre', { 'class': 'zm-log' });
 		var bannerEl = E('div', {});
 
 function z2ConfCard(view) {
 			var busy = false, btn = {};
-			var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'width:100%;min-height:460px' });
+			var ta = E('textarea', { 'class': 'zm-config-editor zm-z2-ta', 'spellcheck': 'false' });
 			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' });
 			var bar = zm.editorBar(ta, {
 				saveLabel: 'Сохранить и применить',
@@ -59030,7 +59031,7 @@ function z2ConfCard(view) {
 			btn.upload = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { fileIn.click(); }); } }, 'Загрузить файл');
 			btn.save = E('button', { 'class': 'cbi-button', 'click': saveToPc }, 'Сохранить файл');
 			btn.restore = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { guard(restore); } }, 'Восстановить файл');
-			var panel = E('div', { 'class': 'zm-card', 'style': 'grid-column:1 / -1;width:100%' }, [
+			var panel = E('div', { 'class': 'zm-card zm-z2-editor' }, [
 				E('h3', {}, 'Редактор конфига Zapret2'),
 				E('p', { 'class': 'zm-hint' }, 'Файл /etc/config/zapret2 целиком: стратегии, списки и параметры Zapret2. «Сохранить и применить» записывает файл и перезапускает Zapret2, если он запущен; если с новым файлом Zapret2 не запускается, вернётся предыдущая версия. «Восстановить файл» скачивает стандартный конфиг с GitHub и применяет его.'),
 				E('div', { 'class': 'zm-actions' }, [ btn.reload, btn.upload, btn.save, btn.restore ]),
@@ -59042,6 +59043,7 @@ function z2ConfCard(view) {
 
 		function renderCards(d) {
 			cards.innerHTML = '';
+			z2PanelBox.style.display = 'none';
 
 			var z2Actions = [];
 			if (d.zapret2 === 'installed' && d.z2_luci) {
@@ -59144,12 +59146,14 @@ function z2ConfCard(view) {
 			cards.appendChild(z2Card);
 			if (d.zapret2 === 'installed') {
 				if (!view.z2ConfCard) view.z2ConfCard = z2ConfCard(view);
-				cards.appendChild(view.z2ConfCard);
+				z2PanelBox.appendChild(view.z2ConfCard);
+				z2PanelBox.style.display = '';
 			}
 		}
 
 		renderCards(data);
 		wrap.appendChild(cards);
+		wrap.appendChild(z2PanelBox);
 		wrap.appendChild(logEl);
 		wrap.appendChild(bannerEl);
 
@@ -59682,6 +59686,9 @@ html.zm-theme-dark .zm-fo-sub.zm-fo-warn { color: #d29922; }
 .zm-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 10px; border: 4px solid transparent; background-clip: padding-box; min-height: 40px; }
 .zm-log::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); background-clip: padding-box; }
 @supports not selector(::-webkit-scrollbar) { .zm-log { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; } }
+.zm-z2-panel { width: 100%; }
+.zm-z2-editor { width: 100%; box-sizing: border-box; margin: 0; }
+.zm-z2-ta { display: block; width: 100%; box-sizing: border-box; min-height: 440px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; resize: vertical; }
 .zm-config-editor { scrollbar-width: auto; scrollbar-color: auto; }
 .zm-config-editor::-webkit-scrollbar { width: 14px; height: 14px; }
 .zm-config-editor::-webkit-scrollbar-button { display: none; }
