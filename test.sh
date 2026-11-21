@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.090
+# Version: 5.093
 ZM_VERSION_EOF
 set -e
 
@@ -6475,6 +6475,8 @@ stl_leftovers() {
 	local t m n=0
 	for t in "inet steer" "ip steer" "ip6 steer" "inet steer_obfs"; do nft delete table $t >/dev/null 2>&1 && n=$((n + 1)); done
 	for t in $(awk '{print $3}' "$STL_STATE/registry" 2>/dev/null); do ip route flush table "$t" >/dev/null 2>&1; done
+	while ip rule del pref "$ST_SUB_RT_PREF" >/dev/null 2>&1; do :; done
+	ip route flush table "$ST_SUB_RT" >/dev/null 2>&1
 	for m in $(awk '{print $2}' "$STL_STATE/registry" 2>/dev/null); do
 		while ip rule del fwmark "0x$m/0x0ff00000" >/dev/null 2>&1; do n=$((n + 1)); done
 		while ip rule del fwmark "0x$m" >/dev/null 2>&1; do n=$((n + 1)); done
@@ -7909,6 +7911,9 @@ _st_diag_node() {
 }
 
 ST_SUB_TAG="# zm-subupd"
+ST_SUB_RT=3099
+ST_SUB_RT_PREF=4099
+ST_SUB_RT_LOCK="$JOBS_DIR/steer-subroute.lock"
 ST_SUB_AUTO_OFF="$ZM_STATE_DIR/st.subauto.off"
 
 ST_SUB_PICK="$ST_DIR/sub.pick"
@@ -27468,8 +27473,7 @@ _doh_wait_local() {
 	done
 }
 # Bootstrap DNS — обычный DNS, через который https-dns-proxy узнаёт IP самого DoH-сервера.
-# Если адреса не заданы, https-dns-proxy берёт встроенные (список из его документации).
-DOH_BOOT_BUILTIN="8.8.8.8,1.1.1.1,8.8.4.4,1.0.0.1,145.100.185.15,145.100.185.16,185.49.141.37"
+# Если адреса не заданы, список не угадываем: проверять нечего.
 doh_boot_check() {
 	local url host boots src=set live b x out="" sep="" n=0 ok=0 run=false
 	url="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].resolver_url')"
@@ -27481,7 +27485,7 @@ doh_boot_check() {
 		*) printf '{"need":false,"host":"%s","running":%s}\n' "$(esc "$host")" "$run"; return 0 ;;
 	esac
 	boots="$(uci -q get 'https-dns-proxy.@https-dns-proxy[0].bootstrap_dns' | tr ' ;' ',,' | sed 's/,,*/,/g; s/^,//; s/,$//')"
-	[ -n "$boots" ] || { boots="$DOH_BOOT_BUILTIN"; src=builtin; }
+	[ -n "$boots" ] || { printf '{"need":true,"host":"%s","none":true,"running":%s}\n' "$(esc "$host")" "$run"; return 0; }
 	command -v nslookup >/dev/null 2>&1 || { printf '{"need":true,"host":"%s","src":"%s","running":%s,"error":"%s"}\n' "$(esc "$host")" "$src" "$run" "на роутере нет nslookup — проверить адреса нечем"; return 0; }
 	live=",$(_doh_boot_live "$url" "$boots"),"
 	for b in $(printf '%s' "$boots" | tr ',' ' '); do
@@ -32994,10 +32998,14 @@ _st_autogrp_sync() {
 	mkdir -p "$ST_RUN" "$ST_VDIR"
 	: > "$ST_SUB_GRPS.chk"; : > "$ST_SUB_GRPS.v2"
 	[ -f "$ST_SUB_GRPS.all" ] || : > "$ST_SUB_GRPS.all"
-	dv=""; [ -f "$ST_SUB_VIA" ] && dv="$(_st_sub_via_pick 2>/dev/null)" && dv="${dv%%|*}"
+	dv=""; vm=""
+	if [ -f "$ST_SUB_VIA" ]; then
+		dv="$(_st_sub_vpn_dev 2>/dev/null)" && _st_sub_route_on "$dv" "$u" && vm=1 || { [ -n "$quiet" ] || echo "   ! Не удалось направить группы АВТО через VPN (VPN не поднят или маршрут занят) — остались прежними"; return 1; }
+	fi
 	rm -f "$t"
-	[ -n "$dv" ] && { curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" --interface "$dv" -o "$t" "$u" 2>/dev/null || rm -f "$t"; }
-	if [ ! -s "$t" ] && { ! curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" -o "$t" "$u" 2>/dev/null || [ ! -s "$t" ]; }; then
+	curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+--resolve $ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
+	[ -n "$vm" ] && _st_sub_route_off
+	if [ ! -s "$t" ]; then
 		rm -f "$t"
 		[ -n "$quiet" ] || [ ! -s "$ST_SUB_GRPS" ] || echo "   ! Подписку в формате Happ скачать не удалось — группы АВТО остались прежними"
 		return 1
@@ -33300,39 +33308,94 @@ _st_sub_check() {
 	return 1
 }
 
-_st_sub_via_pick() {
+_st_sub_vpn_dev() {
 	local d
-	d="$(_st_vpn_dev 2>/dev/null)" && _st_via_ok "$d" && { echo "$d|VPN"; return 0; }
-	_st_via_pick
+	d="$(_st_vpn_dev 2>/dev/null)" || return 1
+	[ -n "$d" ] && [ -d "/sys/class/net/$d" ] && ip -o link show dev "$d" 2>/dev/null | grep -q '[<,]UP[,>]' && ip -4 -o addr show dev "$d" 2>/dev/null | grep -q 'inet ' || return 1
+	echo "$d"
+}
+
+_st_sub_route_clean() {
+	while ip rule del pref "$ST_SUB_RT_PREF" >/dev/null 2>&1; do :; done
+	ip route flush table "$ST_SUB_RT" >/dev/null 2>&1
+}
+
+_st_sub_route_lock() {
+	local i=0
+	mkdir -p "$JOBS_DIR"
+	while ! mkdir "$ST_SUB_RT_LOCK" 2>/dev/null; do
+		if [ -n "$(find "$ST_SUB_RT_LOCK" -maxdepth 0 -mmin +15 2>/dev/null)" ]; then rmdir "$ST_SUB_RT_LOCK" 2>/dev/null; continue; fi
+		i=$((i + 1)); [ "$i" -le 900 ] || return 1
+		sleep 1
+	done
+	return 0
+}
+
+_st_sub_route_off() {
+	_st_sub_route_clean
+	ST_SUB_RESOLVE=""
+	rmdir "$ST_SUB_RT_LOCK" 2>/dev/null
+	return 0
+}
+
+_st_sub_route_on() {
+	local d="$1" u="$2" auth h port ip ips src peer first
+	auth="${u#*://}"; auth="${auth%%/*}"
+	case "$u" in https://*) port=443 ;; *) port=80 ;; esac
+	case "$auth" in *:*) port="${auth##*:}"; h="${auth%%:*}" ;; *) h="$auth" ;; esac
+	case "$h" in ''|*[!0-9.]*) ips="$(nslookup "$h" 2>/dev/null | awk '/^Name:/ { f = 1; next } f && /^Address/ { a = $0; sub(/^Address[ 0-9]*:[ \t]*/, "", a); sub(/[ \t#].*$/, "", a); if (a ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print a }' | awk '!s[$0]++')" ;; *) ips="$h" ;; esac
+	[ -n "$ips" ] || return 1
+	src="$(ip -4 -o addr show dev "$d" 2>/dev/null | awk '{ sub(/\/.*/, "", $4); print $4; exit }')"
+	peer="$(ip -4 -o addr show dev "$d" 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "peer") { p = $(i + 1); sub(/\/.*/, "", p); print p; exit } }')"
+	[ -n "$src" ] || return 1
+	_st_sub_route_lock || return 1
+	_st_sub_route_clean
+	for ip in $ips; do
+		if [ -n "$peer" ]; then
+			ip route replace "$ip/32" via "$peer" dev "$d" src "$src" onlink table "$ST_SUB_RT" || { _st_sub_route_off; return 1; }
+		else
+			ip route replace "$ip/32" dev "$d" src "$src" table "$ST_SUB_RT" || { _st_sub_route_off; return 1; }
+		fi
+		ip rule add pref "$ST_SUB_RT_PREF" to "$ip/32" lookup "$ST_SUB_RT" || { _st_sub_route_off; return 1; }
+	done
+	[ -w "/proc/sys/net/ipv4/conf/$d/rp_filter" ] && echo 2 > "/proc/sys/net/ipv4/conf/$d/rp_filter" 2>/dev/null
+	first="$(printf '%s\n' "$ips" | head -n1)"
+	ST_SUB_RESOLVE="$h:$port:$first"
+	return 0
+}
+
+_st_sub_happ_prep() {
+	command -v jq >/dev/null 2>&1 && return 0
+	[ -n "$(find "$JOBS_DIR/jq.try" -mmin -360 2>/dev/null)" ] && return 0
+	mkdir -p "$JOBS_DIR"; : > "$JOBS_DIR/jq.try"; _zm_pkg_add jq >/dev/null 2>&1
+}
+
+_st_sub_get_via() {
+	local c dv rc=1 u="$1"
+	c="$(_zm_bin curl)" || { echo "   · Через VPN подписку качать нечем (нет curl) — список не обновлён"; return 1; }
+	dv="$(_st_sub_vpn_dev)" || { echo "   ! VPN сейчас не поднят — подписку не обновили, остаётся прежний список"; return 1; }
+	_st_sub_route_on "$dv" "$u" || { echo "   ! Не удалось направить запрос подписки в VPN (маршрут занят или адрес сервера не узнан) — список не обновлён"; return 1; }
+	if [ -f "$ST_SUB_URL.happ" ]; then
+		_st_sub_happ_prep
+		echo "   · Подписку качаем как для Happ через VPN"
+		_st_sub_curl "$c" "" "$@" happ && rc=0
+		[ "$rc" = 0 ] || echo "   · Как для Happ подписка через VPN не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — пробуем как обычно"
+	fi
+	[ "$rc" = 0 ] || { _st_sub_curl "$c" "" "$@" && rc=0; }
+	_st_sub_route_off
+	[ "$rc" = 0 ] || echo "   ! Через VPN подписка не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — прежний список остаётся"
+	return $rc
 }
 
 _st_sub_get() {
-	local c dv lb
+	local c
+	[ -f "$ST_SUB_VIA" ] && { _st_sub_get_via "$@"; return; }
 	if [ -f "$ST_SUB_URL.happ" ] && c="$(_zm_bin curl)"; then
-		if ! command -v jq >/dev/null 2>&1 && [ -z "$(find "$JOBS_DIR/jq.try" -mmin -360 2>/dev/null)" ]; then
-			mkdir -p "$JOBS_DIR"; : > "$JOBS_DIR/jq.try"; _zm_pkg_add jq >/dev/null 2>&1
-		fi
-		dv=""; lb=""
-		[ -f "$ST_SUB_VIA" ] && dv="$(_st_sub_via_pick 2>/dev/null)" && { lb="${dv#*|}"; dv="${dv%%|*}"; }
-		echo "   · Подписку качаем как для Happ${lb:+ через $lb}"
-		_st_sub_curl "$c" "$dv" "$@" happ && return 0
-		[ -n "$dv" ] && _st_sub_curl "$c" "" "$@" happ && return 0
+		_st_sub_happ_prep
+		echo "   · Подписку качаем как для Happ"
+		_st_sub_curl "$c" "" "$@" happ && return 0
 		echo "   · Как для Happ подписка не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — качаем как обычно"
 	fi
-	[ -f "$ST_SUB_VIA" ] || { stl_sub_fetch "$@"; return; }
-	if ! c="$(_zm_bin curl)"; then
-		echo "   · Через VPN подписку качать нечем (нет curl) — качаем напрямую"
-		stl_sub_fetch "$@"; return
-	fi
-	if ! dv="$(_st_sub_via_pick)"; then
-		echo "   · Подключение Steer сейчас не работает — подписку качаем напрямую"
-		stl_sub_fetch "$@"; return
-	fi
-	lb="${dv#*|}"; dv="${dv%%|*}"
-	[ -w "/proc/sys/net/ipv4/conf/$dv/rp_filter" ] && echo 2 > "/proc/sys/net/ipv4/conf/$dv/rp_filter" 2>/dev/null
-	echo "   · Подписку качаем через $lb"
-	_st_sub_curl "$c" "$dv" "$@" && return 0
-	echo "   · Через $lb подписка не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — качаем напрямую"
 	stl_sub_fetch "$@"
 }
 
@@ -33348,10 +33411,10 @@ _st_sub_curl() {
 	for try in "$u" "${u%/}/json"; do
 		rm -f "$t" "$h"
 		if [ -n "$id" ]; then
-			"$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $ifa -A "$ua" \
+			"$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $ifa ${ST_SUB_RESOLVE:+--resolve $ST_SUB_RESOLVE} -A "$ua" \
 				-H "x-hwid: $id" -H "x-device-os: $os" -H "x-ver-os: $os" -H "x-device-model: $md" -D "$h" -o "$t" "$try" 2>/dev/null || rm -f "$t"
 		fi
-		[ -s "$t" ] || "$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $ifa -A "$ua" \
+		[ -s "$t" ] || "$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $ifa ${ST_SUB_RESOLVE:+--resolve $ST_SUB_RESOLVE} -A "$ua" \
 			-D "$h" -o "$t" "$try" 2>/dev/null || rm -f "$t"
 		[ -s "$t" ] || { STL_SUB_ERR="панель не ответила"; continue; }
 		if [ "$(head -c 2 "$t" | od -An -tx1 | tr -d ' \n')" = 1f8b ]; then
@@ -47767,6 +47830,12 @@ return view.extend({
 				bootNote.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, String(boot.error).charAt(0).toUpperCase() + String(boot.error).slice(1) + '.'));
 				return;
 			}
+			if (boot.none) {
+				bootBox.appendChild(badge('zm-warn', 'не задан'));
+				bootBox.appendChild(again);
+				bootNote.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Свои адреса Bootstrap DNS не заданы — проверять нечего. Адреса https-dns-proxy не подставляем, чтобы не выдавать непроверенные.'));
+				return;
+			}
 			if (boot.need === false) {
 				bootBox.appendChild(badge('zm-ok', 'не нужен'));
 				bootNote.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin:0' }, 'Адрес DoH-сервера задан IP-адресом (' + boot.host + ') — узнавать его через Bootstrap DNS не нужно.'));
@@ -47778,7 +47847,7 @@ return view.extend({
 				bootBox.appendChild(E('span', { 'class': 'zm-doh-bip' + (x.ok ? '' : ' zm-doh-bip-bad'), 'title': x.ok ? 'Отвечает: ' + boot.host + ' через него находится' : 'Не отвечает — через этот адрес ' + boot.host + ' не найти' }, [ E('i'), String(x.ip) ]));
 			});
 			bootBox.appendChild(again);
-			var src = boot.src === 'builtin' ? 'Свои адреса не заданы — https-dns-proxy берёт встроенные. ' : '';
+			var src = '';
 			if (!ok) {
 				bootNote.appendChild(E('div', { 'class': 'zm-dlg-note ' + (boot.running ? 'zm-dlg-note-warn' : 'zm-dlg-note-bad'), 'style': 'margin:2px 0 6px' }, [
 					E('b', {}, boot.running ? 'DoH может перестать работать. ' : 'Поэтому DoH и не работает. '),
@@ -50771,7 +50840,7 @@ return view.extend({
 					refresh();
 				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 			}));
-			setCard.appendChild(zm.swRow(!!data.sub_via, 'Обновлять подписку через VPN', 'Подписка будет скачиваться через сам VPN, а если он сейчас не поднят — через WARP или туннель Steer. Помогает, если сайт подписки у провайдера не открывается. Не скачается через подключение — обновится напрямую.', function() {
+			setCard.appendChild(zm.swRow(!!data.sub_via, 'Обновлять подписку через VPN', 'Подписка будет скачиваться только через VPN. Если VPN сейчас не поднят — подписка не обновится, останется прежний список. Помогает, если сайт подписки у провайдера не открывается.', function() {
 				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
 				var on = !data.sub_via;
 				zm.steerAction('sub_via', on ? 'on' : 'off').then(function(res) {
@@ -63156,7 +63225,7 @@ var SP_PAY = [
 	{ id: 'tb', title: 'ТБанк донаты', url: 'https://pay.cloudtips.ru/p/0d41f298' },
 	{ id: 'oz', title: 'Ozon донаты', url: 'https://finance.ozon.ru/apps/sbp/ozonbankpay/019f8e08-d609-710b-ab0e-47fae3a07547?attempt=1' }
 ];
-var SP_KVN_BOT = 'https://t.me/StressKVN_bot';
+var SP_KVN_BOT = 'https://t.me/StressKVN_bot?start=zm_bot';
 var SP_KVN_SITE = 'http://stresskvn.lol/';
 var SP_KVN_ICO = {
 	shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
@@ -66331,7 +66400,7 @@ var DNS_CAT = {
 		{ id: 'geohide_eu', name: 'GeoHide EU', value: 'https://eu.geohide.ru/dns-query', boot: '77.88.8.8', geo: true },
 		{ id: 'geohide_us', name: 'GeoHide US', value: 'https://us.geohide.ru/dns-query', boot: '77.88.8.8', geo: true },
 		{ id: 'malw', name: 'MALW', value: 'https://dns.malw.link/dns-query', boot: '77.88.8.8', alias: [ 'dns.malw.link' ], geo: true },
-		{ id: 'webshift', name: 'WebShift', value: 'https://d.webshiftvpn.ru/dns-query', boot: '77.88.8.8', alias: [ 'd.webshiftvpn.ru' ], geo: true },
+		{ id: 'webshift', name: 'WebShift', value: 'https://d.webshiftvpn.ru/dns-query', alias: [ 'd.webshiftvpn.ru' ], geo: true },
 		{ id: 'dagami', name: 'Dagami', value: 'https://dns.dagami.ru/dns-query', boot: '77.88.8.8', alias: [ 'dns.dagami.ru' ], geo: true },
 		{ id: 'magicdns', name: 'MagicDNS', value: 'https://dns.magicdns.ru/dns-query', boot: '77.88.8.8', alias: [ 'dns.magicdns.ru', 'api.magicdns.ru' ], geo: true },
 		{ id: 'tamaev', name: 'tamaev-gifts.xyz', value: 'https://tamaev-gifts.xyz/dns-query', boot: '77.88.8.8', alias: [ 'tamaev-gifts.xyz' ], geo: true },
@@ -66410,7 +66479,7 @@ function dnsBoots(t, servers) {
 		var p = dnsFind(t, v), b = p ? p.boot : (t === 'udp' ? '' : '9.9.9.9');
 		[].concat(b || []).forEach(function(x) { if (out.indexOf(x) < 0) out.push(x); });
 	});
-	[ '9.9.9.9', '77.88.8.8' ].forEach(function(b) { if (out.length < 2 && out.indexOf(b) < 0) out.push(b); });
+	[ '9.9.9.9' ].forEach(function(b) { if (out.length < 2 && out.indexOf(b) < 0) out.push(b); });
 	return out.slice(0, 4);
 }
 
