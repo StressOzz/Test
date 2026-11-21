@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.102
+# Version: 5.103
 ZM_VERSION_EOF
 set -e
 
@@ -20710,7 +20710,7 @@ z2_strat_set() {
 }
 
 Z2_FAKE_DIR=/opt/zapret2/files/fake
-Z2_FAKE_FLOWSEAL="https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin"
+Z2_FAKE_SOURCES="Flowseal zapret zapret2 ZM"
 
 _z2_blob_scan() {
 	tr -d '\r' < "$Z2_CONF" | awk -F"'" '
@@ -20749,35 +20749,32 @@ _z2_blob_json_list() {
 	printf '%s' "$1" | sed 's/[^,][^,]*/"&"/g'
 }
 
+_z2_blob_url() {
+	case "$1" in
+		Flowseal) echo "https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin" ;;
+		zapret) echo "https://github.com/bol-van/zapret/raw/refs/heads/master/files/fake" ;;
+		zapret2) echo "https://github.com/bol-van/zapret2/raw/refs/heads/master/files/fake" ;;
+		ZM) echo "https://github.com/StressOzz/Zapret-Manager/raw/refs/heads/main/files" ;;
+	esac
+}
+
 _z2_blob_fetch() {
-	local f="$1" base dst
+	local f="$1" base dst s u
 	base="${f##*/}"
 	dst="$Z2_FAKE_DIR/$base"
 	mkdir -p "$Z2_FAKE_DIR"
+	Z2_BLOB_SRC=""
+	for s in $Z2_FAKE_SOURCES; do
+		u="$(_z2_blob_url "$s")"
+		rm -f "$dst.zmdl"
+		if _zm_fetch "$u/$base" "$dst.zmdl" 30 && [ -s "$dst.zmdl" ]; then
+			mv -f "$dst.zmdl" "$dst" && chmod a+r "$dst" 2>/dev/null
+			case "$s" in ZM) Z2_BLOB_SRC="Zapret Manager" ;; *) Z2_BLOB_SRC="$s" ;; esac
+			return 0
+		fi
+	done
 	rm -f "$dst.zmdl"
-	_zm_fetch "$Z2_FAKE_FLOWSEAL/$base" "$dst.zmdl" 30 || { rm -f "$dst.zmdl"; return 1; }
-	[ -s "$dst.zmdl" ] || { rm -f "$dst.zmdl"; return 1; }
-	mv -f "$dst.zmdl" "$dst" && chmod a+r "$dst" 2>/dev/null
-	return 0
-}
-
-z2_blob_get() {
-	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
-	local name pth en used onu lst sep=""
-	printf '{"items":['
-	while read -r name pth en used onu lst; do
-		[ -n "$name" ] || continue
-		[ "$pth" = - ] && pth=""
-		printf '%s{"name":"%s","on":%s,"path":"%s","used":[%s],"usedOn":%s,"have":%s}' "$sep" "$name" \
-			"$([ "$en" = 1 ] && echo true || echo false)" "$pth" \
-			"$(_z2_blob_json_list "$lst")" \
-			"$([ "$onu" = 1 ] && echo true || echo false)" \
-			"$([ -s "$Z2_FAKE_DIR/${pth##*/}" ] && echo true || echo false)"
-		sep=","
-	done <<-EOF
-	$(_z2_blob_scan)
-	EOF
-	printf ']}\n'
+	return 1
 }
 
 _z2_blob_check_run() {
@@ -20791,13 +20788,13 @@ _z2_blob_check_run() {
 		if [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then
 			st=ok; echo "   ✓ ${pth##*/}"
 		elif _z2_blob_fetch "$pth"; then
-			st=get; got=$((got + 1)); echo "   ↓ ${pth##*/} — скачан из Flowseal"
+			st=get; got=$((got + 1)); echo "   ↓ ${pth##*/} — скачан из $Z2_BLOB_SRC"
 		else
 			st=miss; miss=$((miss + 1)); missn="$missn$([ -n "$missn" ] && echo ',')$name"
-			echo "   !! ${pth##*/} — нет ни на роутере, ни в Flowseal: стратегия с ним может не работать"
+			echo "   !! ${pth##*/} — не найден ни в одном источнике (Flowseal, bol-van, Zapret Manager): стратегия с ним может не работать"
 		fi
 		[ "$en" = 1 ] || { off=$((off + 1)); echo "   · $name используется в стратегии, но выключен — включите его в карточке «Блобы»"; }
-		json="$json$sep{\"name\":\"$name\",\"file\":\"${pth##*/}\",\"state\":\"$st\",\"on\":$([ "$en" = 1 ] && echo true || echo false)}"
+		json="$json$sep{\"name\":\"$name\",\"file\":\"${pth##*/}\",\"state\":\"$st\",\"src\":\"$Z2_BLOB_SRC\",\"on\":$([ "$en" = 1 ] && echo true || echo false)}"
 		sep=","
 	done < "$scan"
 	rm -f "$scan"
@@ -20832,10 +20829,10 @@ _z2_blob_install() {
 			echo "   ✓ ${pth##*/}"
 		elif _z2_blob_fetch "$pth"; then
 			got=$((got + 1))
-			echo "   ↓ ${pth##*/} — скачан из Flowseal"
+			echo "   ↓ ${pth##*/} — скачан из $Z2_BLOB_SRC"
 		else
 			miss=$((miss + 1))
-			echo "   !! ${pth##*/} — нет ни на роутере, ни в Flowseal: стратегия с ним может не работать"
+			echo "   !! ${pth##*/} — не найден ни в одном источнике (Flowseal, bol-van, Zapret Manager): стратегия с ним может не работать"
 		fi
 		[ "$en" = 1 ] || echo "   · $name используется в стратегии, но выключен — включите его в карточке «Блобы»"
 	done < "$tmp"
@@ -59385,7 +59382,7 @@ function z2StratCard(view) {
 		}
 
 		function z2BlobCard(view) {
-			var items = [], orig = [], busy = false, query = '', onlyOn = false, open = {}, fileSt = {};
+			var items = [], orig = [], busy = false, query = '', onlyOn = false, open = {}, fileSt = {}, fileSrc = {};
 			var GROUPS = [ { k: 'tls', t: 'TLS' }, { k: 'quic', t: 'QUIC' }, { k: 'other', t: 'Прочее' } ];
 			var count = E('span', { 'class': 'zm-z2-count' });
 			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:8px 0 0' });
@@ -59441,8 +59438,8 @@ function z2StratCard(view) {
 							? E('span', { 'class': 'zm-z2-use' + (it.usedOn ? ' zm-z2-use-on' : ''), 'title': 'В стратегиях: ' + it.used.join(', ') }, it.usedOn ? 'используется' : 'в выключенных')
 							: E('span', { 'class': 'zm-z2-use-none' });
 						var fsv = fileSt[it.name], pills = [ use ];
-						if (it.used.length && fsv === 'miss') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-miss', 'title': 'Файла нет на роутере и в Flowseal' }, 'нет файла'));
-						if (fsv === 'get') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-get', 'title': 'Скачан из Flowseal' }, 'скачан'));
+						if (it.used.length && fsv === 'miss') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-miss', 'title': 'Файла нет на роутере и ни в одном источнике' }, 'нет файла'));
+						if (fsv === 'get') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-get', 'title': 'Скачан из ' + (fileSrc[it.name] || 'Flowseal') }, 'скачан'));
 						var useBox = E('span', { 'class': 'zm-z2-use-box' }, pills);
 						list.appendChild(E('div', { 'class': 'zm-z2-brow' + (it.on ? '' : ' zm-z2-off'), 'title': it.path || it.name }, [
 							cb,
@@ -59460,9 +59457,9 @@ function z2StratCard(view) {
 			function report(res) {
 				busy = false;
 				if (res.error) { say(res.error, true); draw(); zm.toast(res.error, 'error'); return; }
-				(res.items || []).forEach(function(x) { fileSt[x.name] = x.state; });
+				(res.items || []).forEach(function(x) { fileSt[x.name] = x.state; fileSrc[x.name] = x.src || ''; });
 				var msg = 'Проверено блобов: ' + res.used + ' · уже есть ' + (res.used - res.downloaded - res.missing) + ' · скачано из Flowseal ' + res.downloaded + ' · не найдено ' + res.missing;
-				if (res.missing) say(msg + '. Нет ни на роутере, ни в Flowseal: ' + res.missingNames.split(',').join(', ') + ' — стратегии с ними могут не работать.', true);
+				if (res.missing) say(msg + '. Не найден ни в одном источнике: ' + res.missingNames.split(',').join(', ') + ' — стратегии с ними могут не работать.', true);
 				else say(msg);
 				zm.toast(res.missing ? 'Не найдено файлов: ' + res.missing : (res.downloaded ? 'Докачано файлов: ' + res.downloaded : 'Все файлы блобов на месте'), res.missing ? 'warning' : 'info');
 				draw();
@@ -59522,7 +59519,7 @@ function z2StratCard(view) {
 			}
 			var node = E('div', { 'class': 'zm-card zm-z2-editor zm-z2-blobs' }, [
 				E('div', { 'class': 'zm-z2-head' }, [ E('h3', {}, 'Блобы'), count ]),
-				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий. Метка «используется» — блоб указан во включённой стратегии; «в выключенных» — только в выключенных. «Проверить и докачать» сверяет файлы на роутере и докачивает недостающие из Flowseal; если их нет и там — будет предупреждение. Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
+				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий. Метка «используется» — блоб указан во включённой стратегии; «в выключенных» — только в выключенных. «Проверить и докачать» сверяет файлы на роутере и докачивает недостающие из Flowseal, bol-van и Zapret Manager; если их нет нигде — будет предупреждение. Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
 				E('div', { 'class': 'zm-z2-tools' }, [ search, E('label', { 'class': 'zm-z2-toggle' }, [ onlyCb, E('span', {}, 'Только включённые') ]) ]),
 				box,
 				E('div', { 'class': 'zm-actions' }, [ saveB, checkB, resetB ]),
