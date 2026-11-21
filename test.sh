@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.098
+# Version: 5.090
 ZM_VERSION_EOF
 set -e
 
@@ -20705,14 +20705,37 @@ z2_strat_set() {
 
 z2_blob_get() {
 	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
-	printf '{"items":['
 	tr -d '\r' < "$Z2_CONF" | awk -F"'" '
-		function flush() { if (name != "") { printf "%s{\"name\":\"%s\",\"on\":%s,\"path\":\"%s\"}", sep, name, (en ? "true" : "false"), pth; sep = ","; name = "" } }
-		/^config / { flush(); if ($0 ~ /^config blob /) { name = $2; en = 0; pth = "" } next }
-		/^[ \t]*option enabled / { if (name != "") en = ($2 == "1") }
-		/^[ \t]*option path / { if (name != "") pth = $2 }
-		END { flush() }'
-	printf ']}\n'
+		function endblk() {
+			if (kind == "blob") { n++; nm[n] = name; ne[n] = (en ? "true" : "false"); np[n] = pth }
+			if (kind == "strategy") { s++; sn[s] = name; se[s] = en }
+		}
+		/^config / {
+			endblk(); kind = ""; en = 0; pth = ""
+			if ($0 ~ /^config blob /) { kind = "blob"; name = $2 }
+			else if ($0 ~ /^config strategy /) { kind = "strategy"; name = $2 }
+			next
+		}
+		kind == "blob" && /^[ \t]*option enabled / { en = ($2 == "1") }
+		kind == "blob" && /^[ \t]*option path / { pth = $2 }
+		kind == "strategy" && /^[ \t]*option enabled / { en = ($2 == "1") }
+		kind == "strategy" {
+			k = split($0, t, /[^A-Za-z0-9_]+/)
+			for (i = 1; i <= k; i++) if (t[i] != "") ref[name SUBSEP t[i]] = 1
+		}
+		END {
+			endblk()
+			printf "{\"items\":["
+			for (j = 1; j <= n; j++) {
+				u = ""; on = 0
+				for (i = 1; i <= s; i++) if ((sn[i] SUBSEP nm[j]) in ref) {
+					u = u (u == "" ? "" : ",") "\"" sn[i] "\""
+					if (se[i]) on = 1
+				}
+				printf "%s{\"name\":\"%s\",\"on\":%s,\"path\":\"%s\",\"used\":[%s],\"usedOn\":%s}", (j > 1 ? "," : ""), nm[j], ne[j], np[j], u, (on ? "true" : "false")
+			}
+			printf "]}\n"
+		}'
 }
 
 z2_blob_set() {
@@ -59286,9 +59309,13 @@ function z2StratCard(view) {
 						var cb = E('input', { 'type': 'checkbox', 'class': 'zm-z2-cb', 'change': function() { it.on = cb.checked; draw(); } });
 						cb.checked = !!it.on;
 						cb.disabled = busy;
+						var use = it.used.length
+							? E('span', { 'class': 'zm-z2-use' + (it.usedOn ? ' zm-z2-use-on' : ''), 'title': 'В стратегиях: ' + it.used.join(', ') }, it.usedOn ? 'используется' : 'в выключенных')
+							: E('span', { 'class': 'zm-z2-use-none' });
 						list.appendChild(E('div', { 'class': 'zm-z2-brow' + (it.on ? '' : ' zm-z2-off'), 'title': it.path || it.name }, [
 							cb,
 							E('span', { 'class': 'zm-z2-name' }, it.name),
+							use,
 							E('span', { 'class': 'zm-z2-path' }, it.path || '')
 						]));
 					});
@@ -59303,7 +59330,7 @@ function z2StratCard(view) {
 				return zm.z2BlobGet().then(function(res) {
 					busy = false;
 					if (res.error) { say(res.error, true); draw(); zm.toast(res.error, 'error'); return; }
-					items = (res.items || []).map(function(x) { return { name: x.name, on: !!x.on, path: x.path || '' }; });
+					items = (res.items || []).map(function(x) { return { name: x.name, on: !!x.on, path: x.path || '', used: x.used || [], usedOn: !!x.usedOn }; });
 					orig = JSON.parse(JSON.stringify(items));
 					if (!silent) say('');
 					draw();
@@ -59331,7 +59358,7 @@ function z2StratCard(view) {
 			}
 			var node = E('div', { 'class': 'zm-card zm-z2-editor zm-z2-blobs' }, [
 				E('div', { 'class': 'zm-z2-head' }, [ E('h3', {}, 'Блобы'), count ]),
-				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий (--blob=). Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
+				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий. Метка «используется» — блоб указан во включённой стратегии; «в выключенных» — только в выключенных. Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
 				E('div', { 'class': 'zm-z2-tools' }, [ search, E('label', { 'class': 'zm-z2-toggle' }, [ onlyCb, E('span', {}, 'Только включённые') ]) ]),
 				box,
 				E('div', { 'class': 'zm-actions' }, [ saveB, resetB ]),
@@ -60088,7 +60115,12 @@ html.zm-theme-dark .zm-fo-sub.zm-fo-warn { color: #d29922; }
 .zm-z2-gbtns { display: flex; gap: 6px; }
 .zm-z2-gbtn { padding: 3px 10px; font-size: 12px; min-width: 0; }
 .zm-z2-glist { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 2px 12px; }
-.zm-z2-brow { display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, auto); align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(15,23,42,.06); background: rgba(15,23,42,.02); }
+.zm-z2-brow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto minmax(0, auto); align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(15,23,42,.06); background: rgba(15,23,42,.02); }
+.zm-z2-use { font-size: 11px; line-height: 1; padding: 4px 8px; border-radius: 999px; background: rgba(15,23,42,.06); color: #64748b; white-space: nowrap; }
+.zm-z2-use-on { background: rgba(59,130,246,.14); color: #1d4ed8; font-weight: 600; }
+.zm-z2-use-none { display: inline-block; width: 0; }
+html.zm-theme-dark .zm-z2-use { background: rgba(255,255,255,.08); color: #94a3b8; }
+html.zm-theme-dark .zm-z2-use-on { background: rgba(96,165,250,.2); color: #93c5fd; }
 .zm-z2-brow.zm-z2-off .zm-z2-name { color: #94a3b8; }
 .zm-z2-brow .zm-z2-path { font-size: 11px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
 html.zm-theme-dark .zm-z2-ghead { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
