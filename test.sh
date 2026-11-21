@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.094
+# Version: 5.095
 ZM_VERSION_EOF
 set -e
 
@@ -20580,7 +20580,7 @@ do_remove_zapret2() {
 }
 
 Z2_CONF=/etc/config/zapret2
-Z2_BAK="$ZM_STATE_DIR/zapret2.conf.bak"
+Z2_DEF_URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2"
 
 _z2c_valid() {
 	local f="$1" d rc=0 q
@@ -20606,7 +20606,7 @@ _z2c_apply() {
 }
 
 _z2c_put() {
-	local src="$1" keep="$2" prev="$ZM_STATE_DIR/zapret2.prev" run=false
+	local src="$1" prev="$ZM_STATE_DIR/zapret2.prev" run=false
 	mkdir -p "$ZM_STATE_DIR"
 	_z2c_up && run=true
 	cp "$Z2_CONF" "$prev" 2>/dev/null || { echo '{"error":"не удалось сохранить резервную копию"}'; return 1; }
@@ -20617,18 +20617,15 @@ _z2c_put() {
 		echo '{"error":"Zapret2 не запустился с новым файлом — вернул предыдущую версию"}'
 		return 1
 	fi
-	[ "$keep" = keep ] && cp "$prev" "$Z2_BAK"
 	printf '{"ok":true,"running":%s}\n' "$run"
 }
 
 z2_conf_get() {
-	local c bak=false run=false
+	local c
 	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
-	[ -s "$Z2_BAK" ] && bak=true
-	_z2c_up && run=true
 	c="$(tr -d '\r' < "$Z2_CONF"; echo x)"
 	c="${c%x}"
-	printf '{"content":"%s","bak":%s,"running":%s}\n' "$(esc_ml "$c")" "$bak" "$run"
+	printf '{"content":"%s"}\n' "$(esc_ml "$c")"
 }
 
 z2_conf_set() {
@@ -20638,15 +20635,21 @@ z2_conf_set() {
 	mkdir -p "$ZM_STATE_DIR"
 	printf '%s' "$1" > "$new"
 	_z2c_valid "$new" || { rm -f "$new"; echo '{"error":"это не похоже на конфиг Zapret2: нет секции zapret2 main или не закрыты кавычки"}'; return 1; }
-	_z2c_put "$new" keep || rc=1
+	_z2c_put "$new" || rc=1
 	rm -f "$new"
 	return $rc
 }
 
 z2_conf_restore() {
-	[ -s "$Z2_BAK" ] || { echo '{"error":"нет сохранённой копии — восстанавливать нечего"}'; return 1; }
-	_z2c_valid "$Z2_BAK" || { echo '{"error":"сохранённая копия повреждена — восстанавливать нечего"}'; return 1; }
-	_z2c_put "$Z2_BAK" none
+	local tmp="$ZM_STATE_DIR/zapret2.default" rc
+	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	mkdir -p "$ZM_STATE_DIR"
+	rm -f "$tmp"
+	_zm_fetch "$Z2_DEF_URL" "$tmp" 60 || { rm -f "$tmp"; echo '{"error":"не удалось скачать стандартный конфиг с GitHub"}'; return 1; }
+	_z2c_valid "$tmp" || { rm -f "$tmp"; echo '{"error":"скачанный файл не похож на конфиг Zapret2"}'; return 1; }
+	_z2c_put "$tmp"; rc=$?
+	rm -f "$tmp"
+	return $rc
 }
 
 zapret2_action() {
@@ -58958,48 +58961,47 @@ return view.extend({
 		var bannerEl = E('div', {});
 
 function z2ConfCard(view) {
-			var busy = false, hasBak = false;
-			var card = E('div', { 'class': 'zm-card' });
-			var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false' });
+			var busy = false, btn = {};
+			var ta = E('textarea', { 'class': 'zm-config-editor', 'spellcheck': 'false', 'style': 'width:100%;min-height:460px' });
+			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' });
 			var bar = zm.editorBar(ta, {
 				saveLabel: 'Сохранить и применить',
 				text: 'Файл изменён и не сохранён',
 				onSave: function(v) { return z2Write(zm.z2ConfSet(v), 'Сохранено'); }
 			});
-			function sync() {
-				reloadBtn.disabled = busy; uploadBtn.disabled = busy; closeBtn.disabled = busy;
-				restoreBtn.disabled = busy || !hasBak;
-			}
+			function sync() { Object.keys(btn).forEach(function(k) { btn[k].disabled = busy; }); }
+			function say(t, bad) { note.textContent = t || ''; note.style.color = bad ? '#b00020' : ''; }
 			function guard(fn) {
 				if (!bar.dirty()) return fn();
-				return zm.ask('Есть несохранённые изменения. Отбросить их?').then(function(ok) { if (ok) fn(); });
+				return zm.ask('Есть несохранённые изменения. Отбросить их?').then(function(ok) { if (ok) return fn(); });
 			}
+			function fail() { busy = false; sync(); zm.toast('Роутер не ответил', 'error'); }
 			function load(silent) {
 				busy = true; sync();
 				return zm.z2ConfGet().then(function(res) {
-					busy = false;
-					if (res.error) { zm.toast(res.error, 'error'); sync(); return; }
-					hasBak = !!res.bak;
+					busy = false; sync();
+					if (res.error) { say(res.error, true); zm.toast(res.error, 'error'); return; }
 					bar.reset(res.content || '');
-					sync();
+					say('');
 					if (!silent) zm.toast('Файл перечитан с диска', 'info');
-				}).catch(function() { busy = false; sync(); zm.toast('Роутер не ответил', 'error'); });
+				}, fail);
 			}
 			function z2Write(p, msg) {
 				busy = true; sync();
 				return p.then(function(res) {
 					busy = false; sync();
-					if (res.error) { zm.toast(res.error, 'error'); return false; }
-					zm.toast(res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 сейчас остановлен — запустите его кнопкой выше', res.running ? 'info' : 'warning');
+					if (res.error) { say(res.error, true); zm.toast(res.error, 'error'); return false; }
+					var t = res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 остановлен — запустите его кнопкой выше';
+					say(t);
+					zm.toast(t, res.running ? 'info' : 'warning');
 					zm.changed({ svc: 'zapret2' });
-					hasBak = true; sync();
 					return true;
-				}).catch(function() { busy = false; sync(); zm.toast('Роутер не ответил', 'error'); return false; });
+				}, function() { fail(); return false; });
 			}
 			function restore() {
-				return zm.ask('Вернуть версию файла до последнего сохранения или загрузки и перезапустить Zapret2?').then(function(ok) {
+				return zm.ask('Скачать стандартный конфиг Zapret2 с GitHub, заменить /etc/config/zapret2 и перезапустить Zapret2?').then(function(ok) {
 					if (!ok) return;
-					return z2Write(zm.z2ConfRestore(), 'Восстановлено').then(function(done) { if (done) return load(true); });
+					return z2Write(zm.z2ConfRestore(), 'Восстановлено из GitHub').then(function(done) { if (done) return load(true); });
 				});
 			}
 			function onFile() {
@@ -59009,38 +59011,33 @@ function z2ConfCard(view) {
 				if (f.size > 262144) { zm.toast('Файл слишком большой для конфига Zapret2', 'error'); return; }
 				var rd = new FileReader();
 				rd.onload = function() {
-					var txt = String(rd.result || '');
 					zm.ask('Заменить /etc/config/zapret2 содержимым файла «' + f.name + '» и перезапустить Zapret2?').then(function(ok) {
 						if (!ok) return;
-						return z2Write(zm.z2ConfSet(txt), 'Файл загружен').then(function(done) { if (done) return load(true); });
+						return z2Write(zm.z2ConfSet(String(rd.result || '')), 'Файл загружен').then(function(done) { if (done) return load(true); });
 					});
 				};
 				rd.readAsText(f);
 			}
-			function open() {
-				openBtn.style.display = 'none'; editBox.style.display = ''; actBox.style.display = '';
-				load(true);
+			function saveToPc() {
+				var url = URL.createObjectURL(new Blob([ ta.value ], { type: 'text/plain;charset=utf-8' }));
+				var a = E('a', { 'href': url, 'download': 'zapret2.conf' });
+				document.body.appendChild(a);
+				a.click();
+				setTimeout(function() { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
 			}
-			function close() {
-				bar.reset('');
-				editBox.style.display = 'none'; actBox.style.display = 'none'; openBtn.style.display = '';
-			}
-			var reloadBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { load(false); }); } }, 'Перечитать файл');
-			var uploadBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { fileIn.click(); }); } }, 'Загрузить файл');
-			var restoreBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(restore); } }, 'Восстановить файл');
-			var closeBtn = E('button', { 'class': 'cbi-button', 'click': function() { guard(close); } }, 'Свернуть');
-			var openBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': open }, 'Открыть редактор');
-			var fileIn = E('input', { 'type': 'file', 'accept': '.conf,.txt,text/plain', 'style': 'display:none', 'change': onFile });
-			var actBox = E('div', { 'class': 'zm-actions', 'style': 'display:none' }, [ reloadBtn, uploadBtn, restoreBtn, closeBtn ]);
-			var editBox = E('div', { 'style': 'display:none' }, [ ta, bar ]);
-			card.appendChild(E('h3', {}, 'Редактировать текущую стратегию'));
-			card.appendChild(E('p', { 'class': 'zm-hint' }, 'Файл /etc/config/zapret2 целиком: стратегии, списки и параметры Zapret2. «Сохранить и применить» пишет файл и перезапускает Zapret2, если он запущен. Если с новым файлом Zapret2 не запускается, панель вернёт предыдущую версию.'));
-			card.appendChild(E('div', { 'class': 'zm-actions' }, [ openBtn ]));
-			card.appendChild(actBox);
-			card.appendChild(fileIn);
-			card.appendChild(editBox);
-			card.appendChild(E('p', { 'class': 'zm-hint' }, '«Восстановить файл» вернёт версию до последнего сохранения или загрузки.'));
-			return card;
+			var fileIn = E('input', { 'type': 'file', 'style': 'display:none', 'change': onFile });
+			btn.reload = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { return load(false); }); } }, 'Перечитать файл');
+			btn.upload = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { fileIn.click(); }); } }, 'Загрузить файл');
+			btn.save = E('button', { 'class': 'cbi-button', 'click': saveToPc }, 'Сохранить файл');
+			btn.restore = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { guard(restore); } }, 'Восстановить файл');
+			var panel = E('div', { 'class': 'zm-card', 'style': 'grid-column:1 / -1;width:100%' }, [
+				E('h3', {}, 'Редактор конфига Zapret2'),
+				E('p', { 'class': 'zm-hint' }, 'Файл /etc/config/zapret2 целиком: стратегии, списки и параметры Zapret2. «Сохранить и применить» записывает файл и перезапускает Zapret2, если он запущен; если с новым файлом Zapret2 не запускается, вернётся предыдущая версия. «Восстановить файл» скачивает стандартный конфиг с GitHub и применяет его.'),
+				E('div', { 'class': 'zm-actions' }, [ btn.reload, btn.upload, btn.save, btn.restore ]),
+				ta, bar, note, fileIn
+			]);
+			load(true);
+			return panel;
 		}
 
 		function renderCards(d) {
@@ -59099,7 +59096,7 @@ function z2ConfCard(view) {
 						? zm.badge(d.zapret2_running === true, 'запущен', 'остановлен')
 						: zm.badge(false, '', 'не установлен')
 				]),
-				E('div', { 'class': 'zm-row' }, [
+				E('div', { 'class': 'zm-row zm-z2-ver' }, [
 					E('span', { 'class': 'zm-label' }, 'Версия'),
 					E('span', {}, [
 						String(d.zapret2_ver || '—'),
@@ -59109,6 +59106,7 @@ function z2ConfCard(view) {
 				E('p', { 'class': 'zm-hint' }, 'Только для 64-битных ARM-роутеров (aarch64). Несовместим с основным Zapret.'),
 				E('div', { 'class': 'zm-actions' }, z2Actions)
 			]);
+			if (d.zapret2 !== 'installed') z2Card.removeChild(z2Card.querySelector('.zm-z2-ver'));
 			if (d.zapret2 === 'installed') {
 				var vsOn = d.vpnskip === true;
 				if (typeof d.zapret2_boot === 'boolean') {
