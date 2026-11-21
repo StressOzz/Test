@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.090
+# Version: 5.100
 ZM_VERSION_EOF
 set -e
 
@@ -1116,6 +1116,7 @@ z2_conf_set() { _zmL zapret && z2_conf_set "$@"; }
 z2_conf_restore() { _zmL zapret && z2_conf_restore "$@"; }
 z2_strat_get() { _zmL zapret && z2_strat_get "$@"; }
 z2_blob_get() { _zmL zapret && z2_blob_get "$@"; }
+z2_blob_check() { _zmL zapret && z2_blob_check "$@"; }
 z2_strat_set() { _zmL zapret && z2_strat_set "$@"; }
 z2_blob_set() { _zmL zapret && z2_blob_set "$@"; }
 do_str_refresh() { _zmL zapret && do_str_refresh "$@"; }
@@ -9498,6 +9499,7 @@ case "$cmd" in
 	z2_conf_restore)                                z2_conf_restore ;;
 	z2_strat_get)                                    z2_strat_get ;;
 	z2_blob_get)                                    z2_blob_get ;;
+	z2_blob_check)                                    z2_blob_check ;;
 	z2_strat_set)                                    z2_strat_set "$1" ;;
 	z2_blob_set)                                    z2_blob_set "$1" ;;
 	strategy_list_v)            strategy_list_v ;;
@@ -20557,6 +20559,8 @@ _do_install_zapret2_core() {
 	_nochange_fetch /opt/zapret2/ipset/zapret_hosts_discord.txt "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt" \
 		|| echo "!! Не удалось загрузить zapret_hosts_discord.txt"
 
+	_z2_blob_install
+
 	echo "==> Запускаем Zapret2"
 	if [ "$boot" = 0 ]; then /etc/init.d/zapret2 disable >/dev/null 2>&1; echo "   · Автозапуск оставлен выключенным, как было"
 	else /etc/init.d/zapret2 enable >/dev/null 2>&1; fi
@@ -20703,11 +20707,13 @@ z2_strat_set() {
 	return $rc
 }
 
-z2_blob_get() {
-	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+Z2_FAKE_DIR=/opt/zapret2/files/fake
+Z2_FAKE_FLOWSEAL="https://github.com/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin"
+
+_z2_blob_scan() {
 	tr -d '\r' < "$Z2_CONF" | awk -F"'" '
 		function endblk() {
-			if (kind == "blob") { n++; nm[n] = name; ne[n] = (en ? "true" : "false"); np[n] = pth }
+			if (kind == "blob") { n++; nm[n] = name; np[n] = pth; ne[n] = en }
 			if (kind == "strategy") { s++; sn[s] = name; se[s] = en }
 		}
 		/^config / {
@@ -20725,17 +20731,93 @@ z2_blob_get() {
 		}
 		END {
 			endblk()
-			printf "{\"items\":["
 			for (j = 1; j <= n; j++) {
-				u = ""; on = 0
-				for (i = 1; i <= s; i++) if ((sn[i] SUBSEP nm[j]) in ref) {
-					u = u (u == "" ? "" : ",") "\"" sn[i] "\""
-					if (se[i]) on = 1
-				}
-				printf "%s{\"name\":\"%s\",\"on\":%s,\"path\":\"%s\",\"used\":[%s],\"usedOn\":%s}", (j > 1 ? "," : ""), nm[j], ne[j], np[j], u, (on ? "true" : "false")
+				u = 0; on = 0
+				for (i = 1; i <= s; i++) if ((sn[i] SUBSEP nm[j]) in ref) { u = 1; if (se[i]) on = 1 }
+				printf "%s %s %d %d %d\n", nm[j], np[j], ne[j], u, on
 			}
-			printf "]}\n"
 		}'
+}
+
+_z2_blob_fetch() {
+	local f="$1" base dst
+	base="${f##*/}"
+	dst="$Z2_FAKE_DIR/$base"
+	mkdir -p "$Z2_FAKE_DIR"
+	rm -f "$dst.zmdl"
+	_zm_fetch "$Z2_FAKE_FLOWSEAL/$base" "$dst.zmdl" 30 || { rm -f "$dst.zmdl"; return 1; }
+	[ -s "$dst.zmdl" ] || { rm -f "$dst.zmdl"; return 1; }
+	mv -f "$dst.zmdl" "$dst" && chmod a+r "$dst" 2>/dev/null
+	return 0
+}
+
+z2_blob_get() {
+	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	local name pth en used onu n=0 sep=""
+	printf '{"items":['
+	while read -r name pth en used onu; do
+		[ -n "$name" ] || continue
+		n=$((n + 1))
+		printf '%s{"name":"%s","on":%s,"path":"%s","used":%s,"usedOn":%s,"have":%s}' "$sep" "$name" \
+			"$([ "$en" = 1 ] && echo true || echo false)" "$pth" \
+			"$([ "$used" = 1 ] && echo true || echo false)" \
+			"$([ "$onu" = 1 ] && echo true || echo false)" \
+			"$([ -s "$Z2_FAKE_DIR/${pth##*/}" ] && echo true || echo false)"
+		sep=","
+	done <<-EOF
+	$(_z2_blob_scan)
+	EOF
+	printf ']}\n'
+}
+
+z2_blob_check() {
+	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	mkdir -p "$Z2_FAKE_DIR"
+	local name pth en used onu st sep="" got=0 miss=0 off=0 n=0 missn=""
+	printf '{"items":['
+	while read -r name pth en used onu; do
+		[ "$used" = 1 ] || continue
+		n=$((n + 1))
+		if [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then st=ok; else
+			if _z2_blob_fetch "$pth"; then st=get; got=$((got + 1))
+			else st=miss; miss=$((miss + 1)); missn="$missn$([ -n "$missn" ] && echo ',')$name"; fi
+		fi
+		[ "$en" != 1 ] && off=$((off + 1))
+		printf '%s{"name":"%s","file":"%s","state":"%s","on":%s}' "$sep" "$name" "${pth##*/}" "$st" \
+			"$([ "$en" = 1 ] && echo true || echo false)"
+		sep=","
+	done <<-EOF
+	$(_z2_blob_scan)
+	EOF
+	printf '],"used":%d,"downloaded":%d,"missing":%d,"off":%d,"missingNames":"%s"}\n' "$n" "$got" "$miss" "$off" "$missn"
+}
+
+_z2_blob_install() {
+	[ -f "$Z2_CONF" ] || return 0
+	mkdir -p "$Z2_FAKE_DIR" "$JOBS_DIR"
+	local tmp="$JOBS_DIR/z2.blobs.$$" name pth en used onu st n=0 got=0 miss=0
+	_z2_blob_scan > "$tmp" 2>/dev/null
+	[ -s "$tmp" ] || { rm -f "$tmp"; return 0; }
+	echo "==> Проверяем блобы Zapret2 (файлы $Z2_FAKE_DIR)"
+	while read -r name pth en used onu; do
+		[ "$used" = 1 ] || continue
+		n=$((n + 1))
+		if [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then
+			echo "   ✓ ${pth##*/}"
+		elif _z2_blob_fetch "$pth"; then
+			got=$((got + 1))
+			echo "   ↓ ${pth##*/} — скачан из Flowseal"
+		else
+			miss=$((miss + 1))
+			echo "   !! ${pth##*/} — нет ни на роутере, ни в Flowseal: стратегия с ним может не работать"
+		fi
+		[ "$en" = 1 ] || echo "   · $name используется в стратегии, но выключен — включите его в карточке «Блобы»"
+	done < "$tmp"
+	rm -f "$tmp"
+	[ "$n" = 0 ] && echo "   · стратегии не используют блобы — проверять нечего"
+	[ "$got" = 0 ] || echo "   ✓ Докачано файлов: $got"
+	[ "$miss" = 0 ] || echo "   !! Не найдено файлов: $miss"
+	return 0
 }
 
 z2_blob_set() {
@@ -43394,6 +43476,7 @@ list_methods() {
 	json_add_object "z2_conf_restore";               json_close_object
 	json_add_object "z2_strat_get";                   json_close_object
 	json_add_object "z2_blob_get";                   json_close_object
+	json_add_object "z2_blob_check";                 json_close_object
 	json_add_object "z2_strat_set";                   json_add_string "content" "string"; json_close_object
 	json_add_object "z2_blob_set";                   json_add_string "content" "string"; json_close_object
 	json_add_object "tg_status";                   json_close_object
@@ -43595,6 +43678,7 @@ call_method() {
 		z2_conf_restore)               "$BACKEND" z2_conf_restore ;;
 		z2_strat_get)                  "$BACKEND" z2_strat_get ;;
 		z2_blob_get)                  "$BACKEND" z2_blob_get ;;
+		z2_blob_check)                  "$BACKEND" z2_blob_check ;;
 		z2_strat_set)                  json_get_var content content; printf '%s' "$content" | "$BACKEND" z2_strat_set @stdin ;;
 		z2_blob_set)                  json_get_var content content; printf '%s' "$content" | "$BACKEND" z2_blob_set @stdin ;;
 		tg_status)                     "$BACKEND" tg_status ;;
@@ -43863,6 +43947,7 @@ cat > '/usr/share/rpcd/acl.d/luci-app-zapret-manager.json' << 'ZM_INSTALLER_EOF'
 					"z2_conf_restore",
 					"z2_strat_set",
 					"z2_blob_set",
+					"z2_blob_check",
 					"zapret_list_set",
 					"zapret_list_restore",
 					"tg_action",
@@ -44197,6 +44282,7 @@ var callZ2ConfSet = zmDeclare({ object: 'zapret-manager', method: 'z2_conf_set',
 var callZ2ConfRestore = zmDeclare({ object: 'zapret-manager', method: 'z2_conf_restore', expect: {} });
 var callZ2StratGet = zmDeclare({ object: 'zapret-manager', method: 'z2_strat_get', expect: {} });
 var callZ2BlobGet = zmDeclare({ object: 'zapret-manager', method: 'z2_blob_get', expect: {} });
+var callZ2BlobCheck = zmDeclare({ object: 'zapret-manager', method: 'z2_blob_check', expect: {} });
 var callZ2StratSet = zmDeclare({ object: 'zapret-manager', method: 'z2_strat_set', params: ['content'], expect: {} });
 var callZ2BlobSet = zmDeclare({ object: 'zapret-manager', method: 'z2_blob_set', params: ['content'], expect: {} });
 var callTgStatus = zmDeclare({ object: 'zapret-manager', method: 'tg_status', expect: {} });
@@ -47121,6 +47207,7 @@ return baseclass.extend({
 	z2ConfRestore: callZ2ConfRestore,
 	z2StratGet: callZ2StratGet,
 	z2BlobGet: callZ2BlobGet,
+	z2BlobCheck: callZ2BlobCheck,
 	z2StratSet: bigText(callZ2StratSet),
 	z2BlobSet: bigText(callZ2BlobSet),
 	tgStatus: callTgStatus,
@@ -59259,7 +59346,7 @@ function z2StratCard(view) {
 		}
 
 		function z2BlobCard(view) {
-			var items = [], orig = [], busy = false, query = '', onlyOn = false, open = {};
+			var items = [], orig = [], busy = false, query = '', onlyOn = false, open = {}, fileSt = {};
 			var GROUPS = [ { k: 'tls', t: 'TLS' }, { k: 'quic', t: 'QUIC' }, { k: 'other', t: 'Прочее' } ];
 			var count = E('span', { 'class': 'zm-z2-count' });
 			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:8px 0 0' });
@@ -59267,6 +59354,7 @@ function z2StratCard(view) {
 			var search = E('input', { 'type': 'search', 'class': 'zm-z2-search', 'placeholder': 'Поиск по имени блоба', 'input': function() { query = search.value.trim().toLowerCase(); draw(); } });
 			var onlyCb = E('input', { 'type': 'checkbox', 'class': 'zm-z2-cb', 'change': function() { onlyOn = onlyCb.checked; draw(); } });
 			var saveB = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function() { save(); } }, 'Сохранить и применить');
+			var checkB = E('button', { 'class': 'cbi-button', 'click': function() { check(); } }, 'Проверить и докачать');
 			var resetB = E('button', { 'class': 'cbi-button', 'click': function() { guard(function() { return load(false); }); } }, 'Сбросить к файлу');
 			function isDirty() { return JSON.stringify(items) !== JSON.stringify(orig); }
 			function say(t, bad) { note.textContent = t || ''; note.style.color = bad ? '#b00020' : ''; }
@@ -59278,6 +59366,7 @@ function z2StratCard(view) {
 				resetB.disabled = busy;
 				search.disabled = busy;
 				onlyCb.disabled = busy;
+				checkB.disabled = busy;
 				count.textContent = 'Включено ' + onCount() + ' из ' + items.length;
 			}
 			function setGroup(list, on) { list.forEach(function(it) { it.on = on; }); draw(); }
@@ -59312,10 +59401,14 @@ function z2StratCard(view) {
 						var use = it.used.length
 							? E('span', { 'class': 'zm-z2-use' + (it.usedOn ? ' zm-z2-use-on' : ''), 'title': 'В стратегиях: ' + it.used.join(', ') }, it.usedOn ? 'используется' : 'в выключенных')
 							: E('span', { 'class': 'zm-z2-use-none' });
+						var fsv = fileSt[it.name], pills = [ use ];
+						if (it.used.length && fsv === 'miss') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-miss', 'title': 'Файла нет на роутере и в Flowseal' }, 'нет файла'));
+						if (fsv === 'get') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-get', 'title': 'Скачан из Flowseal' }, 'скачан'));
+						var useBox = E('span', { 'class': 'zm-z2-use-box' }, pills);
 						list.appendChild(E('div', { 'class': 'zm-z2-brow' + (it.on ? '' : ' zm-z2-off'), 'title': it.path || it.name }, [
 							cb,
 							E('span', { 'class': 'zm-z2-name' }, it.name),
-							use,
+							useBox,
 							E('span', { 'class': 'zm-z2-path' }, it.path || '')
 						]));
 					});
@@ -59325,12 +59418,27 @@ function z2StratCard(view) {
 				sync();
 			}
 			function fail() { busy = false; draw(); zm.toast('Роутер не ответил', 'error'); }
+			function check() {
+				busy = true; draw();
+				return zm.z2BlobCheck().then(function(res) {
+					busy = false;
+					if (res.error) { say(res.error, true); draw(); zm.toast(res.error, 'error'); return; }
+					(res.items || []).forEach(function(x) { fileSt[x.name] = x.state; });
+					var msg = 'Проверено блобов: ' + res.used + ' · уже есть ' + (res.used - res.downloaded - res.missing) + ' · скачано из Flowseal ' + res.downloaded + ' · не найдено ' + res.missing;
+					if (res.missing) say(msg + '. Нет ни на роутере, ни в Flowseal: ' + res.missingNames.split(',').join(', ') + ' — стратегии с ними могут не работать.', true);
+					else say(msg);
+					zm.toast(res.missing ? 'Не найдено файлов: ' + res.missing : (res.downloaded ? 'Докачано файлов: ' + res.downloaded : 'Все файлы блобов на месте'), res.missing ? 'warning' : 'info');
+					draw();
+				}, fail);
+			}
 			function load(silent) {
 				busy = true; draw();
 				return zm.z2BlobGet().then(function(res) {
 					busy = false;
 					if (res.error) { say(res.error, true); draw(); zm.toast(res.error, 'error'); return; }
-					items = (res.items || []).map(function(x) { return { name: x.name, on: !!x.on, path: x.path || '', used: x.used || [], usedOn: !!x.usedOn }; });
+					items = (res.items || []).map(function(x) { return { name: x.name, on: !!x.on, path: x.path || '', used: x.used || [], usedOn: !!x.usedOn, have: !!x.have }; });
+					fileSt = {};
+					items.forEach(function(x) { if (x.used.length) fileSt[x.name] = x.have ? 'ok' : 'miss'; });
 					orig = JSON.parse(JSON.stringify(items));
 					if (!silent) say('');
 					draw();
@@ -59358,10 +59466,10 @@ function z2StratCard(view) {
 			}
 			var node = E('div', { 'class': 'zm-card zm-z2-editor zm-z2-blobs' }, [
 				E('div', { 'class': 'zm-z2-head' }, [ E('h3', {}, 'Блобы'), count ]),
-				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий. Метка «используется» — блоб указан во включённой стратегии; «в выключенных» — только в выключенных. Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
+				E('p', { 'class': 'zm-hint' }, 'Блобы — файлы подмены пакетов для стратегий. Метка «используется» — блоб указан во включённой стратегии; «в выключенных» — только в выключенных. «Проверить и докачать» сверяет файлы на роутере и докачивает недостающие из Flowseal; если их нет и там — будет предупреждение. Флажок меняет параметр enabled в /etc/config/zapret2. Группы раскрываются нажатием на заголовок; «Все» и «Нет» действуют на видимые блобы группы.'),
 				E('div', { 'class': 'zm-z2-tools' }, [ search, E('label', { 'class': 'zm-z2-toggle' }, [ onlyCb, E('span', {}, 'Только включённые') ]) ]),
 				box,
-				E('div', { 'class': 'zm-actions' }, [ saveB, resetB ]),
+				E('div', { 'class': 'zm-actions' }, [ saveB, checkB, resetB ]),
 				note
 			]);
 			view.z2BlobLoad = function() { if (!isDirty()) load(true); };
@@ -60127,6 +60235,12 @@ html.zm-theme-dark .zm-z2-ghead { border-color: rgba(255,255,255,.08); backgroun
 html.zm-theme-dark .zm-z2-ghead:hover { background: rgba(255,255,255,.06); }
 html.zm-theme-dark .zm-z2-brow { border-color: rgba(255,255,255,.07); background: rgba(255,255,255,.02); }
 @media (max-width: 720px) { .zm-z2-brow .zm-z2-path { display: none; } }
+.zm-z2-use-box { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.zm-z2-file { font-size: 11px; line-height: 1; padding: 4px 8px; border-radius: 999px; white-space: nowrap; font-weight: 600; }
+.zm-z2-file-miss { background: rgba(220,38,38,.12); color: #b91c1c; }
+.zm-z2-file-get { background: rgba(22,163,74,.14); color: #15803d; }
+html.zm-theme-dark .zm-z2-file-miss { background: rgba(248,113,113,.16); color: #fca5a5; }
+html.zm-theme-dark .zm-z2-file-get { background: rgba(74,222,128,.16); color: #86efac; }
 .zm-z2-ta { display: block; width: 100%; box-sizing: border-box; min-height: 440px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; resize: vertical; }
 .zm-z2-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .zm-z2-head h3 { margin: 0 0 12px 0; }
