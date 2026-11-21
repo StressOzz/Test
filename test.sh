@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.105
+# Version: 5.091
 ZM_VERSION_EOF
 set -e
 
@@ -20836,37 +20836,77 @@ z2_blob_get() {
 	printf ']}\n'
 }
 
-_z2_blob_check_run() {
-	local out="$JOBS_DIR/z2_blobs.json" tmp="$JOBS_DIR/z2_blobs.json.tmp" scan="$JOBS_DIR/z2_blobs.scan"
-	local name pth en used onu lst st json="" sep="" got=0 miss=0 off=0 n=0 missn=""
-	mkdir -p "$Z2_FAKE_DIR"
+_z2_blob_short() {
+	echo "$1" | awk -F, '{ if (NF > 3) print $1", "$2", "$3" и ещё "(NF - 3); else print $0 }'
+}
+
+_z2_blob_verify() {
+	local jout="$1" scan="$JOBS_DIR/z2_blobs.$$.scan" name pth en used onu lst st undef u
+	local need=0 present=0 got=0 miss=0 off=0 nop=0 unk=0 json="" sep="" missn="" offn="" unkn=""
+	mkdir -p "$Z2_FAKE_DIR" "$JOBS_DIR"
 	_z2_blob_scan > "$scan" 2>/dev/null
+	echo "==> Проверка блобов Zapret2"
 	while read -r name pth en used onu lst; do
-		[ "$used" = 1 ] && [ "$pth" != - ] || continue
-		n=$((n + 1)); Z2_BLOB_SRC=""
-		if [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then
-			st=ok; echo "   ✓ ${pth##*/}"
+		[ "$used" = 1 ] || continue
+		need=$((need + 1)); Z2_BLOB_SRC=""; st=ok
+		if [ "$pth" = - ]; then
+			st=nopath; nop=$((nop + 1))
+			echo "   !! $name — в конфиге не указан файл"
+		elif [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then
+			present=$((present + 1)); echo "   ✓ ${pth##*/}"
 		elif _z2_blob_fetch "$pth"; then
-			st=get; got=$((got + 1)); echo "   ↓ ${pth##*/} — скачан из $Z2_BLOB_SRC"
+			st=get; got=$((got + 1)); present=$((present + 1))
+			echo "   ↓ ${pth##*/} — скачан из $Z2_BLOB_SRC"
 		else
 			st=miss; miss=$((miss + 1)); missn="$missn$([ -n "$missn" ] && echo ',')$name"
-			echo "   !! ${pth##*/} — не найден ни в одном источнике (Flowseal, bol-van, Zapret Manager): стратегия с ним может не работать"
+			echo "   !! ${pth##*/} — не найден ни в одном источнике"
 		fi
-		[ "$en" = 1 ] || { off=$((off + 1)); echo "   · $name используется в стратегии, но выключен — включите его в карточке «Блобы»"; }
+		if [ "$en" != 1 ]; then
+			off=$((off + 1)); offn="$offn$([ -n "$offn" ] && echo ',')$name"
+			echo "   ! $name выключен, но нужен стратегиям: $(_z2_blob_short "$lst") — включите его в карточке «Блобы»"
+		fi
 		json="$json$sep{\"name\":\"$name\",\"file\":\"${pth##*/}\",\"state\":\"$st\",\"src\":\"$Z2_BLOB_SRC\",\"on\":$([ "$en" = 1 ] && echo true || echo false)}"
 		sep=","
 	done < "$scan"
 	rm -f "$scan"
-	printf '{"items":[%s],"used":%d,"downloaded":%d,"missing":%d,"off":%d,"missingNames":"%s"}\n' "$json" "$n" "$got" "$miss" "$off" "$missn" > "$tmp" && mv -f "$tmp" "$out"
-	echo "==> Готово: используется $n, докачано $got, не найдено $miss"
+	undef="$(tr -d '\r' < "$Z2_CONF" 2>/dev/null | awk -F"'" '
+		/^config blob / { d[$2] = 1; next }
+		/^config strategy / { s = 1; next }
+		/^config / { s = 0; next }
+		s {
+			line = $0
+			while (match(line, /blob_[A-Za-z0-9_]+/)) {
+				t = substr(line, RSTART, RLENGTH)
+				if (!(t in d) && !(t in seen)) { seen[t] = 1; out = out (out == "" ? "" : ",") t }
+				line = substr(line, RSTART + RLENGTH)
+			}
+		}
+		END { print out }')"
+	for u in $(echo "$undef" | tr ',' ' '); do
+		unk=$((unk + 1)); unkn="$unkn$([ -n "$unkn" ] && echo ',')$u"
+		echo "   ! $u используется в стратегии, но такого блоба в конфиге нет"
+	done
+	if [ "$need" = 0 ]; then
+		echo "==> Стратегии блобы не используют — проверять нечего"
+	elif [ $((miss + off + unk + nop)) = 0 ]; then
+		echo "==> Всё совпадает: блобов нужно $need, все на месте и включены"
+	else
+		echo "==> Есть проблемы: не найдено файлов $miss, выключено $off, неизвестных блобов $unk, без пути к файлу $nop (нужно всего $need)"
+	fi
+	if [ -n "$jout" ]; then
+		printf '{"items":[%s],"used":%d,"present":%d,"downloaded":%d,"missing":%d,"off":%d,"unknown":%d,"nopath":%d,"missingNames":"%s","offNames":"%s","unknownNames":"%s"}\n' \
+			"$json" "$need" "$present" "$got" "$miss" "$off" "$unk" "$nop" "$missn" "$offn" "$unkn" > "$jout.tmp" && mv -f "$jout.tmp" "$jout"
+	fi
+	return 0
 }
+
 z2_blob_check() {
 	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
 	mkdir -p "$JOBS_DIR"
 	if _job_running z2_blobs; then printf '{"started":true,"already_running":true}\n'; return 0; fi
 	rm -f "$JOBS_DIR/z2_blobs.json"
 	: > "$JOBS_DIR/z2_blobs.log"
-	( _z2_blob_check_run >>"$JOBS_DIR/z2_blobs.log" 2>&1; echo "__DONE__ $?" >>"$JOBS_DIR/z2_blobs.log" ) </dev/null >/dev/null 2>&1 &
+	( _z2_blob_verify "$JOBS_DIR/z2_blobs.json" >>"$JOBS_DIR/z2_blobs.log" 2>&1; echo "__DONE__ $?" >>"$JOBS_DIR/z2_blobs.log" ) </dev/null >/dev/null 2>&1 &
 	echo $! > "$JOBS_DIR/z2_blobs.pid"
 	printf '{"started":true}\n'
 }
@@ -20876,29 +20916,7 @@ z2_blob_check_result() {
 
 _z2_blob_install() {
 	[ -f "$Z2_CONF" ] || return 0
-	mkdir -p "$Z2_FAKE_DIR" "$JOBS_DIR"
-	local tmp="$JOBS_DIR/z2.blobs.$$" name pth en used onu lst st n=0 got=0 miss=0
-	_z2_blob_scan > "$tmp" 2>/dev/null
-	[ -s "$tmp" ] || { rm -f "$tmp"; return 0; }
-	echo "==> Проверяем блобы Zapret2 (файлы $Z2_FAKE_DIR)"
-	while read -r name pth en used onu lst; do
-		[ "$used" = 1 ] && [ "$pth" != - ] || continue
-		n=$((n + 1))
-		if [ -s "$Z2_FAKE_DIR/${pth##*/}" ]; then
-			echo "   ✓ ${pth##*/}"
-		elif _z2_blob_fetch "$pth"; then
-			got=$((got + 1))
-			echo "   ↓ ${pth##*/} — скачан из $Z2_BLOB_SRC"
-		else
-			miss=$((miss + 1))
-			echo "   !! ${pth##*/} — не найден ни в одном источнике (Flowseal, bol-van, Zapret Manager): стратегия с ним может не работать"
-		fi
-		[ "$en" = 1 ] || echo "   · $name используется в стратегии, но выключен — включите его в карточке «Блобы»"
-	done < "$tmp"
-	rm -f "$tmp"
-	[ "$n" = 0 ] && echo "   · стратегии не используют блобы — проверять нечего"
-	[ "$got" = 0 ] || echo "   ✓ Докачано файлов: $got"
-	[ "$miss" = 0 ] || echo "   !! Не найдено файлов: $miss"
+	_z2_blob_verify ""
 	return 0
 }
 
@@ -59578,6 +59596,7 @@ function z2StratCard(view) {
 						var fsv = fileSt[it.name], pills = [ use ];
 						if (it.used.length && fsv === 'miss') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-miss', 'title': 'Файла нет на роутере и ни в одном источнике' }, 'нет файла'));
 						if (fsv === 'get') pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-get', 'title': 'Скачан из ' + (fileSrc[it.name] || 'Flowseal') }, 'скачан'));
+						if (it.used.length && !it.on) pills.push(E('span', { 'class': 'zm-z2-file zm-z2-file-off', 'title': 'Блоб выключен, а его используют стратегии: ' + it.used.join(', ') }, 'выключен, нужен'));
 						var useBox = E('span', { 'class': 'zm-z2-use-box' }, pills);
 						list.appendChild(E('div', { 'class': 'zm-z2-brow' + (it.on ? '' : ' zm-z2-off'), 'title': it.path || it.name }, [
 							cb,
@@ -59596,10 +59615,22 @@ function z2StratCard(view) {
 				busy = false;
 				if (res.error) { say(res.error, true); draw(); zm.toast(res.error, 'error'); return; }
 				(res.items || []).forEach(function(x) { fileSt[x.name] = x.state; fileSrc[x.name] = x.src || ''; });
-				var msg = 'Проверено блобов: ' + res.used + ' · уже есть ' + (res.used - res.downloaded - res.missing) + ' · скачано из Flowseal ' + res.downloaded + ' · не найдено ' + res.missing;
-				if (res.missing) say(msg + '. Не найден ни в одном источнике: ' + res.missingNames.split(',').join(', ') + ' — стратегии с ними могут не работать.', true);
-				else say(msg);
-				zm.toast(res.missing ? 'Не найдено файлов: ' + res.missing : (res.downloaded ? 'Докачано файлов: ' + res.downloaded : 'Все файлы блобов на месте'), res.missing ? 'warning' : 'info');
+				var bad = (res.missing || 0) + (res.off || 0) + (res.unknown || 0) + (res.nopath || 0);
+				if (!res.used) {
+					say('В стратегиях блобы не используются — проверять нечего.');
+					zm.toast('Проверять нечего', 'info');
+				} else if (!bad) {
+					say('Всё совпадает: блобов нужно ' + res.used + ', все на месте и включены' + (res.downloaded ? ' (докачано ' + res.downloaded + ')' : '') + '.');
+					zm.toast('Всё совпадает', 'info');
+				} else {
+					var parts = [];
+					if (res.missing) parts.push('не найдено файлов: ' + res.missingNames.split(',').join(', '));
+					if (res.off) parts.push('выключены, но нужны стратегиям: ' + res.offNames.split(',').join(', '));
+					if (res.unknown) parts.push('нет в списке блобов: ' + res.unknownNames.split(',').join(', '));
+					if (res.nopath) parts.push('без пути к файлу: ' + res.nopath);
+					say('Есть проблемы — ' + parts.join('; ') + '.', true);
+					zm.toast('Проверка: есть проблемы (' + bad + ')', 'warning');
+				}
 				draw();
 			}
 			function poll(n) {
@@ -59634,7 +59665,8 @@ function z2StratCard(view) {
 					items.forEach(function(x) { if (x.used.length) fileSt[x.name] = x.have ? 'ok' : 'miss'; });
 					orig = JSON.parse(JSON.stringify(items));
 					var missN = items.filter(function(x) { return x.used.length && !x.have; }).length;
-					sumLine.textContent = 'Загружено из /etc/config/zapret2: блобов ' + items.length + ', используются стратегиями ' + items.filter(function(x) { return x.used.length; }).length + ', нет файла ' + missN + '.';
+					var offN = items.filter(function(x) { return x.used.length && !x.on; }).length;
+					sumLine.textContent = 'Загружено из /etc/config/zapret2: блобов ' + items.length + ', используются стратегиями ' + items.filter(function(x) { return x.used.length; }).length + ', нет файла ' + missN + ', выключены, но нужны, ' + offN + '.';
 					if (!silent) say('');
 					draw();
 					if (!silent) zm.toast('Блобы перечитаны с диска', 'info');
@@ -60463,6 +60495,8 @@ html.zm-theme-dark .zm-z2-edit { background: rgba(96,165,250,.06); border-color:
 html.zm-theme-dark .zm-z2-blockta { background: #0f172a; color: #e2e8f0; border-color: rgba(255,255,255,.12); }
 html.zm-theme-dark .zm-z2-out { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); }
 html.zm-theme-dark .zm-z2-edit-state { color: #94a3b8; }
+.zm-z2-file-off { background: rgba(245,158,11,.18); color: #b45309; }
+html.zm-theme-dark .zm-z2-file-off { background: rgba(251,191,36,.16); color: #fcd34d; }
 .zm-z2-ta { display: block; width: 100%; box-sizing: border-box; min-height: 440px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; resize: vertical; }
 .zm-z2-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .zm-z2-head h3 { margin: 0 0 12px 0; }
