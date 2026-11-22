@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.147
+# Version: 5.100
 ZM_VERSION_EOF
 set -e
 
@@ -643,8 +643,9 @@ else
 	RAZ="apk"
 fi
 
+_ZM_CTL="$(printf '[\001-\037]')"
 esc() {
-	case "$1" in *[!A-Za-z0-9\ ._:/@+=,%-]*) ;; *) printf '%s' "$1"; return 0 ;; esac
+	case "$1" in *[\"\\]*|*$_ZM_CTL*) ;; *) printf '%s' "$1"; return 0 ;; esac
 	printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037' | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g' | tr '\n' ' '
 }
 
@@ -1656,6 +1657,10 @@ ZM_JESC_AWK='function jesc(s,    o, i, c, n) {
 
 _zm_zone_sec() {
 	local z
+	case "$1" in ''|*[!A-Za-z0-9_-]*) ;; *)
+		uci -q -X show firewall | awk -v n="'$1'" '/^firewall\.[^.=]*=zone$/ { s = substr($0, 10); sub(/=zone$/, "", s); z[s] = 1; next } /^firewall\.[^.=]*\.name=/ { p = index($0, ".name="); s = substr($0, 10, p - 10); if ((s in z) && substr($0, p + 6) == n) { print s; f = 1; exit } } END { exit !f }'
+		return ;;
+	esac
 	for z in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=zone\$/\1/p"); do
 		[ "$(uci -q get "firewall.$z.name")" = "$1" ] && { echo "$z"; return 0; }
 	done
@@ -3339,7 +3344,7 @@ HOSTS_AUTO="$ZM_STATE_DIR/hosts.auto"
 HOSTS_BASE="$ZM_STATE_DIR/hosts.base.gz"
 HOSTS_ON="$ZM_STATE_DIR/hosts.on"
 HOSTS_AUTO_TAG="# zm-hosts-auto"
-_hosts_auto_get() { [ -s "$HOSTS_AUTO" ] && sed -n "s/^$1=//p" "$HOSTS_AUTO" | head -n 1; }
+_hosts_auto_get() { [ -s "$HOSTS_AUTO" ] && sed -n "/^$1=/{s/^$1=//p;q}" "$HOSTS_AUTO"; }
 hosts_status() {
 	local blocks="$HOSTS_BLOCKS" b
 	local geohide
@@ -4073,7 +4078,7 @@ _zs2_opt_check() {
 	return 0
 }
 ZS2_FAKES="stun.bin stun2.bin quic_initial_4pda_to.bin quic_initial_tencent_com.bin tls_clienthello_sochi_park.bin quic_initial_www_google_com.bin quic_initial_steamcommunity_com.bin quic_initial_5ka_ru.bin quic_initial_rutube_ru.bin"
-_zs2_kv() { sed -n "s/^$2=//p" "$1/sel" 2>/dev/null | head -n1; }
+_zs2_kv() { sed -n "/^$2=/{s/^$2=//p;q}" "$1/sel" 2>/dev/null; :; }
 _zs2_kset() {
 	{ grep -v "^$2=" "$1/sel" 2>/dev/null; [ -z "$3" ] || printf '%s=%s\n' "$2" "$3"; } > "$1/sel.t" && mv -f "$1/sel.t" "$1/sel"
 }
@@ -6978,7 +6983,7 @@ _st_ext_zoneless() {
 	z="$(_zm_zone_of_net "$ST_WIF1")"
 	[ -z "$z" ] || [ "$z" = "$ST_WARP_ZONE" ]
 }
-_st_zone_sec() { local z; for z in $(uci -q -X show firewall | sed -n "s/^firewall\.\([^.=]*\)=zone\$/\1/p"); do [ "$(uci -q get "firewall.$z.name")" = "$1" ] && { echo "$z"; return 0; }; done; return 1; }
+_st_zone_sec() { _zm_zone_sec "$@"; }
 
 _zm_fwd_fix() {
 	local lz
@@ -8759,7 +8764,7 @@ MON_TTYD_OWN="$ZM_STATE_DIR/ttyd.htop"
 WATCH_OFF="$ZM_STATE_DIR/watch.off"
 WATCH_EVERY="$ZM_STATE_DIR/watch.every"
 
-_watch_kv() { sed -n "s/^$1=//p" "$WATCH_EVERY" 2>/dev/null | head -n1; }
+_watch_kv() { sed -n "/^$1=/{s/^$1=//p;q}" "$WATCH_EVERY" 2>/dev/null; :; }
 _watch_every() {
 	local v
 	v="$(_watch_kv every)"
@@ -12300,7 +12305,7 @@ _bk_lock() {
 
 _bk_unlock() { rmdir "$BK_RUN.lock" 2>/dev/null; return 0; }
 
-_bk_meta() { sed -n "s/^$2=//p" "$BK_DIR/$1.meta" 2>/dev/null | head -n 1; }
+_bk_meta() { sed -n "/^$2=/{s/^$2=//p;q}" "$BK_DIR/$1.meta" 2>/dev/null; :; }
 
 _bk_ids() { ls "$BK_DIR" 2>/dev/null | sed -n 's/^\([0-9]\{8\}-[0-9]\{6\}[0-9a-z-]*\)\.zmb$/\1/p' | sort; }
 
@@ -17348,7 +17353,7 @@ cat > "$_zmi_st/mod/openwrt.sh" << 'ZM_INSTALLER_EOF'
 _zram_has() { _pkg_is_installed zram-swap || [ -x /etc/init.d/zram ]; }
 
 _zram_ram() { awk '$1 == "MemTotal:" { print int($2 / 1024); exit }' /proc/meminfo 2>/dev/null; }
-_zram_algos() { tr -d '[]' < /sys/block/zram0/comp_algorithm 2>/dev/null | tr -s ' \t' '\n\n' | grep -E '^[a-z0-9-]+$'; }
+_zram_algos() { tr -d '[]' 2>/dev/null < /sys/block/zram0/comp_algorithm | tr -s ' \t' '\n\n' | grep -E '^[a-z0-9-]+$'; }
 _zram_tune_on() { [ -f "$ZRAM_TUNE" ]; }
 
 _zram_tune_set() {
@@ -20496,8 +20501,33 @@ _zp_boot_set() {
 	status
 }
 
+_z2_keep_files() { printf '%s\n' /etc/config/zapret2 /opt/zapret2/ipset/zapret_hosts_user_exclude.txt /opt/zapret2/ipset/zapret_hosts_discord.txt /opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh; }
+_z2_keep_save() {
+	local k="$ZM_STATE_DIR/z2.keep" f
+	rm -rf "$k"; mkdir -p "$k" || return 1
+	_z2_keep_files | while read -r f; do [ -f "$f" ] && cp -p "$f" "$k/$(echo "$f" | sed 's#/#%#g')"; done
+	return 0
+}
+_z2_keep_restore() {
+	local k="$ZM_STATE_DIR/z2.keep" f b
+	[ -d "$k" ] || return 0
+	_z2_keep_files | while read -r f; do
+		b="$k/$(echo "$f" | sed 's#/#%#g')"
+		[ -f "$b" ] || continue
+		mkdir -p "$(dirname "$f")"
+		cp -p "$b" "$f.zm-keep" && mv -f "$f.zm-keep" "$f"
+	done
+	rm -rf "$k"
+	echo "   · Ваши настройки Zapret2 сохранены без изменений"
+}
+_z2_fetch_missing() {
+	[ -s "$1" ] && return 0
+	_nochange_fetch "$@"
+}
+
 _do_install_zapret2_core() {
-	local arch boot=1
+	local arch boot=1 upd=0
+	[ -f /etc/init.d/zapret2 ] && upd=1
 	[ -x /etc/init.d/zapret2 ] && ! _zm_boot zapret2 && boot=0
 	arch="$(_z2_arch)"
 	if ! _z2_arch_ok; then
@@ -20541,28 +20571,31 @@ _do_install_zapret2_core() {
 		_zm_get "${base_url}${luci_file}" "$luci_file" "" 60
 	fi
 
+	[ "$upd" = 1 ] && _z2_keep_save
+
 	echo "==> Обновляем список пакетов"
 	$UPDATE
 
 	echo "==> Устанавливаем"
 	_zm_arch_accept aarch64_cortex-a53
-	$INSTALL ./*."$raz" || { echo "ОШИБКА установки"; return 1; }
+	$INSTALL ./*."$raz" || { _z2_keep_restore >/dev/null; echo "ОШИБКА установки"; return 1; }
 	_nochange_restore zapret2
+	[ "$upd" = 1 ] && _z2_keep_restore
 
 	echo "==> Добавляем домены в исключения"
 	mkdir -p /opt/zapret2/ipset
-	_nochange_fetch /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
+	_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
 
 	echo "==> Настраиваем стратегии"
 	mkdir -p /opt/zapret2/init.d/openwrt/custom.d
-	_nochange_fetch /opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh \
+	_z2_fetch_missing /opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh \
 		"${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/50-discord_media.sh" \
 		|| echo "!! Не удалось загрузить 50-discord_media.sh"
 	if _nochange_in /etc/config/zapret2; then echo "   · Стратегия Zapret2 помечена #nochange — оставляем как есть"
 	else
-		_nochange_fetch /etc/config/zapret2 "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2" || echo "!! Не удалось загрузить zapret2"
+		_z2_fetch_missing /etc/config/zapret2 "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret2" || echo "!! Не удалось загрузить zapret2"
 	fi
-	_nochange_fetch /opt/zapret2/ipset/zapret_hosts_discord.txt "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt" \
+	_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_discord.txt "${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Zapret2/zapret_hosts_discord.txt" \
 		|| echo "!! Не удалось загрузить zapret_hosts_discord.txt"
 
 	_z2_blob_install
@@ -20628,7 +20661,7 @@ _z2c_put() {
 	mkdir -p "$ZM_STATE_DIR"
 	_z2c_up && run=true
 	cp "$Z2_CONF" "$prev" 2>/dev/null || { echo '{"error":"не удалось сохранить резервную копию"}'; return 1; }
-	cat "$src" > "$Z2_CONF" || { cat "$prev" > "$Z2_CONF"; echo '{"error":"не удалось записать /etc/config/zapret2"}'; return 1; }
+	cp "$src" "$Z2_CONF.zm-new" && mv -f "$Z2_CONF.zm-new" "$Z2_CONF" || { rm -f "$Z2_CONF.zm-new"; echo '{"error":"не удалось записать /etc/config/zapret2"}'; return 1; }
 	mkdir -p "$JOBS_DIR"; rm -f "$JOBS_DIR/z2_blobs.json"; _z2_blob_verify "$JOBS_DIR/z2_blobs.json" >"$JOBS_DIR/z2_blobs.log" 2>&1
 	if [ "$run" = true ] && ! _z2c_apply; then
 		cat "$prev" > "$Z2_CONF"
@@ -20642,7 +20675,6 @@ _z2c_put() {
 z2_conf_get() {
 	local c
 	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
-	mkdir -p "$JOBS_DIR"; _z2_blob_verify "" >"$JOBS_DIR/z2_blobs.log" 2>&1
 	c="$(tr -d '\r' < "$Z2_CONF"; echo x)"
 	c="${c%x}"
 	printf '{"content":"%s"}\n' "$(esc_ml "$c")"
@@ -20695,7 +20727,7 @@ z2_strat_block_set() {
 	printf '%s\n' "$2" | awk '{ l[NR] = $0 } END { n = NR; while (n > 0 && l[n] ~ /^[ \t]*$/) n--; for (i = 1; i <= n; i++) print l[i] }' > "$bf"
 	[ -s "$bf" ] || { rm -f "$bf"; echo '{"error":"блок стратегии пустой"}'; return 1; }
 	if grep -q '^config ' "$bf"; then rm -f "$bf"; echo '{"error":"в блоке нельзя начинать строку с config"}'; return 1; fi
-	en="$(tr -d '\r' < "$Z2_CONF" | awk -v H="config strategy '$name'" '$0 == H { f = 1; next } f && /^config / { exit } f && /^[ \t]*option enabled / { print $3; exit }')"
+	en="$(tr -d '\r' < "$Z2_CONF" | awk -v H="config strategy '$name'" '$0 == H { f = 1; next } f && /^config / { exit } f && /^[ \t]*option enabled / { v = $3; gsub(/["'"'"']/, "", v); print "'"'"'" v "'"'"'"; exit }')"
 	case "$en" in "'0'"|"'1'") ;; *) en="'0'" ;; esac
 	tr -d '\r' < "$Z2_CONF" | awk -v H="config strategy '$name'" -v E="$en" -v B="$bf" '
 		BEGIN { while ((getline l < B) > 0) { if (l ~ /^[ \t]*option enabled /) continue; body = body l "\n" } close(B) }
@@ -20887,7 +20919,7 @@ _z2_blob_verify() {
 			st=miss; miss=$((miss + 1)); missn="$missn$([ -n "$missn" ] && echo ',')$name"
 			echo "   !! ${pth##*/} — не найден ни в одном источнике"
 		fi
-		if [ "$en" != 1 ]; then
+		if [ "$en" != 1 ] && [ "$onu" = 1 ]; then
 			off=$((off + 1)); offn="$offn$([ -n "$offn" ] && echo ',')$name"
 			echo "   ! $name выключен, но нужен стратегиям: $(_z2_blob_short "$lst") — включите его в карточке «Блобы»"
 		fi
@@ -20895,7 +20927,7 @@ _z2_blob_verify() {
 		sep=","
 	done < "$scan"
 	rm -f "$scan"
-	undef="$(tr -d '\r' < "$Z2_CONF" 2>/dev/null | awk -F"'" '
+	undef="$(tr -d '\r' 2>/dev/null < "$Z2_CONF" | awk -F"'" '
 		/^config blob / { d[$2] = 1; next }
 		/^config strategy / { s = 1; next }
 		/^config / { s = 0; next }
@@ -59578,8 +59610,9 @@ function z2StratCard(view) {
 				String(text || '').split('\n').forEach(function(l) {
 					var m = /^(\s*)✓(.*)$/.exec(l);
 					var err = /^\s*!|Есть проблемы|Ошибка|не найден/.test(l);
-					var row = m ? [m[1], E('span', { 'style': 'color:#166534' }, '✓'), m[2]] : [l];
-					outBox.appendChild(E('div', { 'style': 'color:' + (err ? '#b91c1c' : '#000000') }, row));
+					var arr = /^\s*==>/.exec(l);
+					var row = m ? [m[1], E('span', { 'style': 'color:#3fb950' }, '✓'), m[2]] : (arr ? [E('span', { 'style': 'color:#56d4dd;font-weight:700' }, '==>'), l.replace(/^\s*==>/, '')] : [l]);
+					outBox.appendChild(E('div', { 'style': 'color:' + (err ? '#ff7b72' : '#e6edf3') }, row));
 				});
 			}
 			view.z2BlobShowLog = function(text) { outWrap.style.display = ''; showOut(text); };
@@ -60538,23 +60571,20 @@ html.zm-theme-dark .zm-z2-file-get { background: rgba(74,222,128,.16); color: #8
 .zm-z2-blockta { width: 100%; min-height: 220px; box-sizing: border-box; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(15,23,42,.12); background: #ffffff; color: #0f172a; resize: vertical; white-space: pre; overflow: auto; tab-size: 4; }
 .zm-z2-blockta:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
 .zm-z2-sum { margin: 6px 0 0; font-size: 12px; }
-.zm-z2-out { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: rgba(15,23,42,.04); border: 1px solid rgba(15,23,42,.07); font-size: 12px; line-height: 1.5; white-space: pre-wrap; max-height: 220px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.zm-z2-out { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: #0d1117; color: #e6edf3; border: 1px solid rgba(255,255,255,.10); font-size: 12px; line-height: 1.5; white-space: pre-wrap; max-height: 220px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 html.zm-theme-dark .zm-z2-edit { background: rgba(96,165,250,.06); border-color: rgba(96,165,250,.4); }
 html.zm-theme-dark .zm-z2-blockta { background: #0f172a; color: #e2e8f0; border-color: rgba(255,255,255,.12); }
-html.zm-theme-dark .zm-z2-out { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); }
+html.zm-theme-dark .zm-z2-out { background: #0d1117; color: #e6edf3; border-color: rgba(255,255,255,.10); }
 html.zm-theme-dark .zm-z2-edit-state { color: #94a3b8; }
 .zm-z2-file-off { background: rgba(245,158,11,.18); color: #b45309; }
 html.zm-theme-dark .zm-z2-file-off { background: rgba(251,191,36,.16); color: #fcd34d; }
 .zm-z2-save.zm-z2-dirty { background: #dc2626 !important; border-color: #b91c1c !important; color: #fff !important; }
 .zm-z2-save.zm-z2-dirty:hover { background: #b91c1c !important; }
-.zm-z2-outwrap { margin: 8px 0 0; border-radius: 8px; border: 1px solid rgba(15,23,42,.07); background: rgba(15,23,42,.04); }
-.zm-z2-outwrap .zm-z2-out { margin: 0; border: 0; border-radius: 0; background: transparent; }
-.zm-z2-outhead { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 12px; font-weight: 600; border-bottom: 1px solid rgba(15,23,42,.07); }
-.zm-z2-x { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 6px; color: inherit; opacity: .7; }
-.zm-z2-x:hover { opacity: 1; background: rgba(15,23,42,.08); }
-html.zm-theme-dark .zm-z2-outwrap { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.08); }
-html.zm-theme-dark .zm-z2-outhead { border-bottom-color: rgba(255,255,255,.08); }
-html.zm-theme-dark .zm-z2-x:hover { background: rgba(255,255,255,.1); }
+.zm-z2-outwrap { margin: 8px 0 0; border-radius: 10px; border: 1px solid rgba(255,255,255,.10); background: #0d1117; color: #e6edf3; overflow: hidden; }
+.zm-z2-outwrap .zm-z2-out { margin: 0; border: 0; border-radius: 0; background: #0d1117; color: #e6edf3; padding: 12px 16px; font-size: 13px; line-height: 1.7; }
+.zm-z2-outhead { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #ffffff; background: #0d1117; border-bottom: 1px solid rgba(255,255,255,.10); }
+.zm-z2-x { border: 0; background: transparent; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 8px; border-radius: 6px; color: #e6edf3; opacity: .7; }
+.zm-z2-x:hover { opacity: 1; background: rgba(255,255,255,.12); }
 .zm-z2-ta { display: block; width: 100%; box-sizing: border-box; min-height: 440px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; resize: vertical; }
 .zm-z2-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .zm-z2-head h3 { margin: 0 0 12px 0; }
