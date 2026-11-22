@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.110
+# Version: 5.117
 ZM_VERSION_EOF
 set -e
 
@@ -20629,14 +20629,14 @@ _z2c_put() {
 	_z2c_up && run=true
 	cp "$Z2_CONF" "$prev" 2>/dev/null || { echo '{"error":"не удалось сохранить резервную копию"}'; return 1; }
 	cat "$src" > "$Z2_CONF" || { cat "$prev" > "$Z2_CONF"; echo '{"error":"не удалось записать /etc/config/zapret2"}'; return 1; }
-	mkdir -p "$JOBS_DIR"; _z2_blob_verify "" >"$JOBS_DIR/z2_blobs.log" 2>&1
+	mkdir -p "$JOBS_DIR"; rm -f "$JOBS_DIR/z2_blobs.json"; _z2_blob_verify "$JOBS_DIR/z2_blobs.json" >"$JOBS_DIR/z2_blobs.log" 2>&1
 	if [ "$run" = true ] && ! _z2c_apply; then
 		cat "$prev" > "$Z2_CONF"
 		_z2c_apply >/dev/null 2>&1
 		echo '{"error":"Zapret2 не запустился с новым файлом — вернул предыдущую версию"}'
 		return 1
 	fi
-	printf '{"ok":true,"running":%s}\n' "$run"
+	printf '{"ok":true,"running":%s,"blobs":%s}\n' "$run" "$(cat "$JOBS_DIR/z2_blobs.json" 2>/dev/null || echo '{}')"
 }
 
 z2_conf_get() {
@@ -59776,8 +59776,20 @@ function z2StratCard(view) {
           if (res.error) { say(res.error, true); zm.toast('Ошибка: ' + res.error, 'error'); return false; }
           say(res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 остановлен — запустите его кнопкой выше', !res.running);
           zm.toast(msg, 'info');
-          if (res.running) zm.toast('Zapret2 перезапущен, ошибок нет', 'info');
-          else zm.toast('Zapret2 остановлен, ошибок нет — запустите его вручную', 'warning');
+          var bl = res.blobs || {};
+          var bParts = [];
+          if (bl.missing) bParts.push('не найдено файлов: ' + bl.missingNames);
+          if (bl.off) bParts.push('выключены, но нужны стратегиям: ' + bl.offNames);
+          if (bl.unknown) bParts.push('нет в списке блобов: ' + bl.unknownNames);
+          if (bl.nopath) bParts.push('без пути к файлу: ' + bl.nopath);
+          if (bParts.length) {
+            say('Ошибка в blob — ' + bParts.join('; ') + '.', true);
+            zm.toast('Ошибка в blob: ' + bParts.join('; '), 'error', 12000);
+          }
+          if (view.z2BlobShowLog) zm.logTail('z2_blobs').then(function(r) { view.z2BlobShowLog([].concat(r.lines || []).join('\n')); }, function() {});
+          if (bParts.length) zm.toast('Zapret2 ' + (res.running ? 'перезапущен' : 'остановлен') + ', но есть ошибка в blob', 'warning', 12000);
+          else if (res.running) zm.toast('Blob-файлы на месте, Zapret2 перезапущен, ошибок нет', 'info');
+          else zm.toast('Zapret2 остановлен — запустите его вручную', 'warning');
           load(true);
           zm.changed({ svc: 'zapret2' });
           if (view.z2StratLoad) view.z2StratLoad();
