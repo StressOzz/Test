@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.137
+# Version: 5.147
 ZM_VERSION_EOF
 set -e
 
@@ -59576,8 +59576,10 @@ function z2StratCard(view) {
 			function showOut(text) {
 				outBox.textContent = '';
 				String(text || '').split('\n').forEach(function(l) {
-					var st = /^\s*!|Есть проблемы|Ошибка|не найден/.test(l) ? 'color:#b91c1c' : (/^\s*✓/.test(l) ? 'color:#166534' : 'color:#000000');
-					outBox.appendChild(E('div', st ? { 'style': st } : {}, l));
+					var m = /^(\s*)✓(.*)$/.exec(l);
+					var err = /^\s*!|Есть проблемы|Ошибка|не найден/.test(l);
+					var row = m ? [m[1], E('span', { 'style': 'color:#166534' }, '✓'), m[2]] : [l];
+					outBox.appendChild(E('div', { 'style': 'color:' + (err ? '#b91c1c' : '#000000') }, row));
 				});
 			}
 			view.z2BlobShowLog = function(text) { outWrap.style.display = ''; showOut(text); };
