@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.101
+# Version: 5.110
 ZM_VERSION_EOF
 set -e
 
@@ -59574,6 +59574,7 @@ function z2StratCard(view) {
 			var outBox = E('pre', { 'class': 'zm-z2-out' });
 			var outWrap = E('div', { 'class': 'zm-z2-outwrap', 'style': 'display:none' }, [ E('div', { 'class': 'zm-z2-outhead' }, [ E('span', {}, 'Журнал проверки'), E('button', { 'class': 'zm-z2-x', 'title': 'Закрыть', 'click': function() { outWrap.style.display = 'none'; } }, '×') ]), outBox ]);
 			function showOut(text) { outBox.textContent = text || ''; }
+			view.z2BlobShowLog = function(text) { outWrap.style.display = ''; showOut(text); };
 			var search = E('input', { 'type': 'search', 'class': 'zm-z2-search', 'placeholder': 'Поиск по имени блоба', 'input': function() { query = search.value.trim().toLowerCase(); draw(); } });
 			var onlyCb = E('input', { 'type': 'checkbox', 'class': 'zm-z2-cb', 'change': function() { onlyOn = onlyCb.checked; draw(); } });
 			var saveB = E('button', { 'class': 'cbi-button cbi-button-action zm-z2-save', 'click': function() { save(); } }, 'Сохранить и применить');
@@ -59742,7 +59743,7 @@ function z2StratCard(view) {
 		function z2ConfCard(view) {
 			var busy = false, btn = {};
 			var ta = E('textarea', { 'class': 'zm-config-editor zm-z2-ta', 'spellcheck': 'false' });
-			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0; white-space:pre-wrap' });
+			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' });
 			var bar = zm.editorBar(ta, {
 				saveLabel: 'Сохранить и применить',
 				text: 'Файл изменён и не сохранён',
@@ -59761,7 +59762,7 @@ function z2StratCard(view) {
 					busy = false; sync();
 					if (res.error) { say(res.error, true); zm.toast(res.error, 'error'); return; }
 					bar.reset(res.content || '');
-					zm.logTail('z2_blobs').then(function(r) { var t = [].concat(r.lines || []).join('\n'); if (t) note.textContent += '\n' + t; }, function() {});
+					if (view.z2BlobShowLog) zm.logTail('z2_blobs').then(function(r) { var t = [].concat(r.lines || []).join('\n'); if (t) view.z2BlobShowLog(t); }, function() {});
 					var cc = res.content || '';
 					say('Загружено из /etc/config/zapret2: стратегий ' + (cc.match(/^config strategy /gm) || []).length + ', блобов ' + (cc.match(/^config blob /gm) || []).length + ', строк ' + cc.split('\n').length + '.');
 					if (!silent) zm.toast('Файл перечитан с диска', 'info');
