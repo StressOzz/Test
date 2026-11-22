@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.107
+# Version: 5.108
 ZM_VERSION_EOF
 set -e
 
@@ -20629,6 +20629,7 @@ _z2c_put() {
 	_z2c_up && run=true
 	cp "$Z2_CONF" "$prev" 2>/dev/null || { echo '{"error":"не удалось сохранить резервную копию"}'; return 1; }
 	cat "$src" > "$Z2_CONF" || { cat "$prev" > "$Z2_CONF"; echo '{"error":"не удалось записать /etc/config/zapret2"}'; return 1; }
+	_z2_blob_verify "" >/dev/null 2>&1
 	if [ "$run" = true ] && ! _z2c_apply; then
 		cat "$prev" > "$Z2_CONF"
 		_z2c_apply >/dev/null 2>&1
@@ -20641,6 +20642,7 @@ _z2c_put() {
 z2_conf_get() {
 	local c
 	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
+	_z2_blob_verify "" >/dev/null 2>&1
 	c="$(tr -d '\r' < "$Z2_CONF"; echo x)"
 	c="${c%x}"
 	printf '{"content":"%s"}\n' "$(esc_ml "$c")"
@@ -20903,11 +20905,14 @@ _z2_blob_verify() {
 			line = $0
 			while (match(line, /blob_[A-Za-z0-9_]+/)) {
 				t = substr(line, RSTART, RLENGTH)
-				if (!(t in d) && !(t in seen)) { seen[t] = 1; out = out (out == "" ? "" : ",") t }
+				if (!(t in seen)) { seen[t] = 1; order[++k] = t }
 				line = substr(line, RSTART + RLENGTH)
 			}
 		}
-		END { print out }')"
+		END {
+			for (i = 1; i <= k; i++) if (!(order[i] in d)) out = out (out == "" ? "" : ",") order[i]
+			print out
+		}')"
 	for u in $(echo "$undef" | tr ',' ' '); do
 		unk=$((unk + 1)); unkn="$unkn$([ -n "$unkn" ] && echo ',')$u"
 		echo "   ! $u используется в стратегии, но такого блоба в конфиге нет"
