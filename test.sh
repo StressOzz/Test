@@ -20840,10 +20840,36 @@ _z2_blob_short() {
 	echo "$1" | awk -F, '{ if (NF > 3) print $1", "$2", "$3" и ещё "(NF - 3); else print $0 }'
 }
 
+_z2_blob_autoadd() {
+	[ -f "$Z2_CONF" ] || return 0
+	local miss n
+	miss="$(tr -d '\r' < "$Z2_CONF" | awk -F"'" '
+		/^config blob / { d[$2] = 1; next }
+		/^config strategy / { s = 1; next }
+		/^config / { s = 0; next }
+		s {
+			line = $0
+			while (match(line, /blob_[A-Za-z0-9_]+/)) {
+				t = substr(line, RSTART, RLENGTH)
+				if (!(t in seen)) { seen[t] = 1; order[++k] = t }
+				line = substr(line, RSTART + RLENGTH)
+			}
+		}
+		END { for (i = 1; i <= k; i++) if (!(order[i] in d)) print order[i] }')"
+	[ -n "$miss" ] || return 0
+	{
+		echo
+		for n in $miss; do
+			printf "config blob '%s'\n\toption path '%s/%s.bin'\n\toption enabled '1'\n\n" "$n" "$Z2_FAKE_DIR" "${n#blob_}"
+		done
+	} >> "$Z2_CONF"
+}
+
 _z2_blob_verify() {
 	local jout="$1" scan="$JOBS_DIR/z2_blobs.$$.scan" name pth en used onu lst st undef u
 	local need=0 present=0 got=0 miss=0 off=0 nop=0 unk=0 json="" sep="" missn="" offn="" unkn=""
 	mkdir -p "$Z2_FAKE_DIR" "$JOBS_DIR"
+	_z2_blob_autoadd
 	_z2_blob_scan > "$scan" 2>/dev/null
 	echo "==> Проверка блобов Zapret2"
 	while read -r name pth en used onu lst; do
