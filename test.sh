@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.108
+# Version: 5.101
 ZM_VERSION_EOF
 set -e
 
@@ -20629,7 +20629,7 @@ _z2c_put() {
 	_z2c_up && run=true
 	cp "$Z2_CONF" "$prev" 2>/dev/null || { echo '{"error":"не удалось сохранить резервную копию"}'; return 1; }
 	cat "$src" > "$Z2_CONF" || { cat "$prev" > "$Z2_CONF"; echo '{"error":"не удалось записать /etc/config/zapret2"}'; return 1; }
-	_z2_blob_verify "" >/dev/null 2>&1
+	mkdir -p "$JOBS_DIR"; _z2_blob_verify "" >"$JOBS_DIR/z2_blobs.log" 2>&1
 	if [ "$run" = true ] && ! _z2c_apply; then
 		cat "$prev" > "$Z2_CONF"
 		_z2c_apply >/dev/null 2>&1
@@ -20642,7 +20642,7 @@ _z2c_put() {
 z2_conf_get() {
 	local c
 	[ -f "$Z2_CONF" ] || { echo '{"error":"Zapret2 не установлен — нет /etc/config/zapret2"}'; return 1; }
-	_z2_blob_verify "" >/dev/null 2>&1
+	mkdir -p "$JOBS_DIR"; _z2_blob_verify "" >"$JOBS_DIR/z2_blobs.log" 2>&1
 	c="$(tr -d '\r' < "$Z2_CONF"; echo x)"
 	c="${c%x}"
 	printf '{"content":"%s"}\n' "$(esc_ml "$c")"
@@ -20859,12 +20859,10 @@ _z2_blob_autoadd() {
 		}
 		END { for (i = 1; i <= k; i++) if (!(order[i] in d)) print order[i] }')"
 	[ -n "$miss" ] || return 0
-	{
-		echo
-		for n in $miss; do
-			printf "config blob '%s'\n\toption path '%s/%s.bin'\n\toption enabled '1'\n\n" "$n" "$Z2_FAKE_DIR" "${n#blob_}"
-		done
-	} >> "$Z2_CONF"
+	for n in $miss; do
+		printf "\nconfig blob '%s'\n\toption path '%s/%s.bin'\n\toption enabled '1'\n" "$n" "$Z2_FAKE_DIR" "${n#blob_}" >> "$Z2_CONF"
+		echo "   + $n — блок добавлен в /etc/config/zapret2"
+	done
 }
 
 _z2_blob_verify() {
@@ -59744,7 +59742,7 @@ function z2StratCard(view) {
 		function z2ConfCard(view) {
 			var busy = false, btn = {};
 			var ta = E('textarea', { 'class': 'zm-config-editor zm-z2-ta', 'spellcheck': 'false' });
-			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0' });
+			var note = E('p', { 'class': 'zm-hint', 'style': 'margin:6px 0 0; white-space:pre-wrap' });
 			var bar = zm.editorBar(ta, {
 				saveLabel: 'Сохранить и применить',
 				text: 'Файл изменён и не сохранён',
@@ -59763,6 +59761,7 @@ function z2StratCard(view) {
 					busy = false; sync();
 					if (res.error) { say(res.error, true); zm.toast(res.error, 'error'); return; }
 					bar.reset(res.content || '');
+					zm.logTail('z2_blobs').then(function(r) { var t = [].concat(r.lines || []).join('\n'); if (t) note.textContent += '\n' + t; }, function() {});
 					var cc = res.content || '';
 					say('Загружено из /etc/config/zapret2: стратегий ' + (cc.match(/^config strategy /gm) || []).length + ', блобов ' + (cc.match(/^config blob /gm) || []).length + ', строк ' + cc.split('\n').length + '.');
 					if (!silent) zm.toast('Файл перечитан с диска', 'info');
@@ -59778,6 +59777,7 @@ function z2StratCard(view) {
           zm.toast(msg, 'info');
           if (res.running) zm.toast('Zapret2 перезапущен, ошибок нет', 'info');
           else zm.toast('Zapret2 остановлен, ошибок нет — запустите его вручную', 'warning');
+          load(true);
           zm.changed({ svc: 'zapret2' });
           if (view.z2StratLoad) view.z2StratLoad();
           if (view.z2BlobLoad) view.z2BlobLoad();
