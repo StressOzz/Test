@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.117
+# Version: 5.107
 ZM_VERSION_EOF
 set -e
 
@@ -59573,7 +59573,13 @@ function z2StratCard(view) {
 			var sumLine = E('p', { 'class': 'zm-hint zm-z2-sum' });
 			var outBox = E('pre', { 'class': 'zm-z2-out' });
 			var outWrap = E('div', { 'class': 'zm-z2-outwrap', 'style': 'display:none' }, [ E('div', { 'class': 'zm-z2-outhead' }, [ E('span', {}, 'Журнал проверки'), E('button', { 'class': 'zm-z2-x', 'title': 'Закрыть', 'click': function() { outWrap.style.display = 'none'; } }, '×') ]), outBox ]);
-			function showOut(text) { outBox.textContent = text || ''; }
+			function showOut(text) {
+				outBox.textContent = '';
+				String(text || '').split('\n').forEach(function(l) {
+					var st = /^\s*(!|Есть проблемы|Ошибка)/.test(l) ? 'color:#991b1b' : (/^\s*(✓|↓|\+)|Всё совпадает/.test(l) ? 'color:#166534' : '');
+					outBox.appendChild(E('div', st ? { 'style': st } : {}, l));
+				});
+			}
 			view.z2BlobShowLog = function(text) { outWrap.style.display = ''; showOut(text); };
 			var search = E('input', { 'type': 'search', 'class': 'zm-z2-search', 'placeholder': 'Поиск по имени блоба', 'input': function() { query = search.value.trim().toLowerCase(); draw(); } });
 			var onlyCb = E('input', { 'type': 'checkbox', 'class': 'zm-z2-cb', 'change': function() { onlyOn = onlyCb.checked; draw(); } });
@@ -59661,8 +59667,7 @@ function z2StratCard(view) {
 					if (res.off) parts.push('выключены, но нужны стратегиям: ' + res.offNames.split(',').join(', '));
 					if (res.unknown) parts.push('нет в списке блобов: ' + res.unknownNames.split(',').join(', '));
 					if (res.nopath) parts.push('без пути к файлу: ' + res.nopath);
-					say('Есть проблемы — ' + parts.join('; ') + '.', true);
-					zm.toast('Проверка: есть проблемы (' + bad + ')', 'warning');
+										zm.toast('Проверка: есть проблемы (' + bad + ')', 'warning');
 				}
 				draw();
 			}
@@ -59775,21 +59780,12 @@ function z2StratCard(view) {
           busy = false; sync();
           if (res.error) { say(res.error, true); zm.toast('Ошибка: ' + res.error, 'error'); return false; }
           say(res.running ? msg + ', Zapret2 перезапущен' : msg + '. Zapret2 остановлен — запустите его кнопкой выше', !res.running);
-          zm.toast(msg, 'info');
           var bl = res.blobs || {};
-          var bParts = [];
-          if (bl.missing) bParts.push('не найдено файлов: ' + bl.missingNames);
-          if (bl.off) bParts.push('выключены, но нужны стратегиям: ' + bl.offNames);
-          if (bl.unknown) bParts.push('нет в списке блобов: ' + bl.unknownNames);
-          if (bl.nopath) bParts.push('без пути к файлу: ' + bl.nopath);
-          if (bParts.length) {
-            say('Ошибка в blob — ' + bParts.join('; ') + '.', true);
-            zm.toast('Ошибка в blob: ' + bParts.join('; '), 'error', 12000);
-          }
+          var bad = !!(bl.missing || bl.off || bl.unknown || bl.nopath);
           if (view.z2BlobShowLog) zm.logTail('z2_blobs').then(function(r) { view.z2BlobShowLog([].concat(r.lines || []).join('\n')); }, function() {});
-          if (bParts.length) zm.toast('Zapret2 ' + (res.running ? 'перезапущен' : 'остановлен') + ', но есть ошибка в blob', 'warning', 12000);
-          else if (res.running) zm.toast('Blob-файлы на месте, Zapret2 перезапущен, ошибок нет', 'info');
-          else zm.toast('Zapret2 остановлен — запустите его вручную', 'warning');
+          if (bad) zm.toast('Ошибка в blob — смотрите Журнал проверки', 'error', 12000);
+          else if (res.running) zm.toast('Ошибок нет, Zapret перезапущен', 'info');
+          else zm.toast('Ошибок нет, Zapret остановлен — запустите вручную', 'warning');
           load(true);
           zm.changed({ svc: 'zapret2' });
           if (view.z2StratLoad) view.z2StratLoad();
