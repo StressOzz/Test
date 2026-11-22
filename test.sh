@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.107
+# Version: 5.137
 ZM_VERSION_EOF
 set -e
 
@@ -59576,7 +59576,7 @@ function z2StratCard(view) {
 			function showOut(text) {
 				outBox.textContent = '';
 				String(text || '').split('\n').forEach(function(l) {
-					var st = /^\s*(!|Есть проблемы|Ошибка)/.test(l) ? 'color:#991b1b' : (/^\s*(✓|↓|\+)|Всё совпадает/.test(l) ? 'color:#166534' : '');
+					var st = /^\s*!|Есть проблемы|Ошибка|не найден/.test(l) ? 'color:#b91c1c' : (/^\s*✓/.test(l) ? 'color:#166534' : 'color:#000000');
 					outBox.appendChild(E('div', st ? { 'style': st } : {}, l));
 				});
 			}
