@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.095
+# Version: 5.195
 ZM_VERSION_EOF
 set -e
 
@@ -56578,10 +56578,9 @@ return view.extend({
 				}).catch(function() { zBusy = false; });
 			}
 
-			renderZCard(status);
-			mainSection.appendChild(zCardWrap);
-			mainSection.appendChild(zLogEl);
-			mainSection.appendChild(zBannerEl);
+		renderZCard(status);
+		mainSection.appendChild(zCardWrap);
+		mainSection.appendChild(zBannerEl);
 
 			var currentBanner = E('div', { 'class': 'zm-current-banner zm-current-top' });
 			panels.strategy.appendChild(currentBanner);
@@ -59985,12 +59984,9 @@ function z2StratCard(view) {
 					}, !!(view.busy2 || view.vsBusy)));
 			}
 
-			cards.appendChild(z2Card);
-		if (d.zapret2 === 'installed') {
-			zLogEl.innerHTML = '';
-			cards.appendChild(zLogEl);
-		}
-			if (d.zapret2 === 'installed') {
+	cards.appendChild(z2Card);
+	zLogEl.innerHTML = '';
+	cards.appendChild(zLogEl);
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
 				if (!view.z2BlobNode) view.z2BlobNode = z2BlobCard(view);
