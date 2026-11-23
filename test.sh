@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.495
+# Version: 5.095
 ZM_VERSION_EOF
 set -e
 
@@ -59986,6 +59986,10 @@ function z2StratCard(view) {
 			}
 
 			cards.appendChild(z2Card);
+		if (d.zapret2 === 'installed') {
+			zLogEl.innerHTML = '';
+			cards.appendChild(zLogEl);
+		}
 			if (d.zapret2 === 'installed') {
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
@@ -60051,7 +60055,7 @@ function z2StratCard(view) {
 		zm.zapret2Action(action).then(function(res) {
 			if (res && res.error) { view.busy2 = false; zm.toast(res.error, 'error'); return; }
 			if (job && res && res.started) {
-				zm.pollJob(job, view.logEl, function(ok) {
+				zm.pollJob(job, zLogEl, function(ok) {
 					view.busy2 = false;
 					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
 					zm.status().then(function(d) { view.renderCards(d); });
