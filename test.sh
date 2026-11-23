@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.195
+# Version: 5.695
 ZM_VERSION_EOF
 set -e
 
@@ -56578,9 +56578,10 @@ return view.extend({
 				}).catch(function() { zBusy = false; });
 			}
 
-		renderZCard(status);
-		mainSection.appendChild(zCardWrap);
-		mainSection.appendChild(zBannerEl);
+			renderZCard(status);
+			mainSection.appendChild(zCardWrap);
+			mainSection.appendChild(zLogEl);
+			mainSection.appendChild(zBannerEl);
 
 			var currentBanner = E('div', { 'class': 'zm-current-banner zm-current-top' });
 			panels.strategy.appendChild(currentBanner);
@@ -59984,9 +59985,10 @@ function z2StratCard(view) {
 					}, !!(view.busy2 || view.vsBusy)));
 			}
 
-	cards.appendChild(z2Card);
-	zLogEl.innerHTML = '';
-	cards.appendChild(zLogEl);
+			cards.appendChild(z2Card);
+			zLogEl.innerHTML = '';
+			cards.appendChild(zLogEl);
+			if (d.zapret2 === 'installed') {
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
 				if (!view.z2BlobNode) view.z2BlobNode = z2BlobCard(view);
@@ -60051,7 +60053,7 @@ function z2StratCard(view) {
 		zm.zapret2Action(action).then(function(res) {
 			if (res && res.error) { view.busy2 = false; zm.toast(res.error, 'error'); return; }
 			if (job && res && res.started) {
-				zm.pollJob(job, zLogEl, function(ok) {
+				zm.pollJob(job, view.logEl, function(ok) {
 					view.busy2 = false;
 					zm.toast(ok ? 'Готово' : 'Операция завершилась с ошибкой', ok ? 'info' : 'error');
 					zm.status().then(function(d) { view.renderCards(d); });
