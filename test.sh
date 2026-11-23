@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.895
+# Version: 5.995
 ZM_VERSION_EOF
 set -e
 
@@ -59987,11 +59987,12 @@ function z2StratCard(view) {
 							renderCards(res);
 						}).catch(function() { view.vsBusy = false; zm.toast('Роутер не ответил', 'error'); renderCards(d); });
 					}, !!(view.busy2 || view.vsBusy)));
-		}
+			}
 
-		if (logEl.classList.contains('zm-show')) z2Card.appendChild(logEl);
-		cards.appendChild(z2Card);
-		if (d.zapret2 === 'installed') {
+			var z2Container = E('div', {});
+			z2Container.appendChild(z2Card);
+			cards.appendChild(z2Container);
+			if (d.zapret2 === 'installed') {
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
 				if (!view.z2BlobNode) view.z2BlobNode = z2BlobCard(view);
@@ -60009,6 +60010,7 @@ function z2StratCard(view) {
 			} else {
 				view.z2Shown = false;
 			}
+			z2Container.appendChild(logEl);
 		}
 
 		renderCards(data);
