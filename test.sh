@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.595
+# Version: 5.895
 ZM_VERSION_EOF
 set -e
 
@@ -20627,7 +20627,6 @@ _do_install_zapret2_core() {
 
 do_remove_zapret2() {
 	local rc=0
-	echo "==> Удаляем Zapret2"
 	echo "==> Останавливаем Zapret2"
 	_zm_svc_off zapret2
 	for p in $(pgrep -f "/opt/zapret[2]/" 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
@@ -59988,10 +59987,11 @@ function z2StratCard(view) {
 							renderCards(res);
 						}).catch(function() { view.vsBusy = false; zm.toast('Роутер не ответил', 'error'); renderCards(d); });
 					}, !!(view.busy2 || view.vsBusy)));
-			}
+		}
 
-			cards.appendChild(z2Card);
-			if (d.zapret2 === 'installed') {
+		if (logEl.classList.contains('zm-show')) z2Card.appendChild(logEl);
+		cards.appendChild(z2Card);
+		if (d.zapret2 === 'installed') {
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
 				if (!view.z2BlobNode) view.z2BlobNode = z2BlobCard(view);
@@ -60014,7 +60014,6 @@ function z2StratCard(view) {
 		renderCards(data);
 		wrap.appendChild(cards);
 		wrap.appendChild(z2PanelBox);
-		wrap.appendChild(logEl);
 		wrap.appendChild(bannerEl);
 
 		this.logEl = logEl;
