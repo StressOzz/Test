@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.395
+# Version: 5.495
 ZM_VERSION_EOF
 set -e
 
@@ -20584,11 +20584,7 @@ _do_install_zapret2_core() {
 
 	echo "==> Добавляем домены в исключения"
 	mkdir -p /opt/zapret2/ipset
-	if [ "$upd" = 0 ]; then
-		_zm_fetch "$EXCLUDE_URL" /opt/zapret2/ipset/zapret_hosts_user_exclude.txt 60 || echo "!! Не удалось загрузить zapret_hosts_user_exclude.txt"
-	else
-		_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
-	fi
+	_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
 
 	echo "==> Настраиваем стратегии"
 	mkdir -p /opt/zapret2/init.d/openwrt/custom.d
