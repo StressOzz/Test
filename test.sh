@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.695
+# Version: 5.595
 ZM_VERSION_EOF
 set -e
 
@@ -20584,7 +20584,11 @@ _do_install_zapret2_core() {
 
 	echo "==> Добавляем домены в исключения"
 	mkdir -p /opt/zapret2/ipset
-	_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
+	if [ "$upd" = 0 ]; then
+		_zm_fetch "$EXCLUDE_URL" /opt/zapret2/ipset/zapret_hosts_user_exclude.txt 60 || echo "!! Не удалось загрузить zapret_hosts_user_exclude.txt"
+	else
+		_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
+	fi
 
 	echo "==> Настраиваем стратегии"
 	mkdir -p /opt/zapret2/init.d/openwrt/custom.d
@@ -20623,6 +20627,7 @@ _do_install_zapret2_core() {
 
 do_remove_zapret2() {
 	local rc=0
+	echo "==> Удаляем Zapret2"
 	echo "==> Останавливаем Zapret2"
 	_zm_svc_off zapret2
 	for p in $(pgrep -f "/opt/zapret[2]/" 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
@@ -59986,8 +59991,6 @@ function z2StratCard(view) {
 			}
 
 			cards.appendChild(z2Card);
-			zLogEl.innerHTML = '';
-			cards.appendChild(zLogEl);
 			if (d.zapret2 === 'installed') {
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
