@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.996
+# Version: 5.497
 ZM_VERSION_EOF
 set -e
 
@@ -8099,6 +8099,124 @@ _st_secs_url() { local s; for s in $(_st_secs); do [ "$(_st_sec_kind "$s")" = vp
 _st_vpn_devs_all() { local s; _st_sec_with main eval 'echo $STL_VPN_DEVS'; for s in $(_st_secs); do [ "$(_st_sec_kind "$s")" = vpn ] && _st_sec_with "$s" eval 'echo $STL_VPN_DEVS'; done; }
 _st_feats_all() { local s; { _st_sec_with main _st_use_vpn && _st_sec_with main _st_sub_feats; for s in $(_st_secs_vpn); do _st_sec_with "$s" _st_sub_feats; done; } | tr ' ' '\n' | grep . | awk '!x[$0]++' | tr '\n' ' '; }
 
+_st_checkall() {
+	local f b n free ovl ld v
+	mkdir -p "$ST_RUN" 2>/dev/null
+	f="$ST_RUN/chk.$$"
+	: > "$f" 2>/dev/null || { echo '{"error":"на роутере некуда записать проверку"}'; return 1; }
+	if stl_present; then
+		printf 'svc\tok\tЯдро steer на месте\t\t\n' >> "$f"
+	else
+		printf 'svc\tfail\tЯдро steer не установлено\tнаправлять трафик некуда\tустановите Steer на вкладке «Подключение»\n' >> "$f"
+	fi
+	if stl_running; then
+		printf 'svc\tok\tСлужба steer запущена\t\t\n' >> "$f"
+	else
+		printf 'svc\tfail\tСлужба steer не запущена\tсервисы идут напрямую, мимо туннеля\tнажмите «Запустить» на вкладке «Подключение»\n' >> "$f"
+	fi
+	if [ -f "$ST_OFF" ]; then
+		printf 'svc\twarn\tSteer выключен кнопкой «Стоп»\tправила сняты, трафик идёт как без панели\tнажмите «Запустить»\n' >> "$f"
+	else
+		printf 'svc\tok\tSteer включён\t\t\n' >> "$f"
+	fi
+	b="$(_st_blocker 2>/dev/null)"
+	if [ -n "$b" ]; then
+		printf 'svc\twarn\tЯдром управляет другая панель\tпанель steer не трогает\tудалите %s, если он больше не нужен\n' "$b" >> "$f"
+	else
+		printf 'svc\tok\tЯдро под управлением панели\t\t\n' >> "$f"
+	fi
+	if _st_owns steer-spec; then
+		printf 'svc\tok\tПравила собраны панелью\t\t\n' >> "$f"
+	else
+		printf 'svc\twarn\tПравила собраны не панелью\tизменения из панели могут не примениться\tнажмите «Сохранить и применить» на вкладке «Подключение»\n' >> "$f"
+	fi
+	if _st_work 2>/dev/null; then
+		printf 'net\tok\tЕсть что направлять в туннель\t\t\n' >> "$f"
+	else
+		printf 'net\twarn\tНе выбрано ни одного сервиса или устройства\tSteer запущен, но направлять нечего\tвыберите сервисы на вкладке «Сервисы» или устройства на вкладке «Устройства»\n' >> "$f"
+	fi
+	n="$(_st_tun_ifaces 2>/dev/null | grep -c .)"
+	if [ "${n:-0}" -gt 0 ]; then
+		printf 'net\tok\tТуннелей в работе: %s\t%s\t\n' "$n" "$(_st_tun_ifaces 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')" >> "$f"
+	else
+		printf 'net\twarn\tТуннелей нет\tSteer пойдёт мимо туннеля\tвыберите выход на вкладке «Подключение»\n' >> "$f"
+	fi
+	case "$(_st_exit 2>/dev/null)" in
+		warp)  printf 'net\tok\tГлавный выход — WARP\t\t\n' >> "$f" ;;
+		vpn)   printf 'net\tok\tГлавный выход — подписка (VPN)\t\t\n' >> "$f" ;;
+		iface) printf 'net\tok\tГлавный выход — туннель-интерфейс\t\t\n' >> "$f" ;;
+		*)     printf 'net\twarn\tВыход не выбран\tтрафик идёт напрямую\tвыберите выход на вкладке «Подключение»\n' >> "$f" ;;
+	esac
+	if pidof dnsmasq >/dev/null 2>&1; then
+		printf 'dns\tok\tDNS-сервер роутера работает\t\t\n' >> "$f"
+	else
+		printf 'dns\tfail\tDNS-сервер роутера не запущен\tимена не разрешаются\tперезапустите dnsmasq в LuCI → Система → Запуск\n' >> "$f"
+	fi
+	if command -v nslookup >/dev/null 2>&1; then
+		if _stl_t 6 nslookup openwrt.org 127.0.0.1 >/dev/null 2>&1; then
+			printf 'dns\tok\tИмена разрешаются через роутер\t\t\n' >> "$f"
+		else
+			printf 'dns\tfail\tРоутер не разрешает имена\tсайты не откроются даже через туннель\tпроверьте DNS на вкладке «Настройки»\n' >> "$f"
+		fi
+	else
+		printf 'dns\twarn\tНа роутере нет nslookup\tпроверить имена нечем\tпоставьте пакет bind-host или busybox с nslookup\n' >> "$f"
+	fi
+	case "$(_st_dnsmode 2>/dev/null)" in
+		router) printf 'dns\tok\tDNS считается на роутере\t\t\n' >> "$f" ;;
+		*)      printf 'dns\tok\tDNS идёт через туннель\t\t\n' >> "$f" ;;
+	esac
+	free="$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)"
+	[ -n "$free" ] || free="$(awk '/^MemFree:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)"
+	if [ -n "$free" ]; then
+		if [ "$free" -ge 40 ]; then
+			printf 'res\tok\tСвободно памяти: %s МБ\t\t\n' "$free" >> "$f"
+		elif [ "$free" -ge 15 ]; then
+			printf 'res\twarn\tМало свободной памяти: %s МБ\tпри нехватке роутер может сбрасывать туннели\tзакройте лишние сервисы или включите ZRAM в разделе «Система»\n' "$free" >> "$f"
+		else
+			printf 'res\tfail\tПамяти почти нет: %s МБ\tтуннели будут рваться\tвыключите лишние сервисы и включите ZRAM\n' "$free" >> "$f"
+		fi
+	fi
+	ovl="$(df -kP /overlay 2>/dev/null | awk 'NR == 2 { print int($4 / 1024) }')"
+	if [ -n "$ovl" ]; then
+		if [ "$ovl" -ge 5 ]; then
+			printf 'res\tok\tСвободно на флеше: %s МБ\t\t\n' "$ovl" >> "$f"
+		elif [ "$ovl" -ge 1 ]; then
+			printf 'res\twarn\tМало места на флеше: %s МБ\tобновления и списки могут не поместиться\tпочистите в разделе «Система» → «Очистка»\n' "$ovl" >> "$f"
+		else
+			printf 'res\tfail\tФлеш заполнен: %s МБ\tпанель не сможет обновиться\tосвободите место в разделе «Система» → «Очистка»\n' "$ovl" >> "$f"
+		fi
+	fi
+	ld="$(awk '{ print $1 }' /proc/loadavg 2>/dev/null)"
+	if [ -n "$ld" ]; then
+		v="$(awk -v l="$ld" -v c="$(nproc 2>/dev/null || echo 1)" 'BEGIN { r = l / (c + 0 > 0 ? c + 0 : 1); if (r < 0.9) print "ok"; else if (r < 1.6) print "warn"; else print "fail" }')"
+		case "$v" in
+			ok) printf 'res\tok\tНагрузка на процессор: %s\t\t\n' "$ld" >> "$f" ;;
+			warn) printf 'res\twarn\tВысокая нагрузка: %s\tправила могут применяться с задержкой\tзагляните в раздел «Мониторинг»\n' "$ld" >> "$f" ;;
+			*) printf 'res\tfail\tПроцессор перегружен: %s\tтуннели тормозят\tзагляните в раздел «Мониторинг»\n' "$ld" >> "$f" ;;
+		esac
+	fi
+	awk -F "$(printf '\t')" -v AT="$(date +%s 2>/dev/null)" "$ZM_JESC_AWK"'
+		BEGIN { T["svc"] = "Установка и служба"; T["net"] = "Подключение"; T["dns"] = "DNS"; T["res"] = "Роутер"; n = 0 }
+		{ n++; L[n] = $0; if (!(($1) in seen)) { seen[$1] = 1; ord[++gc] = $1 } }
+		END {
+			printf "{\"at\":%d,\"groups\":[", AT + 0
+			for (i = 1; i <= gc; i++) {
+				g = ord[i]
+				printf "%s{\"id\":\"%s\",\"title\":\"%s\",\"items\":[", (i > 1 ? "," : ""), jesc(g), jesc(T[g])
+				first = 1
+				for (k = 1; k <= n; k++) {
+					split(L[k], a, "\t")
+					if (a[1] != g) continue
+					printf "%s{\"v\":\"%s\",\"what\":\"%s\",\"why\":\"%s\",\"tip\":\"%s\"}", (first ? "" : ","), a[2], jesc(a[3]), jesc(a[4]), jesc(a[5])
+					first = 0
+				}
+				printf "]}"
+			}
+			printf "]}\n"
+		}' "$f"
+	rm -f "$f"
+}
+
 steer_action() {
 	local action="$1" mode="$2" w d
 	case "$action" in sec_add|sec_name|sec_kind|sec_del|sec_off|sec_over|sec_order) steer_sec_action "$action" "$mode"; return ;; esac
@@ -8540,6 +8658,7 @@ steer_action() {
 			fi
 			printf '{"warp":"%s","colo":"%s","vpn":"%s","vpn_ip":"%s","vpn_loc":"%s","tunnels":[%s],"ifs":[%s],"diag":%s,"human":[%s]}\n' "$warp" "$(esc "$colo")" "$vpn" "$(esc "$vip")" "$(esc "$vloc")" "$tun" "$itj" "${d:-null}" "$hj"
 			;;
+		checkall) _st_checkall ;;
 		dns_fix)
 			do_steer_dns_fix
 			printf '{"ok":true}\n'
@@ -50750,7 +50869,7 @@ return view.extend({
 		data = data || {};
 		var wrap = E('div', { 'class': 'zm-wrap' });
 		var hostsWarn = zm.hostsWarn('Steer');
-		var busy = false, lastAction = '', pick = null, autoBusy = false, diagRes = null, diagBusy = false, viewKind = null, viewRes = null, viewBusy = false;
+		var busy = false, lastAction = '', pick = null, autoBusy = false, diagRes = null, diagBusy = false, chkRes = null, chkBusy = false, chkOpen = {}, viewKind = null, viewRes = null, viewBusy = false;
 		var warpPick = null, ownTa = null, ownOpen = false, ownLoaded = false;
 		var extPick = null, awgData = null, awgAt = 0, awgBusy = false;
 		function awgLoad(force) {
@@ -52435,17 +52554,68 @@ return view.extend({
 		}
 
 
+		function chkDiagList() {
+			var items = [], dg = diagRes || {};
+			var tn = dg.tunnels || [];
+			if (dg.vpn === 'on') items.push([ 'ok', dg.vpn_ip ? [ 'Трафик идёт через подписку (выход ', zm.secret(dg.vpn_ip), (dg.vpn_loc ? ', ' + dg.vpn_loc : '') + ')' ] : 'Трафик идёт через подписку', '' ]);
+			else if (dg.vpn === 'off') items.push([ 'fail', 'Трафик через подписку не идёт', 'проверьте задержку узлов на вкладке «VPN» или выберите другой узел' ]);
+			else if (tn.length) tn.forEach(function(t) {
+				var who = tn.length > 1 ? 'Туннель ' + t.n + ': ' : '';
+				var extW = data.warp_mode === 'iface';
+				if (t.warp === 'on') items.push([ 'ok', who + 'трафик идёт через ' + warpName() + (t.colo ? ' (сервер ' + t.colo + ')' : ''), '' ]);
+				else if (t.warp === 'notls') items.push([ 'warn', who + 'соединение есть, но HTTPS не открывается', 'WARP поднялся без TLS — часть сайтов может не открыться', 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
+				else items.push([ tn.length > 1 && dg.warp === 'on' ? 'warn' : 'fail', who + 'трафик через ' + warpName() + ' не идёт',
+					extW ? 'нажмите «Перезапустить туннель» или «Подобрать точку входа»' : 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
+			});
+			else if (dg.warp === 'on') items.push([ 'ok', 'Трафик идёт через WARP' + (dg.colo ? ' (сервер ' + dg.colo + ')' : ''), '' ]);
+			else if (dg.warp === 'off') items.push([ 'fail', 'Трафик через WARP не идёт', 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
+			(dg.ifs || []).forEach(function(t) {
+				var who = 'Туннель ' + t.name + (t.label ? ' (' + t.label + ')' : '');
+				if (t.ip) items.push([ 'ok', [ who + ': трафик идёт (выход ', zm.secret(t.ip), ')' ], '' ]);
+				else if (!t.up) items.push([ 'fail', who + ' не подключён', t.kind === 'awg' ? 'включите его на вкладке AmneziaWG' : 'подключите его в LuCI, в разделе Сеть → Интерфейсы' ]);
+				else items.push([ 'fail', who + ': трафик через туннель не идёт', t.kind === 'awg' ? 'почините его на вкладке AmneziaWG' : 'проверьте подключение в Сеть → Интерфейсы' ]);
+			});
+			var d = dg.diag;
+			if (Array.isArray(dg.human) && dg.human.length) dg.human.forEach(function(c) { items.push([ c.v, c.what, c.why, c.tip, c.note ]); });
+			else if (d && d.checks) d.checks.forEach(function(c) {
+				if (c.verdict === 'ok' || c.verdict === 'warn' || c.verdict === 'fail') items.push([ c.verdict, c.what, c.why ]);
+			});
+			return items;
+		}
+
+		function chkGroups() {
+			var out = [], dl = diagRes ? chkDiagList() : [];
+			if (dl.length) out.push({ id: 'conn', title: 'Подключение', items: dl });
+			(chkRes && chkRes.groups ? chkRes.groups : []).forEach(function(g) {
+				var its = (g.items || []).map(function(i) { return [ i.v, i.what, i.why || '', i.tip || '', '' ]; });
+				if (its.length) out.push({ id: g.id || 'g', title: g.title || 'Проверка', items: its });
+			});
+			return out;
+		}
+
+		function chkTally() {
+			var t = { ok: 0, warn: 0, fail: 0 };
+			chkGroups().forEach(function(g) { g.items.forEach(function(i) { if (t[i[0]] !== undefined) t[i[0]]++; }); });
+			return t;
+		}
+
 		function runDiag(quiet) {
-			if (diagBusy) return;
-			diagBusy = true;
+			if (diagBusy || chkBusy) return;
+			diagBusy = true; chkBusy = true; chkRes = null;
 			renderCheck();
-			zm.steerAction('diag', '').then(function(res) {
-				diagBusy = false;
-				diagRes = res || {};
+			zm.steerAction('diag', '').catch(function() { return {}; }).then(function(d) {
+				diagRes = d || {};
+				return zm.steerAction('checkall', '').catch(function() { return null; });
+			}).then(function(c) {
+				chkRes = c && c.groups && c.groups.length ? c : null;
+				chkBusy = false; diagBusy = false;
 				renderCheck();
 				zm.steerStatus().then(function(r) { if (r) { data = r; renderMain(); renderSet(); } }).catch(function() {});
-				if (!quiet) zm.toast('Проверка закончена', 'info');
-			}).catch(function() { diagBusy = false; renderCheck(); });
+				if (!quiet) {
+					var t = chkTally();
+					zm.toast('Проверка закончена — ' + (t.fail ? 'есть поломка' : t.warn ? 'есть замечания' : 'всё в порядке'), (t.fail || t.warn) ? 'warning' : 'info');
+				}
+			}).catch(function() { chkBusy = false; diagBusy = false; renderCheck(); });
 		}
 
 		function renderCheck() {
@@ -52453,50 +52623,56 @@ return view.extend({
 			checkCard.style.display = data.installed && !data.blocker ? '' : 'none';
 			if (!data.installed || data.blocker) return;
 			checkCard.appendChild(E('h3', {}, 'Проверка'));
-			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Роутер проверит каждый туннель и спросит сам Steer, всё ли на месте.'));
-			if (diagRes) {
-				var items = [];
-				var tn = diagRes.tunnels || [];
-				if (diagRes.vpn === 'on') items.push([ 'ok', diagRes.vpn_ip ? [ 'Трафик идёт через подписку (выход ', zm.secret(diagRes.vpn_ip), (diagRes.vpn_loc ? ', ' + diagRes.vpn_loc : '') + ')' ] : 'Трафик идёт через подписку', '' ]);
-				else if (diagRes.vpn === 'off') items.push([ 'fail', 'Трафик через подписку не идёт', 'проверьте задержку узлов на вкладке «VPN» или выберите другой узел' ]);
-				else if (tn.length) tn.forEach(function(t) {
-					var who = tn.length > 1 ? 'Туннель ' + t.n + ': ' : '';
-					var ownW = data.warp_mode === 'own', extW = data.warp_mode === 'iface';
-					if (t.warp === 'on') items.push([ 'ok', who + 'трафик идёт через ' + warpName() + (t.colo ? ' (сервер ' + t.colo + (t.city ? ', ' + t.city : '') + ')' : '') + (t.seen ? ' · сайты видят: ' + country(t.seen) : ''), '' ]);
-					else if (t.warp === 'notls') items.push([ 'warn', who + 'соединение есть, но HTTPS через туннель не проходит', extW ? 'нажмите «Подобрать точку входа» в «Подключении»' : ownW ? 'замените конфиг в «Подключении»' : 'нажмите «Сменить точки входа» в «Подключении»' ]);
-					else items.push([ tn.length > 1 && diagRes.warp === 'on' ? 'warn' : 'fail', who + 'трафик через ' + warpName() + ' не идёт',
-						extW ? 'нажмите «Перезапустить туннель» или «Подобрать точку входа» в «Подключении»' : ownW ? 'нажмите «Перезапустить туннель» или замените конфиг в «Подключении»' : 'нажмите «Перезапустить туннели» или «Сменить точки входа» в «Подключении»' ]);
-				});
-				else if (diagRes.warp === 'on') items.push([ 'ok', 'Трафик идёт через WARP' + (diagRes.colo ? ' (сервер ' + diagRes.colo + ')' : ''), '' ]);
-				else if (diagRes.warp === 'off') items.push([ 'fail', 'Трафик через WARP не идёт', 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
-				(diagRes.ifs || []).forEach(function(t) {
-					var who = 'Туннель ' + t.name + (t.label ? ' (' + t.label + ')' : '');
-					if (t.ip) items.push([ 'ok', [ who + ': трафик идёт (выход ', zm.secret(t.ip), ')' ], '' ]);
-					else if (!t.up) items.push([ 'fail', who + ' не подключён', t.kind === 'awg' ? 'включите его на вкладке AmneziaWG' : 'подключите его в LuCI, в разделе Сеть → Интерфейсы' ]);
-					else items.push([ 'fail', who + ': трафик через туннель не идёт', t.kind === 'awg' ? 'почините его на вкладке AmneziaWG' : 'проверьте подключение в Сеть → Интерфейсы' ]);
-				});
-				var d = diagRes.diag;
-				if (Array.isArray(diagRes.human) && diagRes.human.length) diagRes.human.forEach(function(c) { items.push([ c.v, c.what, c.why, c.tip, c.note ]); });
-				else if (d && d.checks) d.checks.forEach(function(c) {
-					if (c.verdict === 'ok' || c.verdict === 'warn' || c.verdict === 'fail') items.push([ c.verdict, c.what, c.why ]);
-				});
-				var bad = items.filter(function(i) { return i[0] === 'fail'; }).length, warn = items.filter(function(i) { return i[0] === 'warn'; }).length;
-				checkCard.appendChild(chkRow(E('span', { 'class': 'zm-label' }, 'Итог'), bad ? badge('zm-bad', 'есть поломка') : warn ? badge('zm-warn', 'работает, есть замечания') : badge('zm-ok', 'всё в порядке')));
-				var CLS = { ok: 'zm-ok', warn: 'zm-warn', fail: 'zm-bad' }, TXT = { ok: 'ок', warn: 'внимание', fail: 'ошибка' };
-				items.forEach(function(i) {
-					var body = [ E('span', {}, [].concat(i[1], i[2] ? ' — ' + i[2] : '')) ];
-					if (i[3]) body.push(E('span', { 'class': 'zm-chk-tip' }, i[3]));
-					if (i[4]) body.push(E('span', { 'class': 'zm-chk-tip zm-chk-note' }, i[4]));
-					checkCard.appendChild(chkRow(badge(CLS[i[0]], TXT[i[0]]), body.length > 1 ? E('span', {}, body) : body[0]));
-				});
-			}
+			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Одна кнопка проверяет всё сразу: службу и ядро, туннели и выход, правила, DNS и сам роутер.'));
+			var busyAll = diagBusy || chkBusy;
 			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
-				E('button', { 'class': 'cbi-button', 'disabled': diagBusy || busy ? '' : null, 'click': function() { runDiag(false); } },
-					diagBusy ? 'Проверяем…' : 'Проверить'),
+				E('button', { 'class': 'cbi-button cbi-button-action zm-chk-run', 'disabled': busyAll || busy ? '' : null, 'click': function() { runDiag(false); } },
+					busyAll ? 'Проверяем…' : 'Проверить всё'),
 				E('button', { 'class': 'cbi-button' + (viewKind === 'conns' ? ' cbi-button-action' : ''), 'disabled': viewBusy ? '' : null, 'click': function() { loadView('conns'); } }, 'Соединения'),
 				E('button', { 'class': 'cbi-button' + (viewKind === 'dnslog' ? ' cbi-button-action' : ''), 'disabled': viewBusy ? '' : null, 'click': function() { loadView('dnslog'); } }, 'Недавние сайты'),
 				viewKind ? E('button', { 'class': 'cbi-button', 'click': function() { viewKind = null; viewRes = null; renderCheck(); } }, 'Скрыть') : ''
 			]));
+			if (busyAll) {
+				checkCard.appendChild(E('div', { 'class': 'zm-chk-bar' }, [ E('i', {}) ]));
+				checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Смотрю службу, туннели, DNS и роутер — это несколько секунд.'));
+			}
+			var groups = chkGroups(), t = chkTally(), total = t.ok + t.warn + t.fail;
+			if (!total && !busyAll) {
+				checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить всё» — панель спросит ядро steer, туннели, DNS и ресурсы роутера и покажет одну сводку.'));
+			}
+			if (total) {
+				var now = new Date();
+				var hh = ('0' + now.getHours()).slice(-2), mm = ('0' + now.getMinutes()).slice(-2);
+				checkCard.appendChild(E('div', { 'class': 'zm-chk-sum' }, [
+					t.fail ? badge('zm-bad', 'есть поломка') : t.warn ? badge('zm-warn', 'есть замечания') : badge('zm-ok', 'всё в порядке'),
+					E('span', { 'class': 'zm-chk-pill zm-ok' }, t.ok + ' ок'),
+					t.warn ? E('span', { 'class': 'zm-chk-pill zm-warn' }, t.warn + ' ' + plural(t.warn, 'замечание', 'замечания', 'замечаний')) : '',
+					t.fail ? E('span', { 'class': 'zm-chk-pill zm-bad' }, t.fail + ' ' + plural(t.fail, 'поломка', 'поломки', 'поломок')) : '',
+					E('span', { 'class': 'zm-chk-when' }, 'проверено в ' + hh + ':' + mm + ' · ' + total + ' ' + plural(total, 'проверка', 'проверки', 'проверок'))
+				]));
+			}
+			var CLS = { ok: 'zm-ok', warn: 'zm-warn', fail: 'zm-bad' }, TXT = { ok: 'ок', warn: 'внимание', fail: 'ошибка' };
+			groups.forEach(function(g) {
+				var bad = g.items.filter(function(i) { return i[0] === 'fail'; }).length;
+				var warn = g.items.filter(function(i) { return i[0] === 'warn'; }).length;
+				var sec = E('div', { 'class': 'zm-chk-sec' + (chkOpen[g.id] === false ? ' zm-fold' : '') });
+				sec.appendChild(E('button', { 'class': 'zm-chk-sec-h', 'type': 'button', 'click': function() { chkOpen[g.id] = chkOpen[g.id] === false; renderCheck(); } }, [
+					E('span', { 'class': 'zm-chk-sec-t' }, g.title),
+					E('span', { 'class': 'zm-chk-pill ' + (bad ? 'zm-bad' : warn ? 'zm-warn' : 'zm-ok') }, bad ? String(bad) : warn ? String(warn) : String(g.items.length)),
+					E('span', { 'class': 'zm-chk-caret' }, '›')
+				]));
+				if (chkOpen[g.id] !== false) {
+					var box = E('div', { 'class': 'zm-chk-list' });
+					g.items.forEach(function(i) {
+						var body = [ E('span', {}, [].concat(i[1], i[2] ? ' — ' + i[2] : '')) ];
+						if (i[3]) body.push(E('span', { 'class': 'zm-chk-tip' }, i[3]));
+						if (i[4]) body.push(E('span', { 'class': 'zm-chk-tip zm-chk-note' }, i[4]));
+						box.appendChild(chkRow(badge(CLS[i[0]] || 'zm-off', TXT[i[0]] || 'инфо'), body.length > 1 ? E('span', {}, body) : body[0]));
+					});
+					sec.appendChild(box);
+				}
+				checkCard.appendChild(sec);
+			});
 			if (!viewKind) return;
 			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, viewKind === 'conns'
 				? 'Что прямо сейчас идёт через туннель: устройство, адрес назначения и выход. Список берётся из памяти роутера в момент нажатия, никуда не сохраняется и не отправляется.'
@@ -60380,6 +60556,28 @@ html.zm-theme-dark .zm-card {
 .zm-chk-tip { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; opacity: .78; }
 .zm-chk-tip::before { content: "→ "; opacity: .7; }
 .zm-chk-note::before { content: "· "; }
+.zm-chk-run { font-weight: 700; letter-spacing: .01em; }
+.zm-chk-bar { position: relative; height: 3px; margin: 2px 0 8px; border-radius: 3px; background: rgba(127,127,127,.16); overflow: hidden; }
+.zm-chk-bar > i { position: absolute; top: 0; bottom: 0; left: -42%; width: 42%; border-radius: 3px; background: linear-gradient(90deg, rgba(14,143,208,0), #0e8fd0, rgba(14,143,208,0)); animation: zm-chk-slide 1.15s ease-in-out infinite; }
+@keyframes zm-chk-slide { 0% { left: -42%; } 100% { left: 100%; } }
+.zm-chk-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 4px 0 10px; }
+.zm-chk-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.zm-chk-pill.zm-ok { background: rgba(46,160,67,.13); color: #1a7f37; }
+.zm-chk-pill.zm-warn { background: rgba(191,135,0,.14); color: #9a6700; }
+.zm-chk-pill.zm-bad { background: rgba(207,34,46,.12); color: #cf222e; }
+html.zm-theme-dark .zm-chk-pill.zm-ok { color: #3fb950; }
+html.zm-theme-dark .zm-chk-pill.zm-warn { color: #e3b341; }
+html.zm-theme-dark .zm-chk-pill.zm-bad { color: #f85149; }
+.zm-chk-when { font-size: 12px; opacity: .6; margin-left: auto; }
+.zm-chk-sec { border: 1px solid rgba(127,127,127,.18); border-radius: 12px; padding: 1px 10px 5px; margin: 0 0 8px; transition: border-color .15s; }
+.zm-chk-sec:hover { border-color: rgba(127,127,127,.32); }
+.zm-chk-sec-h { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.zm-chk-sec-t { flex: 1 1 auto; font-weight: 700; font-size: 13px; }
+.zm-chk-caret { opacity: .45; font-size: 15px; line-height: 1; transform: rotate(90deg); transition: transform .15s; }
+.zm-chk-sec.zm-fold .zm-chk-caret { transform: rotate(0deg); }
+.zm-chk-sec .zm-row.zm-chk { border-top: 1px solid rgba(127,127,127,.12); }
+.zm-chk-sec .zm-row.zm-chk:first-child { border-top: 0; }
+@media (max-width: 560px) { .zm-chk-when { margin-left: 0; flex: 1 1 100%; } }
 
 .zm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; max-width: 100%; }
 .zm-row > .zm-badge, .zm-awg-if .zm-badge, .zm-zc-row > .zm-badge, .zm-svc-card .zm-badge { white-space: normal; overflow-wrap: anywhere; text-align: left; }
