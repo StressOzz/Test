@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.095
+# Version: 5.995
 ZM_VERSION_EOF
 set -e
 
@@ -2489,6 +2489,27 @@ _zo_rkn_count() {
 	mkdir -p "$JOBS_DIR" 2>/dev/null && echo "$k ${n:-0}" > "$f" 2>/dev/null
 	echo "${n:-0}"
 }
+
+# Zapret2: у части сборок пакета /etc/init.d/zapret2 status возвращает 1 даже когда
+# служба работает, поэтому «работает» считаем по нескольким признакам сразу.
+_z2_run() {
+	[ -f /etc/init.d/zapret2 ] || return 1
+	[ -x /etc/init.d/zapret2 ] && /etc/init.d/zapret2 status >/dev/null 2>&1 && return 0
+	if command -v ubus >/dev/null 2>&1; then
+		ubus call service list '{"name":"zapret2"}' 2>/dev/null | grep -q '"running":[[:space:]]*true' && return 0
+	fi
+	if command -v pgrep >/dev/null 2>&1; then
+		pgrep -f "/opt/zapret[2]/" >/dev/null 2>&1 && return 0
+		pgrep -x nfqws2 >/dev/null 2>&1 && return 0
+	else
+		local _p
+		for _p in /proc/[0-9]*/cmdline; do
+			tr '\0' ' ' < "$_p" 2>/dev/null | grep -qE '(/opt/zapret2/|(^|/)nfqws2( |$))' && return 0
+		done
+	fi
+	pidof nfqws2 >/dev/null 2>&1 && return 0
+	return 1
+}
 status() {
 	local zr="not_installed" zr_running="false" zr_ver=""
 	_test_recover
@@ -2502,7 +2523,7 @@ status() {
 	local zr2="not_installed" zr2_running="false" zr2_luci=""
 	if [ -f /etc/init.d/zapret2 ]; then
 		zr2="installed"
-		/etc/init.d/zapret2 status >/dev/null 2>&1 && zr2_running="true"
+		_z2_run && zr2_running="true"
 		zr2_luci="$(_z2_luci_path)"
 	fi
 
@@ -5568,7 +5589,7 @@ _tg_dash_info() {
 health() {
 	local zr=0 zr2=0 bt=0 tg=0 mx=0 doh=0 hs=0 inst=0 bad=0 out=""
 	if [ -f /etc/init.d/zapret ]; then zr=2; pgrep -f "/opt/zapre[t]/" >/dev/null 2>&1 && zr=1; fi
-	if [ -f /etc/init.d/zapret2 ]; then zr2=2; /etc/init.d/zapret2 status >/dev/null 2>&1 && zr2=1; fi
+	if [ -f /etc/init.d/zapret2 ]; then zr2=2; _z2_run && zr2=1; fi
 	if [ -x /usr/bin/bytetube ]; then
 		bt=2
 		out=$(/usr/bin/bytetube status 2>/dev/null)
@@ -9357,7 +9378,9 @@ AB_ALLOW_DEFAULT='# Переходы по рекламе в поиске Янд�
 yabs.yandex.ru
 redirect.appmetrica.yandex.com
 trk.mail.ru
-s.click.aliexpress.com'
+s.click.aliexpress.com
+# Виджеты Кинопоиска (трейлеры и оценки на сайте) — без них страницы ломаются
+widgets.kinopoisk.ru'
 
 _ab_get() {
 	local v
@@ -13178,18 +13201,92 @@ mirror_set() {
 	else job_start mirror_set do_mirror_set "$host"; fi
 }
 
+# ── IPv6: устройства с таким адресом идут мимо Zapret наравне с IPv4 ──────────
+_excl_current6() {
+	local f; f="$(_excl_file)"
+	[ -f "$f" ] || return 0
+	sed -n "s/^EXCEPT_SRC6='{ \(.*\) }'$/\1/p" "$f" | tr ',' '\n' | tr -d ' \t' | sed '/^$/d' | sort -u
+}
+
+_excl_v6_ok() {
+	case "$1" in *:*) ;; *) return 1 ;; esac
+	printf '%s' "$1" | grep -qE '^[0-9A-Fa-f:]+$' || return 1
+	[ "$(printf '%s' "$1" | wc -c | tr -d ' ')" -le 45 ] || return 1
+	printf '%s' "$1" | awk '
+		function zmcnt(s, t, i, k) { k = 0; while ((i = index(s, t)) > 0) { k++; s = substr(s, i + 1) } return k }
+		{
+			a = $0
+			if (zmcnt(a, "::") > 1) exit 1
+			zk = (index(a, "::") > 0)
+			n = split(a, g, ":")
+			for (i = 1; i <= n; i++) {
+				if (g[i] == "") continue
+				if (length(g[i]) > 4 || g[i] !~ /^[0-9A-Fa-f]+$/) exit 1
+			}
+			if (!zk && n != 8) exit 1
+			if (zk && n > 9) exit 1
+			exit 0
+		}'
+}
+
+# mac → IPv6 из odhcpd. Строки: mac<TAB>ip6<TAB>имя. Пусто — IPv6 в сети не раздаётся.
+_zm_v6_map() {
+	local out="$1" raw="$JOBS_DIR/excl_v6_raw"
+	: > "$out" 2>/dev/null || return 0
+	command -v ubus >/dev/null 2>&1 || return 0
+	ubus call dhcp ipv6leases 2>/dev/null > "$raw" || { rm -f "$raw"; return 0; }
+	if [ -s "$raw" ]; then
+		tr -d '\r' < "$raw" | tr -d '\n' | sed 's/}[[:space:]]*,[[:space:]]*{/}\n{/g' | awk '
+			{
+				mac = ""; ip6 = ""; host = ""
+				if (match($0, /"mac"[ \t]*:[ \t]*"[^"]*"/)) { t = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", t); sub(/".*$/, "", t); mac = tolower(t) }
+				if (match($0, /"ipv6"[ \t]*:[ \t]*"[^"]*"/)) { t = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", t); sub(/".*$/, "", t); ip6 = t }
+				if (match($0, /"hostname"[ \t]*:[ \t]*"[^"]*"/)) { t = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", t); sub(/".*$/, "", t); host = t }
+				if (ip6 != "" && ip6 !~ /^fe80:/) print (mac == "" ? "-" : mac) "\t" ip6 "\t" host
+			}' | sort -u > "$out"
+	fi
+	rm -f "$raw"
+	# SLAAC-адреса odhcpd не выдаёт в аренду — берём их из соседей IPv6 на LAN
+	if command -v ip >/dev/null 2>&1; then
+		local lan; lan=" $(_zm_lan_devs) "
+		ip -6 neigh show 2>/dev/null | awk -v L="$lan" '
+			{
+				a = $1; dev = ""; mac = ""
+				for (i = 2; i < NF; i++) { if ($i == "dev") dev = $(i + 1); if ($i == "lladdr") mac = tolower($(i + 1)) }
+				if (a ~ /^(fe80|ff[0-9a-f][0-9a-f]):/ || a == "::1" || mac == "" || $NF == "FAILED" || $NF == "INCOMPLETE") next
+				if (index(L, " " dev " ") == 0) next
+				print mac "\t" a "\t"
+			}' >> "$out" 2>/dev/null
+		sort -u -o "$out" "$out" 2>/dev/null
+	fi
+	return 0
+}
+
+# Все IPv6 устройства одной строкой через пробел (в JSON нельзя переводы строк).
+_zm_v6_of() {
+	[ -n "$2" ] && [ -s "$1" ] || return 0
+	awk -v m="$2" 'BEGIN { m = tolower(m) } { n = split($0, a, "\t"); if (n >= 2 && a[1] == m && !s[a[2]]++) o = o (o == "" ? "" : " ") a[2] } END { if (o != "") print o }' "$1"
+}
+
 _excl_write() {
-	local ips="$1" f
+	local ips="$1" ips6="$2" f formatted
 	f="$(_excl_file)"
 	mkdir -p "$(_excl_dir)"
-	if [ -n "$ips" ]; then
+	if [ -n "$ips" ] || [ -n "$ips6" ]; then
 		_excl_enable_custom
-		local formatted
-		formatted=$(printf '%s\n' "$ips" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
 		{
-			echo "EXCEPT_SRC='{ $formatted }'"
-			echo "nft insert rule inet zapret postrouting_hook index 0 \\"
-			echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"
+			if [ -n "$ips" ]; then
+				formatted=$(printf '%s\n' "$ips" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+				echo "EXCEPT_SRC='{ $formatted }'"
+				echo "nft insert rule inet zapret postrouting_hook index 0 \\"
+				echo "  ip saddr \$EXCEPT_SRC meta mark set meta mark \\| 0x40000000"
+			fi
+			if [ -n "$ips6" ]; then
+				formatted=$(printf '%s\n' "$ips6" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+				echo "EXCEPT_SRC6='{ $formatted }'"
+				echo "nft insert rule inet zapret postrouting_hook index 0 \\"
+				echo "  ip6 saddr \$EXCEPT_SRC6 meta mark set meta mark \\| 0x40000000"
+			fi
 		} > "$f"
 	else
 		: > "$f"
@@ -13198,9 +13295,15 @@ _excl_write() {
 
 exclusions_status() {
 	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
-	local current devjson="" first=1 ip name ts mac rest aip ahw aflags amac amask adev aname
+	local current current6 exf a6 devjson="" devjson6="" first=1 ip name name6 ts mac rest aip ahw aflags amac amask adev aname
+	local v6map="$JOBS_DIR/excl_v6_map"
 
 	current=$(_excl_current)
+	current6=$(_excl_current6)
+	exf="$JOBS_DIR/excl_cur.$$"
+	mkdir -p "$JOBS_DIR" 2>/dev/null
+	{ printf '%s\n' "$current"; printf '%s\n' "$current6"; } | sed '/^$/d' | sort -u > "$exf"
+	_zm_v6_map "$v6map"
 
 	if [ -f /tmp/dhcp.leases ]; then
 		while read -r ts mac ip name rest; do
@@ -13211,7 +13314,8 @@ exclusions_status() {
 			[ "$name" = "*" ] && name="Неизвестное устройство"
 			[ "$first" -eq 1 ] || devjson="$devjson,"
 			first=0
-			devjson="$devjson{\"ip\":\"$ip\",\"name\":\"$(esc "$name")\",\"excluded\":$(printf '%s\n' "$current" | grep -qx "$ip" && echo true || echo false)}"
+			a6="$(_zm_v6_of "$v6map" "$mac")"
+			devjson="$devjson{\"ip\":\"$ip\",\"ip6\":\"$a6\",\"name\":\"$(esc "$name")\",\"excluded\":$(_excl_flag "$ip" "$a6" "$exf")}"
 		done < /tmp/dhcp.leases
 	fi
 
@@ -13235,16 +13339,17 @@ exclusions_status() {
 			[ "$aname" = "$amac" ] && aname=""
 			ip2="$(_zm_dname "$amac")" && aname="$ip2"
 			[ -n "$aname" ] || aname="Неизвестное устройство"
-			printf '%s|%s\n' "$aip" "$aname" >> "$arp_tmp"
+			printf '%s|%s|%s\n' "$aip" "$aname" "$amac" >> "$arp_tmp"
 		done
 		rm -f "$arp_tmp.log"
 	fi
 	if [ -f "$arp_tmp" ]; then
-		while IFS='|' read -r aip aname; do
+		while IFS='|' read -r aip aname amac; do
 			[ -z "$aip" ] && continue
 			[ "$first" -eq 1 ] || devjson="$devjson,"
 			first=0
-			devjson="$devjson{\"ip\":\"$aip\",\"name\":\"$(esc "$aname")\",\"excluded\":$(printf '%s\n' "$current" | grep -qx "$aip" && echo true || echo false)}"
+			a6="$(_zm_v6_of "$v6map" "$amac")"
+			devjson="$devjson{\"ip\":\"$aip\",\"ip6\":\"$a6\",\"name\":\"$(esc "$aname")\",\"excluded\":$(_excl_flag "$aip" "$a6" "$exf")}"
 		done < "$arp_tmp"
 		rm -f "$arp_tmp"
 	fi
@@ -13255,25 +13360,50 @@ exclusions_status() {
 		printf '%s' "$devjson" | grep -q "\"ip\":\"$ip2\"" && continue
 		[ "$first" -eq 1 ] || devjson="$devjson,"
 		first=0
-		devjson="$devjson{\"ip\":\"$ip2\",\"name\":\"Устройство offline\",\"excluded\":true}"
+		devjson="$devjson{\"ip\":\"$ip2\",\"ip6\":\"\",\"name\":\"Устройство offline\",\"excluded\":true}"
 	done
 
-	printf '{"devices":[%s]}\n' "$devjson"
+	# IPv6, которого нет у известных IPv4-устройств (и осиротевшие записи исключений)
+	local ip6v
+	for ip6v in $current6; do
+		[ -z "$ip6v" ] && continue
+		printf '%s' "$devjson$devjson6" | grep -qE "\"ip6\":\"([^\"]* )?$ip6v( [^\"]*)?\"" && continue
+		[ -z "$devjson6" ] || devjson6="$devjson6,"
+		name6="$(awk -v m="$ip6v" 'BEGIN { m = tolower(m) } { n = split($0, a, "\t"); if (n >= 2 && tolower(a[2]) == m && a[3] != "") { print a[3]; exit } }' "$v6map" 2>/dev/null)"
+		devjson6="$devjson6{\"ip6\":\"$ip6v\",\"name\":\"$(esc "${name6:-IPv6-адрес}")\",\"excluded\":true}"
+	done
+	rm -f "$exf"
+
+	printf '{"devices":[%s],"devices6":[%s]}\n' "$devjson" "$devjson6"
+}
+
+_excl_flag() {
+	local a
+	for a in $1 $2; do
+		[ -n "$a" ] || continue
+		[ -f "$3" ] && grep -qxF "$a" "$3" && { echo true; return 0; }
+	done
+	echo false
 }
 
 exclusions_set() {
-	local ips="" ip bad=""
+	local ips="" ips6="" ip bad="" cur6
 	[ -f /etc/init.d/zapret ] || { echo '{"error":"Zapret не установлен"}'; return 1; }
 	for ip in $(printf '%s' "$1" | tr ',;\r\n\t' '     '); do
 		if _zm_re "$ip" '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' && printf '%s' "$ip" | awk -F. '$1 < 256 && $2 < 256 && $3 < 256 && $4 < 256 { ok = 1 } END { exit !ok }'; then
 			ips="$ips$ip
 "
+		elif _excl_v6_ok "$ip"; then
+			ips6="$ips6$ip
+"
 		else bad="$ip"; break; fi
 	done
-	[ -z "$bad" ] || { printf '{"error":"%s"}\n' "$(esc "«$bad» — не IPv4-адрес, например 192.168.1.100")"; return 1; }
+	[ -z "$bad" ] || { printf '{"error":"%s"}\n' "$(esc "«$bad» — не IPv4- и не IPv6-адрес, например 192.168.1.100 или 2a02:1234:5678::100")"; return 1; }
 	ips="$(printf '%s' "$ips" | grep -v '^$' | sort -u)"
-	if [ "$ips" = "$(_excl_current)" ]; then printf '{"ok":true,"changed":false}\n'; return 0; fi
-	_excl_write "$ips"
+	ips6="$(printf '%s' "$ips6" | grep -v '^$' | sort -u)"
+	cur6="$(_excl_current6)"
+	if [ "$ips" = "$(_excl_current)" ] && [ "$ips6" = "$cur6" ]; then printf '{"ok":true,"changed":false}\n'; return 0; fi
+	_excl_write "$ips" "$ips6"
 	zapret_restart
 	logger -t zapret-manager "Zapret: исключения устройств обновлены — устройств: $(printf '%s\n' "$ips" | grep -c .)"
 	printf '{"ok":true,"changed":true}\n'
@@ -20584,7 +20714,11 @@ _do_install_zapret2_core() {
 
 	echo "==> Добавляем домены в исключения"
 	mkdir -p /opt/zapret2/ipset
-	_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
+	if [ "$upd" = 0 ]; then
+		_zm_fetch "$EXCLUDE_URL" /opt/zapret2/ipset/zapret_hosts_user_exclude.txt 60 || echo "!! Не удалось загрузить zapret_hosts_user_exclude.txt"
+	else
+		_z2_fetch_missing /opt/zapret2/ipset/zapret_hosts_user_exclude.txt "$EXCLUDE_URL"
+	fi
 
 	echo "==> Настраиваем стратегии"
 	mkdir -p /opt/zapret2/init.d/openwrt/custom.d
@@ -20610,8 +20744,8 @@ _do_install_zapret2_core() {
 	/etc/init.d/zapret2 restart >/dev/null 2>&1
 	if [ "$boot" != 0 ]; then
 		local zi=0
-		while [ "$zi" -lt 8 ]; do /etc/init.d/zapret2 status >/dev/null 2>&1 && break; sleep 1; zi=$((zi + 1)); done
-		if /etc/init.d/zapret2 status >/dev/null 2>&1; then echo "   ✓ Zapret2 перезапущен"
+		while [ "$zi" -lt 8 ]; do _z2_run && break; sleep 1; zi=$((zi + 1)); done
+		if _z2_run; then echo "   ✓ Zapret2 перезапущен"
 		else echo "!! Zapret2 не запустился — проверьте /etc/config/zapret2"; fi
 	fi
 
@@ -20657,7 +20791,7 @@ _z2c_valid() {
 	return $rc
 }
 
-_z2c_up() { /etc/init.d/zapret2 status >/dev/null 2>&1; }
+_z2c_up() { _z2_run; }
 
 _z2c_apply() {
 	local i=0
@@ -21030,16 +21164,16 @@ zapret2_action() {
 		remove)         job_start remove_zapret2  do_remove_zapret2 ;;
 		start)
 			/etc/init.d/zapret2 start >/dev/null 2>&1
-			for p in 1 2 3 4 5 6; do /etc/init.d/zapret2 status >/dev/null 2>&1 && break; sleep 1; done
+			for p in 1 2 3 4 5 6; do _z2_run && break; sleep 1; done
 			status ;;
 		stop)
 			/etc/init.d/zapret2 stop >/dev/null 2>&1
-			for p in 1 2 3 4 5 6; do /etc/init.d/zapret2 status >/dev/null 2>&1 || break; sleep 1; done
+			for p in 1 2 3 4 5 6; do _z2_run || break; sleep 1; done
 			status ;;
 		restart)
 			[ -x /etc/init.d/zapret2 ] || { echo '{"error":"Zapret2 не установлен"}'; return 1; }
 			/etc/init.d/zapret2 restart >/dev/null 2>&1
-			for p in 1 2 3 4 5; do /etc/init.d/zapret2 status >/dev/null 2>&1 && break; sleep 1; done
+			for p in 1 2 3 4 5; do _z2_run && break; sleep 1; done
 			status ;;
 		boot_on|boot_off) _zp_boot_set zapret2 Zapret2 "$action" ;;
 		*) echo '{"error":"неизвестное действие"}' ;;
@@ -28955,7 +29089,11 @@ _stl_rule() {
 	else
 		r="{\"name\":$(_stl_js "$lab"),\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
 	fi
-	if [ -n "$top" ]; then crules="$crules${crules:+,}$r"; else rules="$rules${rules:+,}$r"; fi
+	if [ -n "$top" ]; then
+		# Свой список секции стоит наверху — её исключения должны оказаться ещё выше.
+		[ -z "$xint" ] && [ -n "$xsec" ] && [ "$xsec" != main ] && [ "$xsec" != - ] && [ -n "$xd$xp" ] && { crules="$crules${crules:+,}$(_stl_xr " (свой список)")"; byp=1; xint=1; }
+		crules="$crules${crules:+,}$r"
+	else rules="$rules${rules:+,}$r"; fi
 }
 
 _stl_dns_need() { case " $dnsn " in *" $1:$2 "*) ;; *) dnsn="$dnsn $1:$2" ;; esac; }
@@ -29047,12 +29185,33 @@ _stl_overs() {
 	printf '%s' "$o"
 }
 
+# Исключения дополнительной секции: правило встаёт прямо перед её сервисами и
+# действует для тех же клиентов, поэтому чужие секции оно не задевает.
+_stl_xr() {
+	local f="" n
+	[ -n "$sfm$sfa" ] && f=",\"for\":[$sfm${sfm:+${sfa:+,}}$sfa]"
+	n="$(_stl_js "Исключения$1 · «$(_st_sec_name "$xsec")»")"
+	printf '{"name":%s%s,"to":"%s","out":"%s","resolve":"realip"}' "$n" "$f" "$ST_EXCL_LIST${xsec#s}" "$ST_DIRECT_OUT"
+}
+
+_stl_xin() {
+	# Сервис custom уходит в верхнюю часть спеки — там исключения ставит _stl_rule, здесь не дублируем.
+	[ "$a" != custom ] || return 0
+	[ -z "$xint" ] && [ -n "$xsec" ] && [ "$xsec" != main ] && [ "$xsec" != - ] && [ -n "$xd$xp" ] && [ -n "$out" ] || return 0
+	xint=1
+	rules="$rules${rules:+,}$(_stl_xr)"
+	byp=1
+}
+
 _stl_spec() {
 	local tab k a b c d m lists="" rules="" outs="" lan="" lid="" lab="" srs="" dom="" pfx=""
 	local clients="" drules="" cid dout byp="" xd="" xp="" xc="" xr="" x="" dnsj="" dnsn="" dnt=""
+	local xsec="" xrec="" xglob="" xdr="" xs xd2 xp2 xc2 xn xb xnm xint=""
 	local body wp=latency main="" mout="" out="" sec="" sfm="" sfa="" so="" t u dvs="" STL_CID="" mf="$1" mif="" cu="" crules="" taken="" svn="" fob=""
 	tab="$(printf '\t')"
 	mkdir -p "$STL_TMP"
+	xrec="$STL_TMP/xrec.$$"
+	: > "$xrec"
 	while IFS="$tab" read -r k a b c; do
 		case "$k" in
 			main) main="$a" ;;
@@ -29097,11 +29256,13 @@ _stl_spec() {
 			vpn) [ "$main" = vpn ] && { t="$(_stl_vpn_outs "$mf" "$a")"; [ -n "$t" ] && outs="$t${outs:+,}$outs"; } ;;
 			sec)
 				_stl_rule; lid=""; srs=""; dom=""; pfx=""; cu=""; svn=""
+				[ -n "$xd$xp" ] && [ "$xsec" != - ] && printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xc:--}" >> "$xrec"
+				xd=""; xp=""; xc=""; xsec="$a"; xint=""
 				sec="$a"; out=""; dnt="${a#s}"; sfm=""; sfa=""
 				if [ "$a" = main ]; then out="$mout"; sec=""; else
 					for t in $so; do [ "${t%%:*}" = "$a" ] && out="${t#*:}"; done
 				fi
-				[ -n "$out" ] || continue
+				[ -n "$out" ] || { xsec=-; continue; }
 				if [ "$out" = "$mout" ]; then dnt=""; elif [ "$out" = "$STL_WARP_OUT" ]; then dnt=w; fi
 				while IFS="$tab" read -r u d m x; do
 					[ "$u" = sdev ] && [ "$d" = "$a" ] && [ "$m" = only ] || continue
@@ -29109,12 +29270,12 @@ _stl_spec() {
 					case "$x" in *:*) sfm="$sfm${sfm:+,}\"$STL_CID\"" ;; *) sfa="$sfa${sfa:+,}\"$STL_CID\"" ;; esac
 				done < "$mf"
 				x="" ;;
-			svc) _stl_rule; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; svn="$b"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
+			svc) _stl_rule; _stl_xin; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; svn="$b"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
 			srs) srs="$srs${srs:+,}$(_stl_js "$a")" ;;
 			dom) dom="$dom${dom:+,}$(_stl_js "$a")" ;;
 			pfx) pfx="$pfx${pfx:+,}$(_stl_js "$a")" ;;
-			xdom) xd="$xd${xd:+,}$(_stl_js "$a")" ;;
-			xpfx) xp="$xp${xp:+,}$(_stl_js "$a")" ;;
+			xdom) if [ -n "$b" ]; then xd="$xd${xd:+,}$(_stl_js "$b")"; else xd="$xd${xd:+,}$(_stl_js "$a")"; fi ;;
+			xpfx) if [ -n "$b" ]; then xp="$xp${xp:+,}$(_stl_js "$b")"; else xp="$xp${xp:+,}$(_stl_js "$a")"; fi ;;
 			dev)
 				if [ "$a" = byp ]; then dout="$ST_DIRECT_OUT"; byp=1; else dout="$mout"; fi
 				[ -n "$dout" ] || continue
@@ -29138,20 +29299,34 @@ _stl_spec() {
 	_stl_fo_apply
 	grep -q "^over$tab" "$mf" && outs="$(_stl_overs "$outs" "$mf")"
 	[ -n "$crules" ] && rules="$crules${rules:+,}$rules"
-	[ -n "$rules$drules" ] || return 1
-	if [ -n "$xd$xp" ]; then
-		body=""
-		[ -n "$xd" ] && body="\"domains_file\":[$xd]"
-		[ -n "$xp" ] && body="$body${body:+,}\"prefixes_file\":[$xp]"
-		lists="\"$ST_EXCL_LIST\":{$body}${lists:+,}$lists"
-		rules="{\"name\":\"Исключения\",\"to\":\"$ST_EXCL_LIST\",\"out\":\"$ST_DIRECT_OUT\",\"resolve\":\"realip\"}${rules:+,}$rules"
-		for cid in $(printf '%s\n' $xc | awk '!s[$0]++'); do
-			xr="$xr${xr:+,}{\"name\":$(_stl_js "$(_stl_ident "x_$cid")"),\"for\":[\"$cid\"],\"to\":\"$ST_EXCL_LIST\",\"out\":\"$ST_DIRECT_OUT\",\"scope\":\"device\",\"resolve\":\"realip\"}"
-		done
-		[ -n "$xr" ] && drules="$xr${drules:+,}$drules"
-		byp=1
+	[ -n "$xd$xp" ] && [ "$xsec" != - ] && printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xc:--}" >> "$xrec"
+	# Исключения по секциям: у каждой секции свой список, правило привязано к её устройствам.
+	if [ -s "$xrec" ]; then
+		while IFS="$tab" read -r xs xd2 xp2 xc2; do
+			[ "$xd2" = - ] && xd2=""; [ "$xp2" = - ] && xp2=""; [ "$xc2" = - ] && xc2=""
+			[ -n "$xd2$xp2" ] || continue
+			xn="$ST_EXCL_LIST"
+			[ "$xs" = main ] || xn="$ST_EXCL_LIST${xs#s}"
+			xb=""
+			[ -n "$xd2" ] && xb="\"domains_file\":[$xd2]"
+			[ -n "$xp2" ] && xb="$xb${xb:+,}\"prefixes_file\":[$xp2]"
+			lists="$lists${lists:+,}\"$xn\":{$xb}"
+			xnm="$(_stl_js "Исключения$([ "$xs" = main ] || printf ' · «%s»' "$(_st_sec_name "$xs")")")"
+			if [ "$xs" = main ]; then
+				xglob="$xglob${xglob:+,}{\"name\":$xnm,\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"resolve\":\"realip\"}"
+			fi
+			for cid in $(printf '%s\n' $xc2 | awk '!s[$0]++'); do
+				xdr="$xdr${xdr:+,}{\"name\":$(_stl_js "$(_stl_ident "x_${xs}_$cid")"),\"for\":[\"$cid\"],\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"scope\":\"device\",\"resolve\":\"realip\"}"
+			done
+			byp=1
+		done < "$xrec"
 	fi
+	rm -f "$xrec"
+	[ -n "$rules$drules$xdr$xglob" ] || return 1
 	[ -n "$byp" ] && outs="$outs${outs:+,}\"$ST_DIRECT_OUT\":{\"kind\":\"direct\"}"
+	[ -n "$xdr" ] && [ -n "$drules" ] && drules="$drules,"
+	[ -n "$xdr" ] && [ -n "$xglob" ] && xdr="$xdr,"
+	drules="$xdr$drules$xglob"
 	[ -n "$drules" ] && [ -n "$rules" ] && drules="$drules,"
 	rules="$drules$rules"
 	[ -n "$clients" ] && clients="\"clients\":{$clients},"
@@ -29532,10 +29707,29 @@ _st_dev_key() {
 
 _st_work_main() { [ -n "$(_st_sel)" ] || _st_devs_all; }
 
+# Исключения секции: $2.lst / $2.pfx → строки модели с меткой секции $1.
+_st_excl_emit() {
+	[ -s "$2.lst" ] && printf 'xdom\t%s\t%s\n' "$1" "$2.lst"
+	[ -s "$2.pfx" ] && printf 'xpfx\t%s\t%s\n' "$1" "$2.pfx"
+	return 0
+}
+
+# Список исключений секции: у основной он лежит там же, где лежал всегда.
+_st_excl_base() { if [ -n "$ST_SEC" ]; then printf '%s' "$ST_SEC_DIR/$ST_SEC/exclude"; else printf '%s' "$ST_USER_DIR/exclude"; fi; }
+
+_st_sec_excl_model() { _st_excl_emit "$1" "$ST_SEC_DIR/$1/exclude"; }
+
+# Быстрое применение годится, только если набор списков исключений не изменился.
+_st_excl_fit() {
+	local s have now
+	have="$(awk -F'\t' '$1 == "xdom" || $1 == "xpfx" { print $2 "\t" $3 }' "$ST_DIR/model.svc" 2>/dev/null | sort -u)"
+	now="$({ _st_excl_model 2>/dev/null; for s in $(_st_secs); do _st_sec_excl_model "$s"; done; } | awk -F'\t' '{ print $2 "\t" $3 }' | sort -u)"
+	[ "$have" = "$now" ]
+}
+
 _st_excl_model() {
 	local id st set
-	[ -s "$ST_DIR/user/exclude.lst" ] && printf 'xdom\t%s\n' "$ST_DIR/user/exclude.lst"
-	[ -s "$ST_DIR/user/exclude.pfx" ] && printf 'xpfx\t%s\n' "$ST_DIR/user/exclude.pfx"
+	_st_excl_emit main "$ST_DIR/user/exclude"
 	[ -s "$ST_TCH_XSETS" ] && [ -s "$ST_TCH_DIRECT" ] && _st_tch_on || return 0
 	for id in $(cat "$ST_TCH_XSETS"); do
 		st="$(awk -F'|' -v k="$id" '$1 == k { print $4; exit }' "$ST_TCH_DIRECT")"
@@ -29543,19 +29737,23 @@ _st_excl_model() {
 		echo "   → Мимо Steer: «$(awk -F'|' -v k="$id" '$1 == k { print $2; exit }' "$ST_TCH_DIRECT")»" >&2
 		for set in $(echo "$st" | tr ',' ' '); do
 			_st_srs_get "$set" || { _rb_warn "Список $set для «Мимо Steer» не скачался — пропускаем его в этот раз" >&2; continue; }
-			[ -s "$ST_DIR/lists/$set.dom" ] && printf 'xdom\t%s\n' "$ST_DIR/lists/$set.dom"
-			[ -s "$ST_DIR/lists/$set.pfx" ] && printf 'xpfx\t%s\n' "$ST_DIR/lists/$set.pfx"
+			[ -s "$ST_DIR/lists/$set.dom" ] && printf 'xdom\tmain\t%s\n' "$ST_DIR/lists/$set.dom"
+			[ -s "$ST_DIR/lists/$set.pfx" ] && printf 'xpfx\tmain\t%s\n' "$ST_DIR/lists/$set.pfx"
 		done
 	done
 	return 0
 }
 
 do_steer_excl() {
-	local rc nd np
+	local rc nd np s sp=""
 	_st_phase rules
 	rm -f "$ST_STOP_FLAG"
 	nd="$(cat "$ST_DIR/user/exclude.lst" 2>/dev/null | grep -c .)"; np="$(cat "$ST_DIR/user/exclude.pfx" 2>/dev/null | grep -c .)"
-	_rb_say "Исключения: доменов $nd, IP и подсетей $np$([ -s "$ST_TCH_XSETS" ] && echo ", готовых списков $(grep -c . "$ST_TCH_XSETS")")"
+	for s in $(_st_secs); do
+		[ -s "$ST_SEC_DIR/$s/exclude.lst" ] || [ -s "$ST_SEC_DIR/$s/exclude.pfx" ] || continue
+		sp="$sp, «$(_st_sec_name "$s")» — доменов $(cat "$ST_SEC_DIR/$s/exclude.lst" 2>/dev/null | grep -c .), IP и подсетей $(cat "$ST_SEC_DIR/$s/exclude.pfx" 2>/dev/null | grep -c .)"
+	done
+	_rb_say "Исключения основной секции: доменов $nd, IP и подсетей $np${sp}$([ -s "$ST_TCH_XSETS" ] && echo ", готовых списков $(grep -c . "$ST_TCH_XSETS")")"
 	if _st_owns "steer-spec" && _st_work; then
 		if _st_use_vpn; then _st_spec_quick; else _st_spec_quick_warp; fi
 		rc=$?
@@ -31109,7 +31307,6 @@ _st_model_head() {
 			*) printf 'so\t%s\twarp\n' "$s" ;;
 		esac
 	done
-	_st_excl_model
 }
 
 _st_model() {
@@ -31121,6 +31318,7 @@ _st_model() {
 	for s in $(_st_order_all); do
 		if [ "$s" = main ]; then
 			printf 'sec\tmain\n'
+			_st_excl_model
 			rm -f "$ST_RUN"/used.*
 			for id; do _st_svc_lists "$id"; done
 			_st_dev_model all
@@ -31130,6 +31328,7 @@ _st_model() {
 		_st_sec_live "$s" || continue
 		rm -f "$ST_RUN"/used.*
 		printf 'sec\t%s\n' "$s"
+		_st_sec_excl_model "$s"
 		for id in $(_st_sec_with "$s" _st_sel); do
 			_st_sec_with "$s" _st_svc_lists "$id"
 		done
@@ -32141,6 +32340,7 @@ _st_spec_quick0() {
 	for f in $(awk -F'\t' '$1 == "srs" || $1 == "dom" || $1 == "pfx" { print $2 }' "$ST_DIR/model.svc"); do [ -s "$f" ] || return 2; done
 	_st_secs_fit || return 2
 	_st_devs_fit || return 2
+	_st_excl_fit || return 2
 	if { ! _st_use_vpn && _st_warp_on; } || _st_warp_used; then [ -s "$ST_WARP_UP" ] || return 2; fi
 	_st_engine_ready || return 1
 	_st_vpn_any && _st_vpn_zone on
@@ -32758,7 +32958,7 @@ _st_tunnels_json() {
 	printf '[%s]' "$out"
 }
 
-_st_ufile() { if [ "$1" = custom ]; then printf '%s' "$ST_CUSTOM"; else printf '%s' "$ST_USER_DIR/$1"; fi; }
+_st_ufile() { if [ "$1" = custom ]; then printf '%s' "$ST_CUSTOM"; elif [ "$1" = exclude ]; then _st_excl_base; else printf '%s' "$ST_USER_DIR/$1"; fi; }
 
 _st_cust_split() {
 	local s m="$ST_DIR/custom.split"
@@ -32775,7 +32975,7 @@ _st_cust_split() {
 
 _st_list_effective() {
 	local id="$1" set f any=0
-	if [ "$id" = exclude ]; then ST_LIST_SRC=user; cat "$ST_USER_DIR/$id.lst" "$ST_USER_DIR/$id.pfx" 2>/dev/null; return 0; fi
+	if [ "$id" = exclude ]; then ST_LIST_SRC=user; f="$(_st_excl_base)"; cat "$f.lst" "$f.pfx" 2>/dev/null; return 0; fi
 	f="$(_st_ufile "$id")"
 	if [ -s "$f.lst" ] || [ -s "$f.pfx" ]; then ST_LIST_SRC=user; cat "$f.lst" "$f.pfx" 2>/dev/null; return 0; fi
 	for set in $(_rb_svc_field "$id" 8 | tr ',' ' '); do
@@ -37508,7 +37708,7 @@ _si_components() {
 	_si_sec "Компоненты ZM"
 	_si_row "Zapret Manager" "$ZM_VERSION" ""
 	[ -f /etc/init.d/zapret ] && _si_row "Zapret" "$ZAPRET_VER · $(pgrep -f '/opt/zapre[t]/' >/dev/null && echo работает || echo остановлен)" "$(pgrep -f '/opt/zapre[t]/' >/dev/null && echo ok || echo bad)"
-	[ -f /etc/init.d/zapret2 ] && _si_row "Zapret2" "$(_si_pkgver zapret2) · $(/etc/init.d/zapret2 status >/dev/null 2>&1 && echo работает || echo остановлен)" ""
+	[ -f /etc/init.d/zapret2 ] && _si_row "Zapret2" "$(_si_pkgver zapret2) · $(_z2_run && echo работает || echo остановлен)" ""
 	_st_installed 2>/dev/null && _si_row "Steer" "установлен" ""
 	_fk_installed && _si_row "$(_fk_name)" "$(_fk_up && echo работает || echo выключен)" "$(_fk_up && echo ok)"
 	[ -x /usr/bin/bytetube ] && _si_row "ByeTube" "установлен" ""
@@ -37529,7 +37729,7 @@ _si_components() {
 	if [ -f /etc/init.d/zapret2 ]; then
 		_si_sec "Zapret2"
 		_si_row "Версия" "$(_si_pkgver zapret2)" ""
-		_si_run "$(/etc/init.d/zapret2 status >/dev/null 2>&1 && echo true || echo false)"
+		_si_run "$(_z2_run && echo true || echo false)"
 		_si_row "Автозапуск" "$(ls /etc/rc.d/S*zapret2 >/dev/null 2>&1 && echo да || echo нет)" ""
 		_si_end
 	fi
@@ -38198,7 +38398,9 @@ ZM_AB_NEVER_EOF
 
 _ab_apps() {
 	cat << 'ZM_AB_APPS_EOF'
+# Служебные хосты сервисов: блокировка ломает сам сервис, поэтому всегда разрешены
 antibot.wildberries.ru
+widgets.kinopoisk.ru
 ZM_AB_APPS_EOF
 }
 
@@ -58754,8 +58956,14 @@ return view.extend({
 			}
 
 			var grid = E('div', { 'class': 'zm-svc-grid' });
-			var busy = false, devices = data.devices || [], pick = null;
-			function saved() { var m = {}; devices.forEach(function(d) { if (d.excluded) m[d.ip] = true; }); return m; }
+			var busy = false, devices = data.devices || [], devices6 = data.devices6 || [], pick = null;
+			function v6of(d) { return String((d && d.ip6) || '').split(/\s+/).filter(Boolean); }
+			function saved() {
+				var m = {};
+				devices.forEach(function(d) { if (d.excluded) m[d.ip] = true; });
+				devices6.forEach(function(d) { if (d.excluded && d.ip6) m[d.ip6] = true; });
+				return m;
+			}
 			function sel() { return pick || saved(); }
 			function sig(m) { return Object.keys(m).sort().join(','); }
 			function dirty() { return !!pick && sig(pick) !== sig(saved()); }
@@ -58774,8 +58982,10 @@ return view.extend({
 				onSave: function() { return save(); }
 			});
 
-			function tileFor(ip, name, on) {
-				return zm.svcCard({ name: name || ip, sub: name ? ip : 'без имени', key: ip, on: on,
+			function tileFor(ip, name, on, v6) {
+				var sub = name ? ip : 'без имени';
+				if (v6 && v6.length) sub += ' · IPv6: ' + v6[0] + (v6.length > 1 ? ' +' + (v6.length - 1) : '');
+				return zm.svcCard({ name: name || ip, sub: sub, key: ip, on: on,
 					'click': function() { edit(function(m) { if (m[ip]) delete m[ip]; else m[ip] = true; }); }
 				});
 			}
@@ -58786,7 +58996,12 @@ return view.extend({
 				devices.forEach(function(d) {
 					if (seen[d.ip]) return;
 					seen[d.ip] = true;
-					grid.appendChild(tileFor(d.ip, d.name, !!s[d.ip]));
+					grid.appendChild(tileFor(d.ip, d.name, !!s[d.ip], v6of(d)));
+				});
+				devices6.forEach(function(d) {
+					if (!d.ip6 || seen[d.ip6]) return;
+					seen[d.ip6] = true;
+					grid.appendChild(tileFor(d.ip6, d.name, !!s[d.ip6]));
 				});
 				Object.keys(s).sort().forEach(function(ip) { if (!seen[ip]) { seen[ip] = true; grid.appendChild(tileFor(ip, '', true)); } });
 				if (!Object.keys(seen).length)
@@ -58798,7 +59013,7 @@ return view.extend({
 
 			function reload() {
 				return zm.exclusionsStatus().then(function(r) {
-					if (r && !r.error) devices = r.devices || [];
+					if (r && !r.error) { devices = r.devices || []; devices6 = r.devices6 || []; }
 					renderGrid();
 					return r;
 				});
@@ -58806,10 +59021,14 @@ return view.extend({
 
 			function save() {
 				if (busy) return Promise.resolve(false);
-				var ips = Object.keys(sel()).sort();
+				var s0 = sel(), ips = Object.keys(s0).sort(), all = {};
+				ips.forEach(function(k) { all[k] = true; });
+				// IPv6 устройства исключается вместе с его IPv4 — иначе трафик по IPv6 продолжит идти через Zapret
+				devices.forEach(function(d) { if (s0[d.ip]) v6of(d).forEach(function(a) { all[a] = true; }); });
+				var list = Object.keys(all).sort();
 				busy = true; renderGrid();
 				zm.toast('Применяем исключения и перезапускаем Zapret', 'warning');
-				return zm.exclusionsSet(ips.join(' ')).then(function(res) {
+				return zm.exclusionsSet(list.join(' ')).then(function(res) {
 					busy = false;
 					if (!res || res.error) { zm.toast((res && res.error) || 'Роутер не ответил', 'error'); renderGrid(); return false; }
 					pick = null;
@@ -58818,10 +59037,18 @@ return view.extend({
 				}).catch(function() { busy = false; renderGrid(); zm.toast('Роутер не ответил', 'error'); return false; });
 			}
 
-			var manualInput = E('input', { 'type': 'text', 'placeholder': '192.168.1.100', 'class': 'cbi-input-text', 'inputmode': 'decimal', 'autocomplete': 'off', 'spellcheck': 'false' });
+			var manualInput = E('input', { 'type': 'text', 'placeholder': '192.168.1.100 или 2a02:…::100', 'class': 'cbi-input-text', 'autocomplete': 'off', 'autocapitalize': 'off', 'spellcheck': 'false' });
+			function isV6(a) {
+				if (!/^[0-9a-f:]+$/i.test(a) || a.indexOf(':') < 0 || a.length > 45) return false;
+				if (a.split('::').length > 2) return false;
+				var g = a.split(':'), dbl = a.indexOf('::') >= 0;
+				if (g.some(function(x) { return x.length > 4; })) return false;
+				return dbl ? g.length <= 9 : g.length === 8;
+			}
 			function addManual() {
-				var ip = manualInput.value.trim();
-				if (!/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(ip)) { zm.toast('Введите IPv4-адрес, например 192.168.1.100', 'error'); manualInput.focus(); return; }
+				var ip = manualInput.value.trim().toLowerCase();
+				if (!/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(ip) && !isV6(ip)) { zm.toast('Введите IPv4- или IPv6-адрес, например 192.168.1.100 или 2a02:1234:5678::100', 'error'); manualInput.focus(); return; }
+				if (/^fe80:/.test(ip)) { zm.toast('Локальный адрес fe80:: не подходит — укажите глобальный IPv6 устройства', 'error'); manualInput.focus(); return; }
 				if (sel()[ip]) { zm.toast(ip + ' уже отмечен', 'info'); return; }
 				manualInput.value = '';
 				edit(function(m) { m[ip] = true; });
@@ -58833,7 +59060,7 @@ return view.extend({
 			var card = E('div', { 'class': 'zm-card' }, [
 				E('h3', {}, 'Исключение устройств из Zapret'),
 				grid,
-				E('p', { 'class': 'zm-hint' }, 'Включённые устройства ходят мимо Zapret.'),
+				E('p', { 'class': 'zm-hint' }, 'Включённые устройства ходят мимо Zapret — и по IPv4, и по IPv6: известные IPv6-адреса устройства исключаются вместе с ним. Вручную можно добавить и IPv6-адрес.'),
 				E('div', { 'class': 'zm-actions' }, [
 					E('button', {
 						'class': 'cbi-button',
@@ -59985,7 +60212,9 @@ function z2StratCard(view) {
 					}, !!(view.busy2 || view.vsBusy)));
 			}
 
-			cards.appendChild(z2Card);
+			var z2Container = E('div', {});
+			z2Container.appendChild(z2Card);
+			cards.appendChild(z2Container);
 			if (d.zapret2 === 'installed') {
 				var z2Reopen = !view.z2Shown, z2Had = !!view.z2StratNode;
 				if (!view.z2StratNode) view.z2StratNode = z2StratCard(view);
@@ -60004,12 +60233,12 @@ function z2StratCard(view) {
 			} else {
 				view.z2Shown = false;
 			}
+			z2Container.appendChild(logEl);
 		}
 
 		renderCards(data);
 		wrap.appendChild(cards);
 		wrap.appendChild(z2PanelBox);
-		wrap.appendChild(logEl);
 		wrap.appendChild(bannerEl);
 
 		this.logEl = logEl;
@@ -60141,7 +60370,9 @@ html.zm-theme-dark .zm-card {
 .zm-chk-tip::before { content: "→ "; opacity: .7; }
 .zm-chk-note::before { content: "· "; }
 
-.zm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.zm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; max-width: 100%; }
+.zm-row > .zm-badge, .zm-awg-if .zm-badge, .zm-zc-row > .zm-badge, .zm-svc-card .zm-badge { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.zm-row > .zm-badge .zm-dot, .zm-awg-if .zm-badge .zm-dot { margin-top: 1px; }
 .zm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 @keyframes zm-dot-live { 0% { transform: scale(1); opacity: .55; } 70% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(2.5); opacity: 0; } }
 .zm-ok .zm-dot, .zm-sx-info .zm-dot { position: relative; }
@@ -60657,13 +60888,14 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 
 .zm-lists-intro { margin: 0 0 12px; }
 .zm-list-card { padding: 0; margin-bottom: 12px; overflow: hidden; }
-.zm-list-head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; user-select: none; outline: none; transition: background .15s; }
+.zm-list-head { display: flex; align-items: center; gap: 10px 14px; padding: 14px 20px; cursor: pointer; user-select: none; outline: none; transition: background .15s; flex-wrap: wrap; }
+.zm-list-head > .zm-list-chev, .zm-list-head > .zm-badge, .zm-list-head > .zm-list-count, .zm-list-head > .zm-list-dirty { flex: 0 0 auto; }
 @media (hover: hover) { .zm-list-head:hover { background: rgba(127,127,127,.06); } }
 .zm-list-head:focus-visible { box-shadow: inset 0 0 0 2px rgba(34,158,217,.55); }
 .zm-list-chev { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(127,127,127,.12); font-size: 16px; font-weight: 700; line-height: 1; transition: transform .2s; }
 .zm-list-open .zm-list-chev { transform: rotate(90deg); }
-.zm-list-titles { flex: 1 1 auto; min-width: 0; }
-.zm-list-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.zm-list-titles { flex: 1 1 150px; min-width: 0; }
+.zm-list-title { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .zm-list-path { margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zm-list-count { flex: 0 0 auto; min-width: 92px; justify-content: center; }
 .zm-list-body { padding: 4px 20px 18px; border-top: 1px solid rgba(127,127,127,.15); }
@@ -64399,9 +64631,9 @@ function spLink(href, label, cls) {
 	return E('a', { 'class': 'cbi-button' + (cls ? ' ' + cls : ''), 'href': href, 'target': '_blank', 'rel': 'noreferrer' }, label);
 }
 
-var SP_MAP = {"w":1000,"h":547,"r":[["RU-SA","Якутия","M808 126l1 1-1-1-2 0-4-2-1-2zM802 121l1 2-2-2 0-1zM596 184l4 2 2-2-1-2 2 1 2 3-1 3 2 1 0 3 0 4 1 2 3 0-3-1-1-1 1-3-1-3 2-2-3-1 2-2 2-1 3-2 12-1 2 1-2 0 1 3 6 2 3 1-3-1 5-1 3-1 3 0-1-1 2 0-2-1 3 1 0-4 1 0-3-4 0-3 1 1 1 0-1-2 1 1 0-2 3 1 1-1 1 2 1 0 1 1 2-3 0 3 1-1 1 2 0-4 4-1 1 1 1-1 0 2 3-1 0 2 1-1 2 1-4 3 0 2 5-1-3 1-2 2 4 1 2-1 3 2-1 2 1-1-2 2-6-3-1 1 1 1 3 1 5 4 1-1-2-3 4 3-2 0-1 2 2 0 4 3 1 3 1-1 4 1 0-1 2 2 1-3-1-4 2-1-2 0 0-3-1-7 1-1 2 1-2 0 0 2 3 2 4 0 3-1 1 1-1-3 2-3 3-1 1 1 1-1 4 0 1 1 0-1 0 1 2 1 0-1-1 0 1-3-2 1-1-3 1-1 1 1 0-2 3 1 1-1 2-2-3-1-1-2-2 0 1-1-1-3 1-1-2 1 0 2-2-1 0-4 3-2 1-2-4-3 7-1 7-5 11-3-5 4-2 0 0 3-2 1 3 0 1-3 5-5 1 7-1-2 0-2-1 1 0 1-1-1-1 0 3 3-1 2-2 0 2 0 0 3 2-1 1-4-1-8 4-3 5-2 4 2 0 2-3-1 1 2-1 1 1 0 0 1 3-3 2 0 0 2 2-3 1 2 0 3 0-4 1 2 0-3 3-1 4 2-1 1 5-1 6-12 1 1 0-2 6-7 6-2 4 0 4 1 1 2 0 1 1 0 3 3 4-3 6 4 3-1 3 4 0 2 0-1-2-5-5-3-1-6 3 2 3 0 1 2 3 1 0 1 3 1 2 4-4 3 0 2-3 5 0 1-3 7 1 3 2-1-1 3 2 2 3 1 5-1 3 1 2 6 2 0 2 2-3 3 1 3-1 1-4 0 0 2-3 1-1 3-2 0 0 1-2 1 0 1 3 4-1 1-1-1-1 1 0 2 4 4-1 5 2 3 3 2 0 3 2 1-1 1-2-1-1 3 0 2-1 0-2 2 1 2-2 1-3-2-2 0-1 4-2 2-3 0 0 3 3 1 1 4-2 0-1-1-1 1 0 1-5 2 1 4-1 3 1 2 3 6 6 6-1 2 2 2 0 9-2 1-2-2 0 2-1-1-3 0 0 3-2 1 0 2-3-2-1 2-6-2-1 1-3-1 1 2-2 2 3 4-1 1 1 8-2 2 0 2-1 0 1 2-2 2 1 3 3 2 1 2 5 10-1 0-1-1-1 2 0 3-2 5-7 1-1 3 0 4-2 1-1 0-1 1-4 0-2 2-1 0-3 4 2 3-2 0 2 6-2 1 2 3-1 2 2 0-5 1 7 4-2 2 1 5-2 0-1 1 4 1 4 3 0 1 1 3-2-1 0 2-1 0-1 1 2 7 2 3-11 4-2 2 1 2-1 1-3 1-3-1-4 1 0 2-3 0-3 2-1 0-1 1-2 1-1-1-2-1-2 2-2-1-2 1-4 1-6-5-5 1-3-1-2 2-4-2-4 1-2-2-6 1-4 3-3-1 0-2-3-3 0-2-1 0-1 2-1-3-3-10-3-1 0-3-2-3 0-3-1-1-4-2-2 3-1-1 0 1-3 0-1-1 0-3-2-1 2-2-2 0-4-3-6-1-3 2-2 4-1 0-2 7-3 3 0 4-1 2-5 2 1 3-1-4 0-2-2 0-1-2-1 3-2 1-7 1 0 2-2 2-3 0-3-4-1 0 2-10-1-2 2-6-1-1 2 0 0-6-2 0-3-2 0-3-2-4 2-6-1-2-3 0-1-1 1-4-1-2-1-5-3-3-5 1 1-4 2 1 0-2-2-5-1 0-2 2-2-2-2 1-4-3-3 2 0-2-2 1-1-2 1-1 1-3 1 1-1-3 4-7-3-2 0-4-2-2 0-3 1-1-2-5 0 1 0-2-3-1 2-1 4-4-2-21-4-7 1-2 2 0 5-2 1-3 5 1 1-4-2-2 1-3 3-1-1-2 2-3 3-1 3-3 1 0 1-3-3-2-2-9-5-3 1-2-3-1 0-2 0-4-3-4 1 0 2-3-1-2zM707 174l0 2-3 0zM667 179l0 1 0 1-3 0zM664 178l2-3 2 1zM632 186l-1 2-1-2 1-1zM712 141l1 1-1 2-9 3-2 2-2 0 2-3-1-5 3-3 7 1zM684 150l0 1-5-2zM698 138l1 2-1 2-3-3 2-2zM602 176l-1 5-5-2 1-1 0-3zM717 105l2 3-3 5-3 2-9 1-2-5 3 2 4-5 2 2 4-4 2 1zM673 133l1 1-2 2-2-6 3 2zM699 114l0 3 1 1 1 2-1 2-4 2-3-2-1-4-2 1 0 2 4 3 2 1 3-2 1 1-3 4-2 0 1-1-1 0-1 0-4 6-2-1 0 5-4 0-7-3 0-1 1-1-1 0-2-3 0-1 1 0-2-2 1-4 1 1 0-2 1-1 0 1 4 0 0 1 3 0 1 1 2-1-3-4 2-1-3-1 6 1 4-3zM700 94l0 1-2 2z"],["RU-KYA","Красноярский край","M466 194l4 1 4 5-1 1 3 5 5 0 2 2-2 3-4 1-1 7-2 2 0 5 0-5 2 0 1-4 1 1 1-1 0 1-1 5-3 4 2 2 0-4 2 1 2-2 0-7-1-2 4-6-1-3-2-1-1-3 0-3-3-2-2-3 2-5 0-2-1-1 1-1 0-1 2-2 0-1 11 2 5 0 2 1 3-1 4 0-6 4 0 2 3 5-1-2-2-3 0-2 6 0 2-4-1 1-1-3 1 0-1 0-1-3-2-1 0-1 1 1 0-2 1 0 2 2-1 0 1 0 0 1 0-1 1 0-2-2 1-1-4-2 2-2 2 4 0-2 1 0 2-2-1-1 1 1 1-1-3-1 1-1 3 1 6-4 1 1 1-2 4-1 2 1 0-1 9-1-2-1 0 1-1-2-1 1 1-2 1 0 0 1 2 0-1-1 2 0 0 1 1-1 4 0 1 1-2 2 3-1 0 2 3-2-1 1 3-1-1-1 2 0-1-1 3-1 0 1 1 0 2 0 0 2 0 3 1-4-4-5 5 0 2-1 0 2 5 0-5-2 1-2-1-1 0-2 7-9 3-1 4 2 1 0 2 2-2 0-1 2-4 2 6-1-1 2 4-1 2 1-2 3 0 2-1 0 0 1 5-1 0-3 7 0 3-1 4 3-1 2 1-2 2 1 0 1 1 1-1 2 2-1 0-1 1 0-2-1 1 0 2 5 1-2 0 1 0 5 0-2-5-2 2 2 1 2 1-2 2 2-2 7-2 2-1 3-1 0-4 3 0 2-2 1 1 0 0 1-3 3-3 5-3 1-1 4-3 1-1 4-2 3 1 0 2-3 3 1 2 0-4-1 0-3 2 0 6-1-1-1 4-2 0-1 1 0-1-1 2 1 4-4 1 1-2 3-1 0 3 4 0 3 0 2 3 2-1 2 5 3 2 9 3 2-1 3-1 0-3 3-3 1-2 3 1 2-3 1-1 3 2 2-1 4-5-1-1 3-5 2-2 0-1 2 4 7 2 21-4 4-2 1 3 1 0 2 0-1 2 5-1 1 0 3 2 2 0 4 3 2-4 7 1 3-1-1-1 5 0 1 2 0 0 1 3-1 0-1 4 3 2-1 2 2 1-1 1 2-3 1-1 2-5-1 1 2-1 5 1 1 0 1-2 0 0 3-1 1 3 5 2 1-3 5 1 3-3 3 0 3-6 4 1 2-2 2 0 2-1 1 2 6 1 1 4 0 1 6-3 0-2 2 2 3 1 1 2 4-4 4 1 2-3 1-2-2-2 1 0-2-2-1-2-1 0-3-3-1-3 2-1 2 1 4-2 3-3 2-1 2-3 2-1 3-1 0 1 5-2 2-2-2-3-8-2 0-2 4-3 1-8-1-4 10 2 1-1 2 2 1 0 5-2 0 0 3-2 2-1-1-3 4 1 6-2 1-1 3 1 2-2 5-3-1-4 4 8 9-1 1-1 1-2-2-1 2-3-1-3 2-1-1-4 0-1 1 1 1-2 5-3 0-5 8-7 5-3 0-14-3-2-4 2-4 7-5 0-2 2-1 2-3-3-2 0-4 1-3-1-6-3-3 1-2-1-2-2 1 0-2-2-2-4 1 0-1-3 1-2-5-2-2 7-5-2-6-3-3 0-2 2-1-1-2 2-3-2-1 6-6 2 0 0-3-8-4 0-6 4-5 3-1-1-4-5 0-1-6-2-1-1-2-2-2-13-2-1-1 3-5-2-7 10-4 0-1 3-1-1-2-6-4-1-6 9-8 1-3 1-3-1 0 0-2-2-1 2-1 2-3 3-1 1-3 0-7-1-1-2 0-1-2-4-1 3-5 0-2-1-2 1-1-1-2-3-1 0-3 1-2-1-4 2-3-4-9 1 0 1-3-2-6 4 1 1-3 1-2 0-3 3-1-1-3-1-3 1-1-2-1 1-2-1-2-1 2-3 0-1-1-4-2 0-4-2-2 0-2 3-2 0-1 1 1 4-3 3 0-1-1 1-2 1-5-2-2-2-4 1-3 4 1 0-2 1-1-2-3-2-2zM595 186l-4 2-2-2 2-3 4 1 0-2 2 0zM472 190l-1 1-3-3 4-3zM507 169l-1 1-1 0 1 1-2-1 1-1zM491 160l-1 2 0-1-1 0 0-1 1-1 0 1 0-2 1 0zM542 157l0 1-1-1-1 0 1 2-4-2 0-1zM592 149l2 0 1 2zM542 145l-1 2-3 0zM521 142l0 1-2 0 0-2zM576 132l-1 1-3 0zM569 127l-2 3-5 2-1 1 0-1-4 1-4 3-2 0 3-10 2 0-1-1 1-2 2 0-2-2 2-3 1 2 0-3 3 2-2 6 3-5 3 3 0 2 1-1 1 1zM493 106l-3 0-1-3zM536 111l0 1-2 1-3 0 1-1-3-1 1-1-1-2zM553 122l-2 3-5 0-2-2-3-1-1-1-2 0-1-2 0-3-1 0 0-1-2 2 0-2 5-3-1-1 2-2 0 1 1-1 6 0 1 1-2 4 2-2 1 0 0-2 2 0 2 3-1 6 0 1-2-1zM504 92l1 1-1 1-3-1 1-1zM532 96l-1 1-3-2zM547 102l0 1-1 0 0 5-7 1-3 1-4-2 2 0-1-2 3 0-5 0 3-1-2-1 3 0 1-3-2 0 1-1 7-4-1 0 2 0zM480 220l0 1-3 4z"],["RU-KHA","Хабаровский край","M850 454l-1 0 1-1 3-2-1-3-3 2-2-1-3 4-2-1-4 1-3-3-4 0-1-1-2 3-1-2-3 0 1 4-2 0-2 2-2-5-2 0 1-1-1-2-2 0 0-3-2-2-3 1-1 0 0-2-1-1-1 2-1-1 0-3-1-1 1-1-1-3 2-3 1 0-3-4 6-5 1-4 5-6-3-1-1-3 11-2 0-4-2 0-1-3 0-4-2-1 0-1-4-1-2 4-4 1-2 2 1 2-7 5-1 2-1-1-3 2 0-2-3-5-4 2-4 0 0-6 2-1-1-4 4-6-1-3 2-1-1-1 2-1-1-3 2-1-6-2-3 3-6 3-2-3-2-7 1-1 1 0 0-2 2 1-1-3 0-1-4-3-4-1 1-1 2 0-1-5 2-2-7-4 1-1 4 0-2 0 1-2-2-3 2-1-2-6 2 0-2-3 1-2 2-2 1 0 2-2 4 0 1-1 1 0 2-1 0-4 1-3 7-1 2-5 0-3 1-2 1 1 2-1-6-9-1-2-3-2-1-3 2-2-1-2 1 0 0-2 2-2-1-8 1-1-3-4 2-2-1-2 3 1 1-1 6 2 1-2 3 2 0-2 2-1 0-3 3 0 1 1 0-2 2 2 2-1 0-5 3-1 3-3 6 1 2 2 1 0 4 4-1 2 2 3-2 1 0 5 3 1 2-3 6 2 0-1 1 0 5 5-1 1-3 1 2 3-1 2-3 0 0-2-1 1-1 0-3 3-6 4-2 3-2 1-3 6 1 9-2 7 2 6-2 3 0 4-3 10 1 2-1 0 0 4 2 2-1 0-1 9-3 8 0 4-3 6 0 3 1 2 3-2 1 1 7-5 3 6 1 3 2 1 2-3-1-2-2 0 1-4 2-1 0 4-1 0 3 1 1-2 0 5-1 2 1 1 4-6 1-5 1 2 0 5 2-1-2-7-3-3 5-1 2-4 5 1 2 2 4 1 8 0 1 1 0 3-4 1 5 0 2 2 1 4 5 1-1 1 2 2-1 6 0 2 1 1-1 1 3 3 0 3 2 4 3 4 2 0 0 3 3 3 1 3 0 1 1 3 0 1 1-1 1 3 2 4-2 12 1 6-4 1-1-2-1 0 2-3-1-1-3 0 0-3-2 1-2-2-1 1-2 4-3 3 0 1 3 1 0 2 5-2 0 2 2 0-3 7-3 0 1 4-2 4-2 2-2 0-1 2-3-1-2 2-1-2-3 0-1 1-2 2-1 3 2 3-3 3-2-5 0-2-2-2 2-4 1-3-4-3 0-4zM823 364l0 3-2 2zM829 361l1 0 0 6-4-2-1 3 0-6 2-1 1 1z"],["RU-IRK","Иркутская область","M565 396l3-1 2-3 0-5 3-3 3 1-1 1 3 3 2 1 0 2 2-1 2 2 3-1-1-2 4-4-2-4-1-1-2-3 2-2 3 0-1-6-4 0-1-1-2-6 1-1 0-2 2-2-1-2 6-4 0-3 3-3-1-3 3-5-2-1-3-5 1-1 0-3 2 0 0-1-1-1 1-5-1-2 5 1 1-2 3 0-1-3-1 0 2-1 3 5 0 2-2-1-1 4 5-1 3 3 1 5 1 2-1 4 1 1 3 0 1 2-2 6 2 4 0 3 5 2 0 6-2 0 1 1-2 6 0 8-2 2 1 2 1 0 2 3 1 1 3 0 2-2 0-2 7-1 2-1 1-3 1 2 2 0 0 2 1 4-1-3 5-2 1-2 0-4 3-3 2-7 1 0 2-4 3-2 6 1 4 3 2 0-2 2 2 1 0 3 1 1 3 0 0-1 1 1 2-3 4 2 1 1 0 3 2 3 0 3 3 1 1 3-3 2-4-2-3 1-1 1 1 2-1 1 1 3-2 2 4 6 3-1-1 2 1 2 0 2-1 1-1-1-3 3-4 0-1 0-4-1 3-3-2-1-3 3-3 0-1 6-4 1-1 3-4-2-1 1-3 0-2-3-2 1-2 0-2 1-3-3-2 5-4 0-5-1-1 4-2 0-5 3-1 4 2 0 2 3 2 0-2 1-2 5 2 9-1 5 4 0-5 19-14 11-6 9-6 3 0 5-3 0-4 2 0-3-2-1-2 1-1-3 0-2-4-3-2-3-3 0-2 0-4-5-5-2-4-4-1-4-3 1 0 1-1 1-3 1-1 2-2-1 1-1-1-1-5 1-1-2-2 0 0-2-3 0-2-3-4-2-2 1-4-5 0-1-3-3 1-2 1 0 2-2 3 1 2-5-1-2 1-3 2-1-1-6 3-4 1 1 2-2 0-3 2 0 0-5-2-1 1-2-2-1 4-10 8 1 3-1 2-4 2 0 3 8 2 2 2-2-1-5 1 0 1-3 3-2z"],["RU-CHU","Чукотский АО","M917 27l1-1 0 3-2-1zM851 48l1-1 0-1 2 0 2-2 2-1-1 1 2 0 2-2 2 1 0-2-4 2 5-3 0 1 1 0 0-2 1 0 3-2 0 1 1-1 1-2-2 2 3-3 1 2 0 1 1 0 2-2-3 0-1-1 3-2 3 0 1 2 0-2-1 0 3-1 3 2 4 0 1 1 2-2 3 1-2-2 1-1 3 1-3-2-2 2-1-2-4-1-2 3 1-5 1-1 0-2 0 1 1 0 2 1 0-1-1 1-1-1 2-2 0-2-2 3 2-6 4-1 6-4 1 1 0-2 1 0 0 1 1 0 1-3 1 0-1 2 2 4 4 0-5 4 4-2 2 1-1 1-1 4 0-1-1 2-1 0-2 3 3-2 1 0 0-1 3 1-1 3 2-3 2 0 2 7 0-2 1 0 1 2 0-2 1 1 1-2 2-1 0 2-2 1 0 1 1-1 2 0 0 2-1 2-2-2-2 1 3 0 0 2-1 2-4 0-2 2-2-1 1 1-1 1 1 1 0 2-1 0-3 2-2-2-3 0-5 5 1 3-2 5-3-1 0 1-5 0 1-1-4-3 2 3-2 1-2 0 1 0-1 1 3 0 0 2-1 0 4 2 5-1 4 4 0 2zM819 88l2 3 0 1-6 3-1-3zM819 36l0-4 2-2 6-3 1 3-1 7-1 2zM803 117l4-5-1-2 5-2 2-3 4-4-1-6 4 0 3 2 5-3 4 1 1-4 2 0-2 0 0-2 1 1-2-1 0-3-7-1-2 2 0-3-5-2 7-8 3-1 0-1-1 1-1-1 3-2 3-8 0 1 2-1-1-1-1 1 0-2 2 1 2-2 7-7 2-1-2 1 2 1 1-3 5-2-3 2 2-1 1-1 49 19 2 4 1 6-1-1 0 3-2 2-3 0-3 2-1 3 1-1 0-2 4-1 0 1-2 3 0 1-3 1 1 3-1 7 2-7-1-3 3 0 2 2-2-2 3-1-2-4 1-1 3 2 3-1 2-2-2-1 6 0-1 0 1 1 1-1-1 0 5 1-1 1 1-1-1 1 1 2 1-2 2 1 0-1-3-1 4 0-1 1 1 0 3-2 2 2 4-1 2 2 0 2 3 1-6 4-2 5-3-3 1 2-3 1 3 1 2-1-1 3 2 4 0 7-1-1 1 1 1 4-2 0 2 0 0 2-4-1 0 1-5-2-2 2 0 6-4 3 1 4-2 1 0 3-2 3-4 0-1-1 0 1-6 1-1 2-3 1-3-10-4 0-2 2-5-1-3 4-4 0-1 3-2 3-1 1-2 0-2 1-1 0-1 1 2 2-5 2 0 1-2 2 0 2 1 2-1 1-5 3-2-1-3 1-3 3-5-1-7 3-4-5-5 2-2-6-2-1-6 1-4-1-1-2 1-3-2 0-1-3 3-6 0-1 3-5 0-2 4-4-2-3-3-1 0-1-2 0-2-3-3 0zM826 39l1 2-1 4-3-1-2-2-2-6z"],["RU-YAN","Ямало-Ненецкий АО","M400 251l-2 0 0-4-1-1 1 1 0 1 1-1 2 2zM395 207l6 9-1 2 2 6-1 3 3-1 5-5 0-1 1 0-2-1-1-1 0-5 2-3-1 0-2-4-2 2 0-1 3-5 1 0 0 1 1-1 0-2 5-6-1-1-2 0 3-3-1 0 0-1 2-2 8-1 9-11 3-3 1 1-1 1 7 3 2 1-1 1 1 0 2 2-2 5-5 7-4 1 2 6-1 4-2 5-3 1-1 6-2 2-3 9 2 7-4 3-2 6-3 0-3 4-2-1 0 2-1 0-2 2-2-1 0 1-1 3-1-1-2 1-2 0-1-2 3-1-2 0-1-3-2 0-3-2 0 4 2 3 2 2 5 3 3 2 1 0 1-2 2-1 2 0 6-2 2-4 6-3 2-6 0-4 3-4 10 1-1 3 2 4-2 2 1 1-2 5-1 1 1 4 7 2 0-2-2 1 0-2-1 1-2-2 0-1-2 0 2-5 4-1-1-3 1-6-5-6-3-2-4 1-1-1-2 0-1-2 2-2 0-5 3-5 4-3 1-2 0-9-1-3 4-4 7-1 3-6 0-3 1-1 1 2 0 1-1 0 1 2-1 4-4 3 0 6-2 2 2 3 3 1 0 2 1-1 2 0 2 5 3 1 1-1-3 0 1-1-1-2 0-2-1 0 1-1-3 0-3-5 0-5 4-1 2 4 2 0 1-1 0-2-3-1 1-1 1 1 3-2 1 0 1 4 4 4-1 4-4-1-1 3 2 4 2 2-1 8-3 0-4 3-1-1 0 1-3 2 0 2 2 2 0 4 4 2 1 1 3 0 1-2 1 2-1 2 2 1-1 1 1 3 1 3-3 1 0 3-1 2-1 3-4-1 2 6-1 3-1 0 4 9-2 3 1 4-1 2 0 3 3 1 1 2-1 1 1 2 0 2-3 5 4 1 1 2 2 0 1 1 0 7-1 3-3 1-2 3-2 1 2 1 0 2 1 0-1 3-1 3-9 8-2-6-4 1-2-5-3-1-3 1-2-3 0-4-3-1-5 3-1 2-6-2-5 1-4-6 0-3-1-1-3 0-2-3-8-2 0-2-5-3 0-3-4 1-2-2-2 1-2-1 2-5 0-1-3-2 0-5 2-1-1-3-2-1-4-4-1 0-1 2-2-2-5 2-4-5 3-3-1-1-7-4-2 1-2-2-2 1-5-2 0-4-2-1-1-2 3-1 0-2 4-4-1-2 0-5 5 0 2-2 2-1 1 0 2-2 11 0 2-3 6-2 1-1-2 0 1-1 2 0 1-3-3-2 0-1 2-3 3-2 1-4-3-3 1-2zM466 191l0 1-3 2-4-2 5-3zM455 179l1 1-1 0-1 2-2-3 1-1zM445 173l-1 2-1-2-6-1 2-4 3 0 2 1-2 2 1 1 1-1zM461 176l-2 1 1-2 2 0z"],["RU-KHM","Ханты-Мансийский АО — Югра","M316 275l0-3 5-4 0-3 2-2 0-2 8-9 3-1 0-2 1-3 4-3 3-2 2 1 0 3 12-5 0 5 1 2-4 4 0 2-3 2 2 2 1 0 1 1-1 3 9 3 2-1 7 4 1 1-3 3 4 5 5-2 2 2 1-2 1 0 4 4 2 1 1 3-2 1 0 5 3 2 0 1-2 5 2 1 2-1 2 2 4-1 0 3 5 3 0 2 8 2 2 3 3 0 1 1 0 3 4 6 5-1 6 2 1-2 5-3 3 1 0 4 2 3 3-1 3 1 2 5 4-1 1 3 1 1 1 8 6 4 1 2-3 1 0 1-10 4-2 0-2-4-2 0-8 5-2-3-4-1 0-1-2-2-4 1-5-1 0-3-9-1-4-4-2 4-3 2 1 1-2 2-3 7-3-1-2 1-3 2-1 3-5 3-2-2-4-2-3-3-3-1 0-4-2-1-1-7-3-6-2 0-3-2-6-5-2 1 1 2-6 0-3 3-4-1-6 1-2-1-1 3-3 0-4-4 1-10-6-5 3-9-1-2 2-9 1-1 0-4-4-10-5-4 1-3z"],["RU-MAG","Магаданская область","M879 250l-1 1 1 2-4 1 0 3-3 4-4-1 5-5 0-2-3 2-5-2-2 3 1 1 0 1-2 1 1-2-9 4-1 3 3 1-2 1-1 0 0 1 1 1 2-1 1 1-3 2-2-1-1 1-1 2 1 1-2 1 0 1-4 1 1-1-4-5-2 0 0 1-6-2-2 3-4-1 1-5 2-2-2-2 1-2-4-4-1 0-4-3-4 0-1 0-1 2-1 1-4 1 1-4-2-2 1-2-6-6-3-6-2-2 2-3-1-4 5-2 0-1 1-1 1 1 2 0-1-4-3-1 0-3 3 0 2-2 1-4 2 0 3 2 2-1-1-2 2-2 1 0 0-2 1-3 2 1-1-5-3-2-2-3 1-5-4-4 0-2 1-1 1 1 1-1-3-4 0-1 2-1 0-1 2 0 1-3 3-1 0-2 4 0 1-1-1-3 3-3-2-1 0-2 4-1 3 5 7-3 5 1 3-3 3-1 2 1 5-3 1-1-1-1 1-1 2 2 3 0 1 3-1 2 3 1 1 2 4 2 0 2 2 1 0 3 2 1 4-1 4 4-1 4 3-1 1 1 0 1 3 1 3 15 1 2-2 1 1 3-3-2-1-3-1 4-1-2-2-1-1 1 1-2-2-1 0-2-4-4 0 6-2-1 1 1-3 0-1 1 1 1-3 3 0 2-3 2 1 2-1 4 3 3 0 6 2 2-1 8 2 6-1-1 0 1 2 1-1 1 3 2-1 0 2 3 0-1 0-1 2 0-2-1 3-2 3 0 1 2-2 2 1 0-3 1 1 2-1 2-3 0 0-1 0 1-2 1 1 2z"],["RU-KAM","Камчатский край","M985 209l1 1-3 0-6 0-2 1 0-2 2-2 2 2zM930 190l0 1-1 3 0 3 2 4-2-1 0-1-3-5-1 1 1-7zM928 115l-1 2 1 3-2 0 2 2 1 3-1 1 0 1 2 0-1 1 1 1-1 2 1-1 0 2 2-1-1 1-1 1 2 0 1 1-2 0 2 1-1 3 1 0 0 1-1 0 2 2-1 3 1 1-1 1 2 0 3 5-3 1-1-1 0-1-7 2 0 1-4 8 0 1-1 2 1 1-2 1 2 0 3 8-1 1-1 0-6-6 0 2 0 1 0-2 1 5-1 1 1 2-1 0 0 1 2 0 1 4-5-1 0 3 2 1-1 0-1-1-3 2 2 0 0 3 2 2 0 2 4 1-1 2 3 0 0 1-2-1 0 2 2 0 0 1-1 0 2 5 5 7 2 1 3-1 0 1 0-1-2-2 1-1 5-2 2 6 6 5 3-3 6 4 1 3-5 2 0-6-1 0 1 2-2 1 0 2 2 0 0 5 4 6 4 2 5 1 1 1 1 4-1 3-2 0-2 3 1 7 4 6 1 0 2 1-1 1 5 1-2 1-1-1-1 6 0 5-3-1 0 1 1 1 1-1 1 2 2 1-1 0 2 1 0 2 1-1 3 5 2 6-1 3 1 2 1 9-2-2-4-1-9-7-4-2 1 0 0-1-2 0-4-2-27-18-11-14-2-8 1 0-2-4-5-3 0-2 2 0 1-2-2-3 3-3 1 0-1 0-1-9 1 0-1 0-2-6-2-2 0-5-2-3 1-2-2-11-2-2 0-8 1-2 1 1-1-2 1-2-3 1-2-6-2 1-2-2 1-2-7-5 0-3 4-3-2 0 2-3-3 3-4 2-3 6 1 2 2 0 0 2 2 1 3 3 2-1 1 3-3-1 0 2 1 0-2 0-3-1 0-1-1-1-3 1 1-4-4-4-5 1-1-1 0-3-2-1 0-2-4-2-1-2-3-1 1-2-1-3-3 0-2-2-1 0 0-2 2-2 0-1 5-2-2-2 1-1 1 0 2-1 2 0 1-1 2-3 1-3 4 0 3-4 5 1 2-2 4 0 3 10 3-1 1-2 6-1 0-1 1 1 4 0 2-3 0-3 2-1-1-4 4-3 0-6 2-2 5 2 0-1z"],["RU-ZAB","Забайкальский край","M677 494l-2 0-5 4-3 4 0 3-2 1-3 0-4 3-6 1-5 4-3-1-1 2-8-1-7 1-6-4 0-4-2 0 0-2 2-3 5-3-5-3 1-1 0-3 2-1-2-2 2-3 3 0 1-1 3 2 5-5 5 1 3-4 4-3 3-5 3 0 0-2 8-3 4-4 1-4 0-1-2 0 0-2-2 0-1-1-1-4 8-7 4-7 7-3 1-4-1-2-5-5-3 1-3-10-2-1 0-2-3-3 1-4 4 1 1 0 4 0 3-3 1 1 1-1 0-2-1-2 1-2-3 1-4-6 2-2-1-3 1-1-1-2 1-1 3-1 4 2 3-1 3 8 2-1 0 2 3 3 0 2 3 1-1 2 1 1 0 1 2 1 2 0 3 2-3 2 1 3 3 0 2-3 3-1 3 7 2-3 2 1 2 7-1 4 2-2 1 3 2 1-1 2-2 0 2 3-1 1 3 3 3 4-9 5-4 9 1 2 3-1 3 0 0 3 2 2 0 3-4 5-1 13-2 6 3 0-1 4-4 2-6 8-6 0-9-3-3 3-3 0-7-3z"],["RU-KO","Коми","M316 273l-3 3-3 1-12-9-2 0-3 2-2-2-2 1-2-2-3 2-5-6-1 1-2-2 1-2-2-3-1 2-2-2-1 1-2-3-3 3 1 4-2 2-1-2-6 1-1-3-3 1-5-3-6 5-1-1 1-2-1-3 2-2-2-3 4-5 3 0-1-2 4-5 2-1 5 2 5-3-1-3 12-8-2-4-2 0-1-1-5 4-2-3-2 1-1-1 5-8 3 1 2-2 0-4 2-2 1-2-2-6 1-4 2 0 4 3 6 6-1 2 1 1 2-1 1 1 2-1 2 2 1 0 3 3 3-2-1-2 2-6-3-2 8-8 16 2 2-1 4 0 5 7 25 19 8 5 8-1 3-3 5 0 1-2 4 0 1-2 5 2-4 4 0 1 3 2-1 3-2 0-1 1 2 0-1 1-6 2-2 3-11 0-2 2-1 0-2 1-2 2-5-1-6 3-1 1-5 2 0-3-1-1-5 2-3 3-1 3 0 2-3 1-8 9 0 2-2 2 0 3-5 4z"],["RU-ARK","Архангельская область","M237 157l1 6 5 1 3-3 0-2-2-1 1-6 2-2 2 1 2-2 1 2 0 6 1 2-1 1-1-2-1 1 2 1 1 0 1 7 2 1-1-1 1 0 1 4 2-2 4-8 2-2 8 1 5 2 6-1 0 3-1 0 3 3 0 3-3 0 0 1 1-1 2 1-2 4 6-5 4 17 3 3 4-2 3 4-8 8 3 2-2 6 1 2-3 2-3-3-1 0-2-2-2 1-1-1-2 1-1-1 1-2-6-6-4-3-2 0-1 4 2 6-1 2-2 2 0 4-2 2-3-1-5 8 1 1 2-1 2 3 5-4 1 1 2 0 2 4-12 8 1 3-5 3-5-2-2 1-2-2 1-1-1-2-2-2-3 1 0-4-2-1-1-2 1-2-1-2-4 2-4-5 1-2-2-1-4 1-1-2-1 0 0-3-2 0-2-3 1-1-1 0-2-2-2 1-1-1 0-3-2 0 1-2-4-1 0-2-2-2-1 0 1-2-2-1 1-3-1-1 2-2 0-1 1-2 4-3 4-2 2-3-1-1 3-1 2-2-2-5 1-4 3-1 3-6 2 2zM365 143l3-2 2 0 1 2 2-2 0 1 1-1 1 1 0-2 2 0-1-1 1 0 1 1-2-3 2-1 3 2 0-1 1 0 0-2 1-1 4 2 3 0 3 6 0 1-3-1 2 2-1 0-3-1 2 1-1 2-2-2 0 3-1-1-1 1-1-1 0 2-1-1 1 1-2 3-3 2 0 1-3 8 1 10-1-1-1 1-1-2 1 3-2-3 0-2-1 0 0 3-2-4 0 2-1-4 0 2-1-1-1 1 0-5-1 3 0-3-3-2 0-2 1 2 2-4 1 2 0-1 2 1-1-1 1 0-2 0 0-2 3-1-3 0 1-2 1 0-3 0 1-4-1 2 0-2-1 1-2-1zM406 128l-1-1 1-1-2-2 4 1-1-1 1-1-2 0 0-2 2 0 0 2 4-2 2 2 0-2 3 0 0-1 6 0 3 1 0-1 1 0 1 1-2 0 1 1 2 0 0-1 1-1 4 2-1 1 2 0 0 1 3 0 3 1 3-1 2 1 1-2 6 0 2 1 1 2-2 4-3 2-13 0-5-1 0-1-1 1-7 0-1 1 0-2-4 2 0-1-1 1-2-1 2 2-2 0 0 1-2-2 0 2-1 1-1-3-2 3-2-3-1 5-1 0 0-1 0 1-1 0 0-1-2 2 0-4-1 2-1-1 1 3-2 2 0-2-2-3 2 3-1 2-1 1-1-3 0 3-3 1 0-1-1 2-1-2 0-2-1 1-2-4-3 0 0-1 2 0 0-1 5 0-3-1-1 0-1-3 5 0 0-1 3 0 1 3-1-4 2 1 0-1 1-1 3 2-2-2 1-2zM366 154l-3 2 1-6 2 1zM435 66l-3-3 3 1zM449 67l0-1 1 0 1 1 0 2zM431 53l-2-1 1-1-1-1-1-2 7 3 1 3-1 2 0-3-2 0zM463 75l-1 2-4 0-1-2-2 0 0-1 3-3 1 2 3 0zM454 70l0-1 1 0 2 1-1 1zM450 66l-2-1-1-2 2 1zM441 60l-2 0-3-2-1 1-2-1-1 0 0 2-1-1-1 0-1-1 2-1-3-1 0-1 2 0 2 2-1-2 1 1 1 0-2-2 3 1 1 2 3-1-1 0 0-1 3 1-1 0 2 1 0 1-2 0 2 1zM454 67l-1-4 3 5zM449 62l1-1 1 2 1 1 2 5-2 0zM457 62l-1-1 1 0 2 1 1 2zM469 67l-1 0 2 0 1 2-1 0zM461 61l-1 0 1-1 3 2-1 0zM451 78l0-1 2 2-1 1zM445 72l2-2 2 2-2 2zM439 66l0-1 2 0 1 2-1 1zM449 75l1-5 4 5-3-1 0 2-1-1-1 1zM460 70l4 2-3 0-1-2zM465 75l3 1 2-2 1 3 0 1-4 1-3-1 0-3zM452 62l1-1 2 2 0-2 2 3-3 0zM257 170l-1-3 2 1z"],["RU-AMU","Амурская область","M736 430l-1 0-9 5-3-4-3-3 1-1-2-3 2 0 1-2-2-1-1-3-2 2 1-4-2-7-2-1-2 3-3-7-7 5-2-4 3-2-3-2-2 0-2-1 0-1-1-1 3-4 2-1 6-1 2 2 4-1 4 2 2-2 3 1 5-1 6 5 4-1 2-1 2 1 2-2 2 1 1 1 2-1 1-1 1 0 3-2 3 0 0-2 4-1 3 1 3-1 1-1-1-2 4-3 7-3 3 0 9-6 2 2 3 0-2 1 1 3-2 1 1 1-2 1 1 3-4 6 1 4-2 1 0 6 4 0 4-2 3 5 0 2 3-2 1 1 1-2 7-5-1-2 2-2 4-1 2-4 4 1 0 1 2 1 0 4 1 3 2 0 0 4-6 2-5 0 1 3 2 1 0 1-3 3-1 4-1 0 1 1-1 1-6 5 3 4-1 0-2 3 1 3-1 1 1 1 0 3 1 1 1-2 1 1 0 2 1 0 3-1 2 2 0 3 2 0 1 2-1 1 2 0 1 3 0 2-2 1 1 4-3 3-3 1-3 0-6-3-1 1-2 1-3 0 0-2-2 0-4 3-3 0-3-1-1-5-3-1-3-5-4-2-1-4-1 1 0-1-7-6 0-2-2 0 1-2-2-1-3-1-1-3-2-1-1 1 0-1-1-1-5 0-1 0 0 2-10-2-2-1z"],["RU-BU","Бурятия","M553 487l-8-4-2-3-1 0 0-2 2-3 0-4 3 1 1-3 3-1 1-1 0-1 3-1 1 4 4 4 5 2 4 5 2 0 3 0 2 3 4 3 0 2 1 3 2-1 2 1 0 3 4-2 3 0 0-5 6-3 6-9 14-11 5-19-4 0 1-5-2-9 2-5 2-1-2 0-2-3-2 0 1-4 5-3 2 0 1-4 5 1 4 0 2-5 3 3 2-1 2 0 2-1 2 3 3 0 1-1 4 2 1-3 4-1 1-6 4-1 1-2 2 0 1 1-3 4-1 4 2 0 1 2 0 2 2 1 3 10 3-1 5 5 1 2-1 4-7 3-4 7-8 7 1 4 1 1 2 0 0 2 2 0 0 1-1 4-4 4-8 3 0 2-3 0-3 5-4 3-3 4-5-1-5 5-3-2-1 1-3 0-2 3 2 2-2 1 0 3-1 1 5 3-5 3-2 3 0 2-5 0-5-4-3 1-3-1-5-1-8 3-2 2-7 0-1-1-3 0-5-3-2-11-3-1-4 0-7-4z"],["RU-TOM","Томская область","M448 348l2 4 2 0 2 6 0 1-3 5 1 1 13 2 2 2 1 2 2 1 1 6 5 0 1 4-3 1-4 5 0 4 0 2 5 2 3 1 0 4-2 0-5 6 1 1-2 3-1 0-5 3-1-1-3-2-1 2-3-2-2 1-1-1-2 1-4 2 1 1-4-1-1 1-1 0-5 1 0-1-2 0-4 4-1-1-2-1 2-1 0-3-1-1 1-1-1 0 2-3-1-2-2 0-1 2-9-1-2-4-6-1-3-8-7-5-15-7-2-6 1-4-2-4 1-1 0-1 2-1-1-2 6-4 1-3 5-3 3 1 3-7 2-2-1-1 3-2 2-4 4 4 9 1 0 3 5 1 4-1 2 2 0 1 4 1 2 3 8-5z"],["RU-SVE","Свердловская область","M259 331l-1-1 1-3 3-3 0-3 4 1 2 0 1 1 3-6 3-1 1 1 0 2 3-1 1-1 0-3 1-1 7-1 2-2-2-2 4-4-2-7 5-3 2 1 7-6 4-4 1-4 2-2 3-4 2-2 2 3-1 3 5 4 4 10 0 4-1 1-2 9 1 2-3 8 0 2 6 4-1 10 1 2-2 8-6 0 0-1-5 1 1 1-3 2 0 2-2 4 2 0-1 1-1 1-2-2-3-1-3 3-4-5-1 1-2-2-3-1 0-1-5 2-1 1-1-3-3-3-1 2-2-1-6-5-3-4-4 2-1-3-2 1-1-2z"],["RU-NVS","Новосибирская область","M374 423l3-4-4 1-2-1 0 1-4 1 3-7-1-3 0-1-1-1 1-1-1-5 3-1-1-2 1 0-1-2 2 1 0-2 5-2 4 1-1-2 1-2-2-1 4-2 2-7 15 7 7 5 3 8 6 1 2 4 9 1 1-2 2 0 1 2-2 3 1 0-1 1 1 1 0 3-2 1 3 2 4-4 4 1-1 4 1 3-1 1 1 1-1 5 1 2-1 2 0 3-3 1-2 2-2-1-3 1-3-1-1 2-1-2-1 0-4 3-3 4-2-3 1-1-3-1-1-2 2-1-3 0 0-2-2-2-1-4-1 2-3 1-3-1-5 4-7-2-1 2-2 0-1-1 0-1-2 0 0 1-3 1-6-11 0-3z"],["RU-NEN","Ненецкий АО","M290 170l3-1 1-1 2-1 1-2-1-3 1-1 5-2 3-3 2 0-1-1 3-2 0-6 1 3 5 6 0 7-3 4-5-4-5 1 0 5-2 4 3 2-2 1 5 2 0 1 7-4 1-2 4 2 1 2 0-2 1-3 1 3 5 1 6 0 1 1 6 1-1 1 1 1-2 0 1 1 2 0 0-2 1 0-1 0 0-1 10 2 1 1-4-2 1 2-3 1-1 4-3-2-1 1 3 3 1-1 0 1 1 0 1 3 2-2 3-1 3 1 4 5 5-1 2 0-1 2 1-2 4 2-1 0 0 3-2 1-2 2 2 2 2 0 1-3 3 1 4 0 1-3-1-1 1-6 1-1 2 1 3-1 8 8 3 5 1 3-2 2 2-1-4 1-1 2 3 3-1 4-1 1-5-2-1 2-4 0-1 2-6 1-2 2-9 0-7-4-25-19-5-7-4 0-2 1-16-2-3-4-5 1-2-2zM338 166l-2 1 1-1-4 1-3-1-2-1 0-3 4-3 4-1 1 1zM381 189l-2 1-3-2 1-2-1-2-1 1 0-3 1-3 1 1 0-2 3 0 0 4 1 5z"],["RU-ALT","Алтайский край","M382 457l-4-21 3-1 0-1 2 0 0 1 1 1 2 0 1-2 6 2 6-4 3 1 3-1 1-2 1 4 2 2 0 2 3 0-2 1 1 2 3 1-1 1 2 3 3-4 4-3 1 0 1 2 1-2 3 1 3-1 1 2 3-3 4-1 1 5 1-1 4 5 2 6 3 1-1 3-2 0 3 3-2 3 1 3-2-1-2 2-1 2 1 1 0 2-3 0-1 1-3-2-3 5-2 0-1 1-10 2-2 2-1-1 0 1 4 2 0 2-1 2-4 0-1-4-4-3-2 0-1 1-2-1-3 2-6-2-2 0 0-3-3-1 2-3-3-2-3 0-1 3-3 1-1 0 0 1z"],["RU-KR","Карелия","M245 107l1-2 6 9-2 4 1 2 3 0 2 2-1 0 1 3 0 1-3-1 2 4 0 3-3 5 0-2-4 2-2-1-3 5-1 0 0 2-2 0 1 1-1 0-1 1-1-1-1 5 1 1 1-1 0 2-2 5 0 1-4 2-2-2-3 6-2 0-2 3 0 5 2 2-3 2-2 1 1 1-2 3-6 3-4-6-2 0-6-3 1-2-2-3-3-1 0-1-2-4-2 1 1 2-2 0 0-2-4 0-3-1-4-21 1-3 20 3 6-1 2-4 3-10 6 0 1-1 1-3 4-3 0-1 2-3 2 1 1-1-1-1 5-1 0-1 2 1zM247 146l-2 0 2-2 1 1z"],["RU-TY","Тыва","M544 482l-2 4-3 1-1 4-1 0-3 6 2 5 2 1 0 4-2 3-4 1-3 3-2-3-4 1-4-3-1 1-1-1-3 2-4-1-1-2-3 0-2-3 0-4-10-2-1-2-1 0-2 1-2-3-2 2-3 0-3 3-4 0-3 2-2 0-4 1-1 1-3 1 0-4-2-1 1 0 1-3 1 1 2-1-5-8 0-5-2-2 4-1 1 1 4 1 2-2 1 0 0-3 1-2 2-1 3 2 0 3 6 1 5 2 6 0 7-5 5-8 3 0 2-5-1-1 5-1 1 1 3-2 3 1 1-2 2 2 3-3 4 2 2 3 3 0 0 2 2 0 0 2 6-1 1 1-1 1 2 1 0 1-3-1 0 4-2 3 0 2 1 0z"],["RU-PRI","Приморский край","M859 480l-2-4 4-3-2-3 2-4 4-2 1 0 1 2 2-2 3 1 1-2 3 0 2-3 1-3-1-4 3 0 3-7-2 0 0-2-5 2 0-2-3-1 0-1 3-3 2-5 1 0 2 2 2-1 0 3 3 0 1 1-2 3 1 0 1 2 4-1-1 6 2 12-4 24 1 5-2 3-1 6 1 3-1 1 1 3-7 13-5 6-2 1-1-2-1 2-1-2-2 2-2 0 0 1-2-5-3 4-1 0 1-3-2 1-1 5-1 1 1 1-1 2 1 3-2-1-1 2-1 0 1-1-2 1 1-1-2 1 3 1 0 3-3-2 0-1-3 0 2-2 4-4-1-6-2-1-3-7-7-8 3-3 2-7 1 1 10-2 1-2-2-4 2-3-2-3 1-2-1-2z"],["RU-PER","Пермский край","M245 317l-1-5-2 2 0-5 1 0-2-1 2-2 0 2 3-2 2 0 0-1 2-2-1-1 2-1-1-2 2-1 2-3 1-4 1 0 2-4 2-1 1-2 2-2-2-2 0-3 9-5 0-3-5-5 2-2-1-4 3-3 2 3 1-1 2 2 1-2 2 3-1 2 2 2 1-1 5 6 3-2 2 2 2-1 2 2 3-2 2 0 11 8 4 0-9 13-7 6-2-1-5 3 2 7-4 4 2 2-2 2-8 2-1 4-3 1 0-2-1-1-5 3-1 4-1-1-2 0-4-1 0 3-3 3-3 1-2-1 0-4-3-1 1-3-4-1z"],["RU-TYU","Тюменская область","M327 385l-1-2-1 2-2-3-1-3 1-2-2 0-3-3 0-3-3-2 0-1-2 0-1-2-2 0 0-4-3-3 1 0-1-3 2-2 1 0 2-2-2 0 2-4 0-2 3-2-1-1 5-1 0 1 6 0 2-8 3 2 2 0 2-3 2 1 6-1 4 1 3-3 6 0 0-3 2 1 0 1 4 2 1 1 3 2 2-1 3 7 1 7 2 1 0 4 11 7 1 1-9 4-7-3-2 1-5-2 0-2-5-2 2-3-2-3-6 6-1 5-2 2 1 3 1-2 2 1-1 1 2 5 0 2-3 1-2-1-1 2-2 0 0 1-1 1-2 4-3 0 2 1-2 1 0 2-2 1-2 3-2 0-2-4-2-2z"],["RU-VLG","Вологодская область","M214 183l-5 7 1 1-1 3 2 1-1 2 1 0 2 2 0 2 4 2 2 5 2-1 2 2 1 0-1 1 2 3 2 1 0 2 1 0 1 2 4-1 2 1-1 2 4 5 4-2 1 2-1 2 1 2 2 1 1 5-3 2-1-1-3 2-3-2-1 2 1 1 2 2-3 2 0 2-1 1-3-3-3 2-2-1-2 0-4-4-1 0-3-3-1-4-2-1 1-1-1 0-1-2-2 0 0-3-2-1 1-2-3 2-5-3-3 2-3 0-3-4 1-6-1-3-1-1-3 2-3-5-2 0-1-1-2 1 2-6-1-2-5 1-1-2 2-2-1-2 1-1-2-2-1 0 0-1 2-1-1-3 3-1 3 3 1-1 0-1 1 1 2-1 1 0-1-1 3-2 0-3 5-2 3-3 3 1 3-1 1-1 5 3 2 0 2 1 0 3z"],["RU-BA","Башкортостан","M259 327l-1 4 4 2 1 2 2-1 1 3 2-1 1 2-3 3 0 1-2 2 2 0 1 2-4-1-3 1 0-1-1 0-1 1-1 0 0 2-1 0-2-2 1-2-4 2 2-3 2 0-4-5-3 2-3 3 2 3 0 5 4 0 1 2 4 0 1 1 5-1 1 3-4 2-3 4-2-2-3 1-2-1-6 8 0 3-1-1-4 4-1 5-3-1-1 2-3 2-3-1-2-4-1 1-5 0-1-4 0 2-1-1 1-1-1-2 2 0 1-3 0-2-3 0 3-1 3-3-2 0 0-2-4 2-2-2 2-2-1-2 0-1 1 1 1-2-2-1 2-5-3-6 0-6 4-8 6-4-1-1 0-4 3 2 7-2 1 0-1-3 1 0-1-2 7-1 3-2 1 5 3 1 4 1-1 3 3 1 0 5z"],["RU-MUR","Мурманская область","M271 86l4 2 3-1 3 2 3-1 0 4 3-2 1 2-2 1 2 0 0 1 2-1 0 2 2-2 0 6-2 0-1-3 1-1-3 1 2 1-1 1-2 0 2 0 1 2-2 0 2 1-3 0 2 0 2 2-3 0 1 1-1 0 0 1-3-1-1 0 1 0 3 1 2-1 2 3 0 4 1 0 1 0 0 14-2 6 0 2 1-2 0 7 0 1 1-1-2 6 1 0 0 2-4 4-1 3-4 2-9-1-7-4-6-16 0-5-2-1 1-1 1 1-1-2 1-1-2 0 1-3-1 1 0-1 1-4 1 0 0-4-2-2 1 2-1 2-2 1 0 5-3-3-3 1-1-2 2-4-6-10 4-3 11-1 2-5 0-4 4-3 4 0z"],["RU-OMS","Омская область","M337 399l-1-1 2-7-2-1 1-2 2-1 0-2 2-1-2-1 3 0 2-2 0-2 1-1 0-1 2 0 1-2 2 1 3-1-2-7 1-1-2-1-1 2-1-3 2-2 1-5 6-6 2 3-2 3 5 2 0 2 5 2 2-1 7 3 8-3 1 2-2 1 0 1-1 1 2 4-1 3 2 7-2 7-4 2 2 1-1 2 1 2-4-1-5 2 0 2-2-1 1 2-1 0 1 2-3 1 1 5-1 1 1 1 1 5-2 0-1 6-3-1 0 1-4 2-2-1-2 1-1-1-1 3-1-2-2-2-2 0-3 1 0-3 3-2 2 1 1-2-3 0-2-1 0-3-3-1-1 1 1 2-3-1 1-2 1 0-1-5-1 4-2-3-2 1-2-2-1 1 0-3 1 0 1-3 2-1z"],["RU-ORE","Оренбургская область","M242 387l-1 2 2 2-1 1 3 4 0 1 3 3 0 3-2 0-4 4-6-2-2-2-1-3-4 2-2-1 0-1 1 0-1-1-3-3-1-2 1-3 0-3-2 0-2-2-2 2-3-1 0-4-3-2-1 1-1-2-2 1-1-1-2 1-4 0-3-11-2 1 1 1-2 3-2 0 0-2 2-2-1-1 1-5-2-2 1-2 0-2-6-4 1-5-2 0-1-1-3 1 0-2-3-1 1-1 1 0-2-4 7 0 6-5 1 1 2-2 4 0 0-1 3-2 0-2 8-3-1-2 1-1 0-1 3 1 1 3 2 0-1 1-1 0-1 2 1 1 0 1 1 0-1 4 0 6 3 6-2 5 2 1-1 2-1-1 0 1 1 2-2 2 2 2 4-2 0 2 2 0-3 3-2 0 0 2 2-1 0 2-1 3-2 0 1 2-1 2 1 0 0-2 1 1 0 3 5 0 1-1 2 4 3 1 3-2 1-2 3 1-1-2 2-1 0 4 3-2 5 5-1 1-3 1z"],["RU-KIR","Кировская область","M222 292l0-2-2 0 2-2-1-3 2-2-3-1 2-4-1 0-2 2 0-2-3-2-2 0-2-2-3 0-2-1 1-2-2-2 3-2 1-2 2-1 3 4 4-2 1 0 0-4-5-4 0-2 6-2 3 1 2-1 1 1 1-1 1 1 2-1 0-3 1-2-1-1 4-3 0-2 3-2-2-2-1-1 1-2 3 2 3-2 1 1 0-2 5-2 3 4-1 1 2 2-4 5 1 2-3 0-4 5 2 3-2 2 1 3-1 2 1 1 6-5 5 3 3-1 1 3 6-1 1 3 5 4 0 3-3 3-1-1-4 3-1 3 2 2-2 1-1 3-2 1-1 2-3-2 0-2-1-1-2 1-3-4-3 0-2 1-1 3-3 3-3 1-2-2-2 1-2 5 1 1-3 2-1-1-2 1-1 5-2 0-1-4 1-1-1-1z"],["RU-VGG","Волгоградская область","M147 335l-2 0-2 3-5-1-5 4 0 3-2 1-3 0-3 1 0-3-1-2-6-1-3-2 0 2 0-1-4 0 1 4-2-4-2 1-1-2 1-1-1-2-2 2 1 1-2 1-2-3-2 1-2-1-3 1-3-3 1-1-2-1 3-8-3-3 3-2 1 1 0-2 5 3 3-2 1-2 0-2 1-1-2-2 6-4 0-6 1-4 5-2 0-4 5 1 3 0 1 3 5 3 0 5 5 3 0 1 2 0 3 4 1 3-1 2-3 1 0 2 2 2 2-1 1 1 0 2-1 2 2 2 3-1 0 1 0 3 1 2-1 1z"],["RU-SAR","Саратовская область","M180 342l-2 1-1-1-4 2-5-2-2-2-3 3-6-1-1-2-4 8-5-1 0-2 1-9-3-2 1-1-1-2 0-3 0-1-3 1-2-2 1-2 0-2-1-1-2 1-2-2 0-2 3 0 1-4-3-3 0-2-1-1-2 0-1 0 1-1-5-3 0-5 1-1 1-5 5-1 2-2 3-1 2 1 5 9 2 0 1-1 1 5 1-1 2 2 2 1 1 3 3-1 3 1 0 2 1 3 4 3 2 0 1 1 1-1 2 1 0 1-1 1 1 2-1 4 2-1 2 2-1 1 0 2 1 0 0 3 2 3-2 1 2 0 1 4z"],["RU-ROS","Ростовская область","M90 298l3 0 2-3 2 0 5 4 4-1 3 1 1-1-1 4 0 6-6 4 2 2-1 1 0 2-1 2-3 2-5-3 0 2-1-1-3 2 3 3-3 8 2 0-1 2 4 4-2 2 1 1 4-1 1 0 0 2-7 4-6 0-1 3-1 0 0-2-3 1-2-2 0-5-2-2-1-5-1 0-1 3-2-2-2 1-1-2-1 2-4-4 1-3 1-1-2-1-2-5 2 0-1-3 3-1 0-1-3-4-2-2-2 1-2-2 3-1-1-2 4 1 1 2 2 0-1-1 1-1 0-2-5-2 1-1 2 1-5-3 2 0 0-2 4-1 3 2 2 0 5 7 2-2 4 0 0-2 1 0 1-2-1-1 4-1 2 1-1-3z"],["RU-KEM","Кемеровская область","M470 412l0-1 1 2-2 1 0 2 3 3 2 6-6 4-3 3 2 6-3 5-1 1 1 1 3-1 1 2 1-1 0 3-2 1 2 3-4 3-1 3 1 0 1 2-2 3 2 3-2 1 1 1-5 3 0 1-2 1 1-4-2 1-2-3-3 1-2-1 0-1-1 0 0-2-1-2 2-3-3-3 2 0 1-3-3-1-2-6-4-5-1 1-2-5-1-2 2-3-1-2 1-5-1-1 1-1-1-3 1-4-1-1 5 0 2-1 3 1-1-1 4-2 2-1 1 1 2-1 3 2 1-2 3 2 1 1 5-3z"],["RU-AL","Республика Алтай","M446 512l-4 0-1-2-2-1-1-3-2-2 2-1 0-1-1-1-5 4-4-3-3 0-2-5 1-2-6-4 0-5 4 0 1-2 0-2-4-2 0-1 1 1 2-2 10-2 1-1 2 0 3-5 3 2 1-1 3 0 0-2-1-2 3-3 2 1 3 3 3-1 2 3 2-1-2 4-1 1-1 0-3 3 3 1-3 2 4 4 1 0 2-2 1 0 1 2 0 5 5 8-2 1-1-1-2 3 2 1 0 1 0 5-3 2-1-1 0 1-2 1-1-2 0 2-6-1-1 2z"],["RU-CHE","Челябинская область","M280 377l-6-2-1 2 0-2-3-2 0 1-1-2-2 0-1-2-1 0-1 1-1-1 0 2-3 1 2 2 2 1-1 1-1 0-1-1-2 2 5 5-1 2-1 0-3-3-3-2 0 1-5 1 0 6-4 0-5-1 0-2 3-1 1-1-5-5-3 2 0-3-1-1 1-2 4-4 1 1 0-3 6-8 2 1 3-1 2 2 3-4 2-1 2-2-1-2-5 1-1-1-4 0-1-2-4 0 0-5-2-3 2-1 1-2 2-2 2 1 3 4-2 0-2 3 4-2-1 2 2 2 1 0 0-2 1 0 1-1 1 0 0 1 3-1 4 1-1-2-2 0 1-1 1-1 0-1 1-2 2-1-1-2 1 0 0-1 10 9 2 1 1-2 2 1 2 6 0 2 0 1-1 0 1 3-2 1 1 2-2 0-1-1-1 1-1 0 0 3-1 1-2-1 0 3-2 0 1 2 3 0-1 2 5 1-1 3-1 0-1 1 1 2z"],["RU-TVE","Тверская область","M180 207l-3 0-1 3-2-1-1 2 0-1-1 5-2 1 1 3-6 3-1 2-1-1 1-4-3 0-2-1-3 1 0-2-6-3-1-4-2 2-1-1-4 1-3-3 1-4-2-2-2 1 0-2-3 1-3-2-2-5-2-2 1-1-2-3 2-2 2 0 2-2 1-4 2-1-1-1 1-2 3 0 2 4 3 0 0 1 8 3 1 3 3-1 4 0 1-2 2 0 2 2 1 5 2-1 2 2 3 0 2 3 3 3 5-1 2 2z"],["RU-SAK","Сахалинская область","M863 350l1 0-1-2 4 1 1 4 4 2 0 1 1-1 1 2 1 0 5 4 3 5 0 2-2-3 2 3 3 4 3 2 1 2 1 0-1-2 2 1 1 2-1 0 2 1 0-1 10 9 12 9 2 1 4 0 2 2-10-2-6 3 1 0 2-2-3 4 0 2 5 14 2 3 4 2 4 1 4 3 0 1 3 0-2-1 2-1 5 4 1 4-5-5-4 3-2-1-1 1 0 1 3 10-2 0-5-5-2-7-6-5-1-5-3-4-5-3-4-9-5-7-4-4-3-8-4-2-5-2 1 0-3-1-3-5-1-3-3-6-3-3 1-4 2 2 1-1 0-3-1 1-1-1 2-2-2-1 0 2-1-3-6-2zM980 435l1 0-2 3-1-1zM972 431l1 0 0 1-2 3-1 8 2 2-2 0-1-1 1-4-1-7zM980 407l1 0-3 5 0 5-2 1 0 7 0 3-1 1-1-3 1 1-1-1 1-2-2-1 1 0 0-5 1 0 1-4-2-2 3 1 1-2 1-5 1 0zM984 389l1-2 1 6-1 6-2 2 0-4zM988 368l1 4-1 2zM978 311l1 1 1 4-1 3 1 2-1 1-3-2 2-4-2-6zM977 306l2 1 1 2-1 1-2-1zM980 328l3 3 0 1-1 0z"],["RU-KDA","Краснодарский край","M36 348l-2-4-3 0 2-16-2-5 1-6-1 0-1-2 2-5-2-6 3 2 0-2 1 0-2-1 2 1 1 3-1 0 1 2 0-2 2 3 1 2 3-3-2 1 2-2 0 1 2 0 4-1 1 1-3 1 4-1 1 3 1 0 1-6-1-2 2-3 0 2 3 2 1 2 1-1-1 0 2-1 2 4-3 1 2 2 2-1 2 2 3 4 0 1-3 1 1 2-2 3 3 4 1 0-1 1-2 6-2-1-2-2-1 2-1 2-2 2 2 1-1 4 1 1-2 1-3 0 0 4-2 0 0 2-4 0-3-6-1 2-1-1-5 3z"],["RU-LEN","Ленинградская область","M171 136l12 3-1 3 4 21 3 1 4 0 0 2 2 0-1-2 2-1 2 4 0 1 3 1 2 3-1 1 0 2-4 1-2-1-3 3-5 2 0 3-3 2 1 1-3 1-1-1 0 1-1 1-3-3-2 1-1-2 0-2-1-1 0-5-1-1 0-2-5 0 0-2 2-3-2-1-1-2-5 1 0-2-5 0-2-3-2 2-2 0-1-3 2-6-2-5 1-2-1-2 4-1 2 1 1-1 3-2 1 0-1 3 3-1 0 2 4 1 1 3-1 1-1 5 3 2 1-2 2-3 0-5-2-1-1-2 2-6 0 2 3-2-4-1-1-2z"],["RU-NIZ","Нижегородская область","M181 282l2-1 0-1-4 2-3-1-2 2-3-2 1-1-2-1 0-8-2-2-2 0-2-3 1-2-2-2 0-3 5-1 1-2 7 0 2-1 2 1-1-1 1-3 2 1 4-3 4 3 2-1 0-1 2-1 2 0 1-1 1 2 6 1 4-3 3 4-1 1 3 1 7 8 1 3-2 0-4 2-3-4-6 5-5-3-2 2-2-1-1 1 1 2-2 1 0 4-5 2 0 5-6 2z"],["RU-KL","Калмыкия","M101 381l-4 2-4 1-2 1 1-2-2 1-1-1-1-4-4-5 1-3-5-14 1-5-2-4-1-5-5-1-1-1 2-2-2 0-2 1-1-4 1-2 1 2 2-1 2 2 1-3 1 0 1 5 2 2 0 5 2 2 3-1 0 2 1 0 1-3 6 0 6-4 1-2-1 0-4 1-1-1 2-4 6 0 2 3 2-1-1-1 2-2 1 2-1 1 1 2 3-1 1 6 1 1-2 4 0 5 5 1 0 1-4 0-2 6 1 5-4 0-1 1-2-2-2 0 2 3-2 2 2 2-7 2 5 3z"],["RU-KGN","Курганская область","M324 384l-2 1-3-1 1 1-2 1-2-1-2 1-13-4 0-1-2 1-2-2 0 1-2-1-1 3-2-2-1 0-1-1-4-2-2 1-1-1-3-1 1-1-1-2 1-1 1 0 1-3-5-1 1-2-3 0-1-2 2 0 0-3 2 1 1-1 0-3 1 0 1-1 1 1 2 0-1-2 2-1-1-3 1 0 0-3 1-2 5-2 0 1 3 1 2 2 1-1 4 5 3-3 3 1 1 1-2 3 1 3-1 0 3 3 0 4 2 0 1 2 2 0 0 1 3 2 0 3 3 3 2 0-1 2z"],["RU-TA","Татарстан","M234 315l1 2-1 0 1 3-8 2-3-2 0 4 1 1-6 4-3 4-1 0 0-4 1 0 1-1-2 0-1-5-3 0 1-3-2-3-1 0 1-1-4-1-2 2 0-2-2 0 0-2-1-1-3-5 2-4-5 0-2-2-1-4-2 0 0-1-2 1-2-1 1-2 3-1 1 2 1-1-1 2 1-2 2 1 0-1 2 0 0-3-2 0 1-1 5 0 0-1 4 0 1-1 2 1 1-1 3 1 0-1 1-1 2 2 2-1 0 1 1 0 1 1 1 0-1 1 3-1 2 2-2 3 1 1-1 1 0 3 1 1 3 1-3 1 1 2 0 1 2 0 0 1 2-1 2 3 1-1 1 1 1-1-1-2 4 0 0-2 1 2-2 0-2 3 2 2 1-2 1 2-5 1 0 1z"],["RU-STA","Ставропольский край","M68 336l2 4 2-1 2 0-2 2 1 1 5 1 1 5 2 4-1 6 3 4 2 9-1 3-2 1-6 0 0 2-4-1 3 3-3 3-2-4-2 2-2 0 0-2-3-4 3-1-2 0-2-4-2 1-3-3 0-2-4-3 1-3-2-1 1-2 4 1-2-2-1-4 1-1-2-1 0-2 1-2 2 0 2-1-1-1 1-4-2-1 2-2 1-2 1-2 3 3 2-3z"],["RU-KOS","Костромская область","M183 231l4-3 7-1 1-3 3 0 2-2 6 3 3-2-1 2 2 1 0 3 2 0 1 2 1 0-1 1 2 1 1 4 3 3 1 0 4 4 2 0 2 1 3-2 3 3-3 2 1 1-1 2 0 3-2 1-1-1-1 1-1-1-2 1-3-1-6 3-3-2-2-1 1-1-3-4-4 3-6-2-1-1 1-3-4 1 2-3-3 2-1-1 3-3-5-2 0-5-4 2-7-5 3-2 1 0z"],["RU-KK","Хакасия","M466 436l-1-4 2-2 2 2 2 5 3-1 0 1 4-1 2 2 0 2 2-1 1 2-1 2 3 3 1 6-1 3 0 4 2 1 1 2-4 3 0 2-7 5-2 4-3 0-1 2 0 3-1 0-4 2-1-1-2 0 0-1-4 1-2 2-5-3 0-1 3-2-3-1 3-3 1 0 4-2 0-1 5-3-1-1 2-1-2-3 2-3-1-2-1 0 1-3 4-3-2-3 2-1 0-2-1 0-1-2-3 1-1-1 1-1 3-4z"],["RU-PSK","Псковская область","M130 155l2-4 3 0 2 1 3-4 8-4 3 2 0 1-1 2 2 5-2 5 1 3-3 0-2 1 0 2-1 0 1 4-1 0-1 3-4 0 0 3-1 0-3 1 1 2-3 0-1 2 1 1-2 1-1 4-2 2-2 0-2 2-1-3-3 0-1-1 1-5-4-4 0-1 2-1 0-3-2-1 1-3-1-1 8-7-1-2 5-1z"],["RU-NGR","Новгородская область","M176 185l-1 2 1 2-2 1 0 1 1 0 2 2-1 1 1 2-2 2-2-1-2-3-3 0-2-2-2 1-1-5-2-2-2 0-1 2-4 0-3 1-1-3-8-3 0-1-3 0-3-6 3-1 1 0 0-3 4 0 1-3 1 0-1-4 1 0 0-2 2-1 5 1 2-2 2 3 5 0 0 2 5-1 1 2 2 1-2 3 0 2 5 0 0 2 1 1 0 5 1 1z"],["RU-SAM","Самарская область","M210 316l-1 1 1 0 2 3-1 3 3 1-1 1-2-1 0 1-1 1 1 2-8 3 0 2-3 2 0 1-4 0-2 2-1-1-6 5-7 0 1-2-1-4-2 0 2-1-2-3 0-3-1 0 0-3-3-1 1-4-1-2 4-1-1-2 1-1-2 0 2-5 2 0 1 1 2-2 2 2 0-2 1 3 3-1 3 4 2 0 0 2 1-1 2 0 3-2 1-3 1 2 0 2 2 0 0 2 2-2z"],["RU-VOR","Воронежская область","M94 288l0-2 3-1 0-2 3-3 2-1 0-4 1 0 1 0 1-1 0-1-1 0-1-2 1-1 1 1 0-3 1 0 2-3 1 0 2 1 1-3 4 2 0 3 3 0 0 5 3 2 3 4 0 2-2 1 1 1 3 2 2 6 1-1-1 2 1 1 0 5-1 1-3-1-3-5-3 0-5-1 0 4-2 0 0 1-4 1 0 1-3-1-4 1-7-6 0-3z"],["RU-DA","Дагестан","M57 402l0-4 3-2 5 1 2-1 3 2 3-6 6-1-1-2 1-1-4-1 1-1-3-5 2-2-3-3 3 1 2-1-1-1 1-1 2 1 3 0 1-1 2 1 3 4 2 5-2 0-3 2 2 6-2 5-3 1-1 1 5-2 1 1-5 2-2 2 1 0-4 2 1 3-2 2-2 12 0 2-4 1-3-1-3 1-3-3-1-3 1-3-1-1 1-5-2 0 1-1z"],["RU-SMO","Смоленская область","M115 192l2-3 7-2 2 5 1 1-1 1 2 2 2 5 3 2 3-1 0 2 2-1 1 2 0 4 3 2-1 3-6 4-4 1-2-1-2 1-2-2-1 0-2 1 0-2-2-3-7 3-2-2-1 1-7 0 0-3 2-1 0-3-2-3 4-1 0-5 2-3 2 0 0-4z"],["RU-AST","Астраханская область","M125 346l-3 2 2 5-1 2-2 0-1 3 0 2 2-1 4 5-1 6-2 9-3 0 0-2-2 0 2 9 0-1-2 0 0 1 0-1-2 0 0-1-1 1 0-1-1-1 0 2-1 0 1 0-2 2 0-3-3 0-1 0-3-2-1 1 0-4-2 3 0-4-1 3 1-2-5-3 7-2-2-2 2-2-2-3 2 0 2 2 1-1 4 0-1-5 2-6 4 0-1-1-3 0-1-2 1-6 1-2-1-1-1-6 4 0 0 1 0-2 3 2 5 0 2 3z"],["RU-MOS","Московская область","M141 226l-1-2-2 0-1-4-2-1 0-1 3-3 1 1 3-4 4-1 1 1 2-2 1 4 6 3 0 2 3-1 2 1 3 0-1 4 1 2-2 1-5 7 2 2-1 4 3 2-4 7-4-2 1 1-2 1-2-2-4 1-3-2-1 1 0 1-3 0 1-4 2 0-1-4 1-1-1-1-2 0 0-4 1-2 11-1 1-1-1-3-3 2-1-1-2 1 0-2-2 2-2 0z"],["RU-PNZ","Пензенская область","M148 274l3-2 1 1 0 2 2-1-1 1 1 0 0 1 1 0 2 2 1-1 3 2 0 2-1 3 2 4 2 0 1-2 2 1 2 1 0 2 4 3 1 2-3 5 1 4-5 6-2 1-1-3-2-1-4 1-1-3-2-1-2-2-1 1-1-5-1 1-2 0-2-5-3-2 0-2-1 0 0-1 3-1 2-4-1-4 1 0 0-4 1 0z"],["RU-UD","Удмуртия","M242 313l-5 2-6-2 0-1 5-1-1-2-2 2-1-2 2-3 2 0-1-1-1-1 1 2-4 0 0 2-2 1-2-3-2 1 0-1-2 0 0-1-2-2 4-1-2-1 2-5 2-1 1 1 3-2-1-1 2-5 2-1 2 2 3-1 3-3 1-3 4-2 4 5 2-1 1 1 0 2 3 2-4 8-2 2-1 0 1 2-2 1 1 1-2 2 0 1-2 0-3 2 0-2-2 2 2 1z"],["RU-RYA","Рязанская область","M136 263l1-4-3 0-2-2 1-2 0-1 5-6 2-1 2 0 0-1 1-1 3 2 4-1 2 2 2-1-1-1 5 2 1 1-1 2 3 1-1 2 1 0 0 2 3 4-1 1 0 1 2 2-2 1 0 2-1 2-2 0 0 1-4-2 0 2 1 0 0 1-1 1-1-2-1 3-2 0-5-5-2 1-3 0-1-4-2-1-1 1z"],["RU-ULY","Ульяновская область","M200 303l-2 4 3 3 0 2-3 4-3 0-1 1-5-6-3 1-1-3 0 2-2-2-2 2-1-1-2 0-2 5 2 0-1 1 1 2-2 1-2-3-2 1-1-1-2 0-4-5 2-1 5-6-1-4 3-5-2-3 3-1 6 3 0-2 2-4 1 4 3 2-1 2 2 1 2-1 0 1 2 0 1 4 2 2z"],["RU-YEV","Еврейская АО","M819 468l-2-1-1-4 3-2-1-4 3-1 2-2 2 0-1-4 3 0 1 2 2-3 1 1 4 0 3 3 4-1 2 1 3-4 2 1 3-2 0 4-2 1-3 3-2 2-1 3-3 1-2 4-1 0 1 4-5 3-8 3-2-2-2-1-1-3-1-2z"],["RU-YAR","Ярославская область","M195 224l-1 3-7 1-3 3-2-1-3 2-1-1-1 0-1-1-3-1-7 3-1-4-2 0 2-6 6-3-1-3 2-1 0-5 2 0 0-1 2 1 0-3 2-1 2 1 2-1 1 1 2 0 3 5 3-2 2 4-1 6z"],["RU-BRY","Брянская область","M102 215l8 0 1-1 3 2-1 3 2 2-2 4-2 1 2 4-3 3 0 2-4-2-1 3-4 0-2 2-1-1-2 1-2-2-2 1 0-2 3-2 1-4-2-1 0-1-1-2-3-1-1-4-3 1-2-2 0-2 1-3 6-3 1-4 3 0 2 6 4 1z"],["RU-TAM","Тамбовская область","M132 266l4-2 2 1 1-1 2 1 1 4 3 0 2-1 4 4-3 2 0 2-1 0-2 13-7 1-2 2-5 1-2-1 1-2-1 1-1-2-1-4-3-2-1-1 2-1-2-3 5-2 0-8z"],["RU-KRS","Курская область","M91 238l3-2 2 2 2-1 1 1 2-1 3 4-1 2 4 4 0 2 1 6 0 2 1 0 1 2 0 2 2 2-1 3-2-1-1 0-2 3-1 0 0-2-3-5-7-2-3-5-1 1-2-1-2-2 0-2 1 0-1-1 2-2-3-3 1-1-2-3 2 0 0-1 1 0 1-2z"],["RU-KLU","Калужская область","M120 235l-3-2-4 0-1-2 1-1-2-4 2-1 2-4-2-2 1-2-1-2 3 0 4-2 2 3 0 2 2-1 1 0 2 2 2-1 2 1 4-1 2 2 1 4 3 1 0 5-4 4-2 1-1-3-3 4-5-5 0 2-4 0z"],["RU-VLA","Владимирская область","M166 232l3-2 2 2 1 1-3 3 0 2 4 0 1 5 4 4-1 2 3 1 0 2-1 3 1 1-2-1-2 1-7 0-1 2-4 1-3-3 0-2-1 0 1-2-3-1 1-2-2-1 4-7-3-2 1-4-2-2 7-8 0 1-1 2 2 0z"],["RU-BEL","Белгородская область","M82 258l0-3 2-2 0 1 3-4 2 4 2 1 1-1 3 5 4 2 1-1 5 6 1 4-3 1 1 2 1 0 0 1-1 1-1 0-1 0 0 4-2 1-3 5-3 1-1-1-1-7-3-1 2-8-6-4 0-2-1-1 1-2z"],["RU-MO","Мордовия","M159.75 278.25l-0.5-1-0.75-0.75-1.25 0.5 0.25 0.25-0.75 0.75-0.25-0.75-0.5 0.25-1-0.75-0.25-1-1 0.25 0.5-0.5-0.5-0.5-0.75 0 0.75-0.5-0.75-0.25-0.5 0.75 0.25-1.25-0.25-1 2-0.25 0.25-0.5 0-1.5 0.5-0.25 0.75 1.75 0.75-0.5 0.75 0 0-1.75-2-0.25 0.75-1.25 0 0.75 1.75 0.75 1-0.25 0.5 0.5 0.5-0.75-0.25-0.25 0.75-0.5 0.5 0.5 0.25-0.5 0.75 0 0.25-1 0.75-0.5-0.5-0.25 0-0.5-0.25-0.75 0.5-0.75 1 0 0 1.5 0.75 0.25 0 0.5 1.25 1.25 0.25 0.75 1.5-0.5 1.75 1 0.75 1.5-0.25 1.5 1 1.5-0.75 0.5 0.75 1-1 0.75 1 2-0.25 0.75 0.5 0.75 1 0.25-0.25 0.5-1 0.25 1.25 0.5 0.5 1.25 1 1 0.5-0.25 0-1.25 1-0.25 0.25-0.75 0.75-0.25 0.75 0-0.25 0.75 1.5-0.75 1 0.75 2.25-1.5 0.5 0.5 1-0.5 0.75 0.5-0.25 1-0.5 0-0.25 0.5-1 0 0 0.5 1.5 1 1 0.25-0.25 1.25 1.25-0.75 0 0.75-0.5 0.75 0 1.25-2 2.25 0 0.75-1 0 0.5 0.75-1.25 0.5 0.75 0.5-1 0-0.25 0.75 0.75 0.5 0 0.75-0.5 0.25-1.75-0.75-1-0.25-2.5-1.5-2.25 0.5-1.25-0.25-0.75 0.5-2.25-2 0-1.75-0.5-0.25-1.25-1.5-1.25 0-0.75-0.75-0.75 0.5-0.5 2-1.5-0.75 0-1.5-0.75-0.25 0-1.25-1-0.5-0.25-0.75 0-1 0.25-0.5 0.5 0.25 0.25-1.25-0.75-1.75 0-0.5z"],["RU-TUL","Тульская область","M133 254l-2-1-1 2-2-2-2 3-3-1 0-2-1-1 0-3 1-1-3-5 0-6-1-2 3-2 4 0 0-2 5 5 3-4 1 3 4-2 0 4 2 0 1 1-1 1 1 4-2 0-2 5z"],["RU-ORL","Орловская область","M122 252l-3 2-2 0-2 4-5 1-1-2-1 0 0-2-1-3 0-5-4-4 1-2-3-2 0-3 4 0 1-3 4 2 0-2 2-2 1 2 2 0 5 1 0 3-1 2 1 2 0 2 3 5-1 1z"],["RU-LIP","Липецкая область","M136 264l-8 4 0 8-5 2-1-3-3-2 0-2 0-1-1-2-2 0 0-3-5-2-1-3 2-2 3 0 2-4 2 0 1-2 2 0 1 3 3 1 2-3 2 2 1-2 2 1 0 1-1 2 2 2 3 0z"],["RU-IVA","Ивановская область","M190 235l0 5 5 2-3 2 0 1 1 1 3-2-2 2 4 0-1 1-1 3-2 0-2 1 0 1-2 1-4-3-4 3-2-1 0-2-3-1 1-2-4-4-1-3 0-2-4 0 0-2 3-3-2-3 3-1 3 1 1 1 1 0 5 4 1 0 2 2z"],["RU-ME","Марий Эл","M220.25 289.75l0.5 1-2.5 0.25 0.5-0.5-1 0-0.5-0.75 0.75 0 0-0.75-1.25-0.5-1 0.5-0.5-0.5 0.25-0.75-1 1-0.75 0 0-1-0.75 0 0-0.75-2 0.5 0 1.25-0.25-0.5-2.25 0.5-0.5-0.25 0-0.5-1.25 1.25-1.75-1-1 0.75-0.25-0.25-0.75-3.25 1-2.25-1.5-2-0.25-0.75 1.25-2-2.25-1-3.25-0.25-0.75-1.25-2.5-0.75-0.75-0.75 1.25-1.25-0.25-1.75 0.5-0.5 0.5 0.25 1-1-0.75-1 0.25-0.25-0.5-0.75 0.25-0.75 1-0.5 1.75 1 1.25-1.25 1.25-0.5 2 1.5 0.75-0.25 1 1.5 0.75 0 0 0.5 1 1 0.75 1.5-0.75 1 2 0.75 0 0.75 1.75-0.75 1.25 0.5 0.25-0.5 0.25 1.5 0.25 0 0 0.5 0.5-0.25 0.5 0.75 0.5 0 0.5-0.5 0.5 0 0-0.25 1 0 0.25 1 1.25 0.25 0 0.5 0.75 0.5 0.25 0.5-0.5 0.75 0.5 0.5 1.75-0.75 0.5-0.75 1.25 0.25-0.25 0.75-1.5 0.75 0 0.75-0.5 1 0.5 1 1.25 0 0.75 1-1.25 1.75 1 1.75-0.25 1.25z"],["RU-CU","Чувашия","M204 289l-2.25 0.25-1-0.25 0-0.25-0.75 0.25-0.5 1-1-0.25-2.25 0.75-0.75-0.5-1 1 0.5 0.5 0.5-0.5 0.25 0.75 0.25-0.5 0.5 0 0.25 0.75-1 1.75-0.5 0.5-1.25-0.5 0.25 1-0.75 0.25-1.25-0.75-1 1.5 0.5-1.5-0.75 0.75-1.25-1.75 0-0.5-1.5 1-2 0-0.25-1.25-1.75-0.5-0.75-4 1-1 0-1.25 0.75-1-0.25-0.5-1.25 0.75 0.25-1.25 1.75-1.25 1.25 0 1-0.75 1.75 0 0-1.5-0.75-0.75 0.5-1-0.25-0.75 0.25-0.75 0.75-0.25 0.25 0.25 0.25-0.5 1 0.25 1-0.5 0.25-0.75 1.75-0.25 1.5 0.25 1 0.5 0.75 1.25 3.25 0.25 2.25 1-1.25 2 0.25 0.75 1.5 2-1 2.25 0.5 2.75z"],["RU-CE","Чеченская Республика","M57.75 393.25l0.25-2.75-0.5-1 1.75-0.25 0-0.5 1.25-0.75 1-1.25 1-0.5 0.25-1 2.25-2.75-0.5-2.5 0.75-0.75 1 0.75 1-0.5 0.75 0.5 1.25-1.5 0.5 0 0.75 0.75-0.5 0.75 1.25 1.5 1.5-0.75 0.5 0.25 0.75 2 1 0.5 1 2-0.75 0.25-0.25 1 0.75-0.25 0.75 1 1-0.5 1.25 0.25 0.5 0.5-1 1.25 1 1-0.25 0.75 0.25 0.5-2.75-0.25-1.5 1-1.75 0-0.5 1 0 1-1 0.75 0 0.5-1 0.25-0.25 0.75 0.75 0.5-1 0.5-0.25 0.75-1.75-0.25 0-0.75-0.75 0-0.25-1-1 0-0.75 1.25-1.25-0.5-1.25 0.75 0-0.75-2.25 0.25-0.75-0.5 0-0.75-0.75-1.5z"],["RU-KC","Карачаево-Черкесия","M37.75 353l-0.75-4 3-2 1.75-0.75 1.5 1 0.75-2 0.25 0.25 2 3.5-0.5 0.75 0.5 0-0.5 0.5 0.5 0 0.25 0.75 1.75-0.25 0.75 0.5 1.75-0.25 0.75-1-0.25-1 0.75-0.25 2.25 1 0.25 0.5-0.75 1.25 1.5 3 0.25 0.5-0.5 0.5 1.5 1.25-0.25 0.5-2.75-1-0.5 0.25-0.75 1.75 0.75 0.75 0.5-0.5 0.75 0.75-0.75 0.25 0.5 0.75-0.75 0 0.25 0.75-2.25 1.75-2-1-1 1.25-1.5 0.25-1 0.75-1 0.25-1.25-1.25-1.25-0.75-2.75-3.75-0.25-2 0.25-0.5-0.75-0.75-0.25-1.5z"],["RU-KGD","Калининградская область","M85 124l-1 6 2 4-2 3-4 0-2 2-8-23 3 1 4-1 2 4 5 1-5-1 1 4 1 1 3-2z"],["RU-KB","Кабардино-Балкария","M45.5 367l-0.75-2.75 1-0.25 1-0.75 1.5-0.25 1-1.25 2 1 1.5-0.75 1 1 1.25 0.25 1.25 1 1 0.25 0 1-0.5 1.25 1.5 0.5 1.5 2.25 1.25-0.5 1.25 0.5 1.75 3 1.75 0.75-0.5 0.25-1.25-0.25-1.5 1-0.5 1.25 0.5 0.75-2 1-0.5 0.75-0.5 0 0-0.5-1.5-0.5 0.25-0.75 0-0.5-1.25 0-0.5 1.25-1 0.25 0.25-0.5-0.75-1 0.25-0.75-2.75 0.75-2.75 0.25-0.5-1-1.25 0-0.75-1.75-0.25-2.5 0.5-0.5-0.25-1.75-1.25-1.25z"],["RU-AD","Адыгея","M48 327.25l0.25 2.75 2 1.75 0.25 1-0.25 3.5-1.5 2.5-0.25 1.5-1.25 1.5-1-0.75 1-0.5 1.25-2.75-0.75-1-1 0.5-0.75 0-0.5 0.5-0.25 1-1.75 2-1.25 0-2 1.75 0 1-3.25 0.5-0.75-3 0-1.25-0.75-0.5-0.25-1 0.75-0.25 1-0.75 0.25-0.75 0.75-0.25 0.5 0.5-0.75 1.75 0.25 0.5 2.5-0.5-0.5-1.25 0.5-1-0.5-1 1.75-0.25 1-0.75 0.5 0 1.25-0.75 1 0.5 1-1.75 0.5-0.25-0.25-0.5 0.75-0.75-1.75-0.5 0.25-1-0.75 0 0-0.25 1 0 0-0.5-0.75-1-1 0.5 0.25 0.75-0.25 1-1 0-0.75-0.5-2.25-3.25-0.5-3.25-0.25-1 1-0.5 0.25 1.25 1 0.25-0.25 1.25 0.5 0.75 1.75 1.75 3.25 0.25z"],["RU-SE","Северная Осетия","M48.5 382.25l-0.75-2.25 1.5-0.25 0.25-0.25-1.25-4.5 1 0 0.5 1 2.75-0.25 2.75-0.75-0.25 0.75 0.75 1-0.25 0.5 1-0.25 0.5-1.25 1.25 0 0 0.5-0.25 0.75 1.5 0.5 0 0.5 0.5 0 0.5-0.75 2-1-0.5-1 1.25-1.5 0.5 1 2.25 1.75 0.5 1.25-0.75 1.25-1.25 1-0.5-1.25-0.75 0.25-0.5-0.5 0.5-0.5-0.5-0.5-2.25 1.5 0.5 0.5-1.5 1.75 0.25 0.75 0-0.5 0.5 0.25-0.25 3.25-1.25 1.5-1.25 0-1.25-2-1.25 1.25-0.75-1-2-1.25-1.25 0-1.25-1z"],["RU-IN","Ингушетия","M57.25 389.5l-0.5-2.25-2 0.75 0.5-2.75 1-0.75 1.25 2 1.75-0.25 0.75-1 0.25-2 0-1.75-0.5 0 0 0.5-0.25-1 1.5-1.5-0.5-0.5 2.25-1.25 0.5 0.25-0.5 0.5 0.5 0.5 0.75-0.25 0.5 0.25-0.25 0.5 0.75 1.5 0 1.5-2.25 2.75-0.5 1.25-0.75 0.25-1 1.25-1.25 0.75 0 0.5z"],["RU-MOW","Москва","M139.75 231.25l1-1 0.75-2.25 1.25 0.25 1-1.5 1-0.75 0.5 0.5-0.75 0.75 0.5 0.75 2-1 1.5 0.75 0.5-1 2-0.5 0.25-0.75 0.25 0.25-0.5 0.5 1 0.75 0.25 1-0.75 2-2 0.5-1-0.5-2.75 1.25 0-0.75-1 0-0.25 0.75-1.25 0.5-1 0 0-0.75-1.75 0.75zM152 223.5l0 0.75-1 0.25 0-0.75zM148 225.25l0.25 0.5-0.5 0.25-1-1 0.75-0.25z"],["RU-SPE","Санкт-Петербург","M168 150.5l0.5 3.25 1.5-0.25 0.25-0.5-0.5-1.75 1.25-1.5 0-1-0.5-1-0.75-0.5 1.5 0.25 1 5.25 0 0.5-1 0.5-0.25 1.25-1.25 0.75-0.25 2-0.75 0.25-1-0.75-1 0-1-1.25 1.25-3.75 0-1.5zM168.75 150.75l-0.25 0 0.25-1z"]]};
+var SP_MAP = {"w":1000,"h":547,"r":[["RU-SA","Якутия","M808 126l1 1-1-1-2 0-4-2-1-2zM802 121l1 2-2-2 0-1zM596 184l4 2 2-2-1-2 2 1 2 3-1 3 2 1 0 3 0 4 1 2 3 0-3-1-1-1 1-3-1-3 2-2-3-1 2-2 2-1 3-2 12-1 2 1-2 0 1 3 6 2 3 1-3-1 5-1 3-1 3 0-1-1 2 0-2-1 3 1 0-4 1 0-3-4 0-3 1 1 1 0-1-2 1 1 0-2 3 1 1-1 1 2 1 0 1 1 2-3 0 3 1-1 1 2 0-4 4-1 1 1 1-1 0 2 3-1 0 2 1-1 2 1-4 3 0 2 5-1-3 1-2 2 4 1 2-1 3 2-1 2 1-1-2 2-6-3-1 1 1 1 3 1 5 4 1-1-2-3 4 3-2 0-1 2 2 0 4 3 1 3 1-1 4 1 0-1 2 2 1-3-1-4 2-1-2 0 0-3-1-7 1-1 2 1-2 0 0 2 3 2 4 0 3-1 1 1-1-3 2-3 3-1 1 1 1-1 4 0 1 1 0-1 0 1 2 1 0-1-1 0 1-3-2 1-1-3 1-1 1 1 0-2 3 1 1-1 2-2-3-1-1-2-2 0 1-1-1-3 1-1-2 1 0 2-2-1 0-4 3-2 1-2-4-3 7-1 7-5 11-3-5 4-2 0 0 3-2 1 3 0 1-3 5-5 1 7-1-2 0-2-1 1 0 1-1-1-1 0 3 3-1 2-2 0 2 0 0 3 2-1 1-4-1-8 4-3 5-2 4 2 0 2-3-1 1 2-1 1 1 0 0 1 3-3 2 0 0 2 2-3 1 2 0 3 0-4 1 2 0-3 3-1 4 2-1 1 5-1 6-12 1 1 0-2 6-7 6-2 4 0 4 1 1 2 0 1 1 0 3 3 4-3 6 4 3-1 3 4 0 2 0-1-2-5-5-3-1-6 3 2 3 0 1 2 3 1 0 1 3 1 2 4-4 3 0 2-3 5 0 1-3 7 1 3 2-1-1 3 2 2 3 1 5-1 3 1 2 6 2 0 2 2-3 3 1 3-1 1-4 0 0 2-3 1-1 3-2 0 0 1-2 1 0 1 3 4-1 1-1-1-1 1 0 2 4 4-1 5 2 3 3 2 0 3 2 1-1 1-2-1-1 3 0 2-1 0-2 2 1 2-2 1-3-2-2 0-1 4-2 2-3 0 0 3 3 1 1 4-2 0-1-1-1 1 0 1-5 2 1 4-1 3 1 2 3 6 6 6-1 2 2 2 0 9-2 1-2-2 0 2-1-1-3 0 0 3-2 1 0 2-3-2-1 2-6-2-1 1-3-1 1 2-2 2 3 4-1 1 1 8-2 2 0 2-1 0 1 2-2 2 1 3 3 2 1 2 5 10-1 0-1-1-1 2 0 3-2 5-7 1-1 3 0 4-2 1-1 0-1 1-4 0-2 2-1 0-3 4 2 3-2 0 2 6-2 1 2 3-1 2 2 0-5 1 7 4-2 2 1 5-2 0-1 1 4 1 4 3 0 1 1 3-2-1 0 2-1 0-1 1 2 7 2 3-11 4-2 2 1 2-1 1-3 1-3-1-4 1 0 2-3 0-3 2-1 0-1 1-2 1-1-1-2-1-2 2-2-1-2 1-4 1-6-5-5 1-3-1-2 2-4-2-4 1-2-2-6 1-4 3-3-1 0-2-3-3 0-2-1 0-1 2-1-3-3-10-3-1 0-3-2-3 0-3-1-1-4-2-2 3-1-1 0 1-3 0-1-1 0-3-2-1 2-2-2 0-4-3-6-1-3 2-2 4-1 0-2 7-3 3 0 4-1 2-5 2 1 3-1-4 0-2-2 0-1-2-1 3-2 1-7 1 0 2-2 2-3 0-3-4-1 0 2-10-1-2 2-6-1-1 2 0 0-6-2 0-3-2 0-3-2-4 2-6-1-2-3 0-1-1 1-4-1-2-1-5-3-3-5 1 1-4 2 1 0-2-2-5-1 0-2 2-2-2-2 1-4-3-3 2 0-2-2 1-1-2 1-1 1-3 1 1-1-3 4-7-3-2 0-4-2-2 0-3 1-1-2-5 0 1 0-2-3-1 2-1 4-4-2-21-4-7 1-2 2 0 5-2 1-3 5 1 1-4-2-2 1-3 3-1-1-2 2-3 3-1 3-3 1 0 1-3-3-2-2-9-5-3 1-2-3-1 0-2 0-4-3-4 1 0 2-3-1-2zM707 174l0 2-3 0zM667 179l0 1 0 1-3 0zM664 178l2-3 2 1zM632 186l-1 2-1-2 1-1zM712 141l1 1-1 2-9 3-2 2-2 0 2-3-1-5 3-3 7 1zM684 150l0 1-5-2zM698 138l1 2-1 2-3-3 2-2zM602 176l-1 5-5-2 1-1 0-3zM717 105l2 3-3 5-3 2-9 1-2-5 3 2 4-5 2 2 4-4 2 1zM673 133l1 1-2 2-2-6 3 2zM699 114l0 3 1 1 1 2-1 2-4 2-3-2-1-4-2 1 0 2 4 3 2 1 3-2 1 1-3 4-2 0 1-1-1 0-1 0-4 6-2-1 0 5-4 0-7-3 0-1 1-1-1 0-2-3 0-1 1 0-2-2 1-4 1 1 0-2 1-1 0 1 4 0 0 1 3 0 1 1 2-1-3-4 2-1-3-1 6 1 4-3zM700 94l0 1-2 2z"],["RU-KYA","Красноярский край","M466 194l4 1 4 5-1 1 3 5 5 0 2 2-2 3-4 1-1 7-2 2 0 5 0-5 2 0 1-4 1 1 1-1 0 1-1 5-3 4 2 2 0-4 2 1 2-2 0-7-1-2 4-6-1-3-2-1-1-3 0-3-3-2-2-3 2-5 0-2-1-1 1-1 0-1 2-2 0-1 11 2 5 0 2 1 3-1 4 0-6 4 0 2 3 5-1-2-2-3 0-2 6 0 2-4-1 1-1-3 1 0-1 0-1-3-2-1 0-1 1 1 0-2 1 0 2 2-1 0 1 0 0 1 0-1 1 0-2-2 1-1-4-2 2-2 2 4 0-2 1 0 2-2-1-1 1 1 1-1-3-1 1-1 3 1 6-4 1 1 1-2 4-1 2 1 0-1 9-1-2-1 0 1-1-2-1 1 1-2 1 0 0 1 2 0-1-1 2 0 0 1 1-1 4 0 1 1-2 2 3-1 0 2 3-2-1 1 3-1-1-1 2 0-1-1 3-1 0 1 1 0 2 0 0 2 0 3 1-4-4-5 5 0 2-1 0 2 5 0-5-2 1-2-1-1 0-2 7-9 3-1 4 2 1 0 2 2-2 0-1 2-4 2 6-1-1 2 4-1 2 1-2 3 0 2-1 0 0 1 5-1 0-3 7 0 3-1 4 3-1 2 1-2 2 1 0 1 1 1-1 2 2-1 0-1 1 0-2-1 1 0 2 5 1-2 0 1 0 5 0-2-5-2 2 2 1 2 1-2 2 2-2 7-2 2-1 3-1 0-4 3 0 2-2 1 1 0 0 1-3 3-3 5-3 1-1 4-3 1-1 4-2 3 1 0 2-3 3 1 2 0-4-1 0-3 2 0 6-1-1-1 4-2 0-1 1 0-1-1 2 1 4-4 1 1-2 3-1 0 3 4 0 3 0 2 3 2-1 2 5 3 2 9 3 2-1 3-1 0-3 3-3 1-2 3 1 2-3 1-1 3 2 2-1 4-5-1-1 3-5 2-2 0-1 2 4 7 2 21-4 4-2 1 3 1 0 2 0-1 2 5-1 1 0 3 2 2 0 4 3 2-4 7 1 3-1-1-1 5 0 1 2 0 0 1 3-1 0-1 4 3 2-1 2 2 1-1 1 2-3 1-1 2-5-1 1 2-1 5 1 1 0 1-2 0 0 3-1 1 3 5 2 1-3 5 1 3-3 3 0 3-6 4 1 2-2 2 0 2-1 1 2 6 1 1 4 0 1 6-3 0-2 2 2 3 1 1 2 4-4 4 1 2-3 1-2-2-2 1 0-2-2-1-2-1 0-3-3-1-3 2-1 2 1 4-2 3-3 2-1 2-3 2-1 3-1 0 1 5-2 2-2-2-3-8-2 0-2 4-3 1-8-1-4 10 2 1-1 2 2 1 0 5-2 0 0 3-2 2-1-1-3 4 1 6-2 1-1 3 1 2-2 5-3-1-4 4 8 9-1 1-1 1-2-2-1 2-3-1-3 2-1-1-4 0-1 1 1 1-2 5-3 0-5 8-7 5-3 0-14-3-2-4 2-4 7-5 0-2 2-1 2-3-3-2 0-4 1-3-1-6-3-3 1-2-1-2-2 1 0-2-2-2-4 1 0-1-3 1-2-5-2-2 7-5-2-6-3-3 0-2 2-1-1-2 2-3-2-1 6-6 2 0 0-3-8-4 0-6 4-5 3-1-1-4-5 0-1-6-2-1-1-2-2-2-13-2-1-1 3-5-2-7 10-4 0-1 3-1-1-2-6-4-1-6 9-8 1-3 1-3-1 0 0-2-2-1 2-1 2-3 3-1 1-3 0-7-1-1-2 0-1-2-4-1 3-5 0-2-1-2 1-1-1-2-3-1 0-3 1-2-1-4 2-3-4-9 1 0 1-3-2-6 4 1 1-3 1-2 0-3 3-1-1-3-1-3 1-1-2-1 1-2-1-2-1 2-3 0-1-1-4-2 0-4-2-2 0-2 3-2 0-1 1 1 4-3 3 0-1-1 1-2 1-5-2-2-2-4 1-3 4 1 0-2 1-1-2-3-2-2zM595 186l-4 2-2-2 2-3 4 1 0-2 2 0zM472 190l-1 1-3-3 4-3zM507 169l-1 1-1 0 1 1-2-1 1-1zM491 160l-1 2 0-1-1 0 0-1 1-1 0 1 0-2 1 0zM542 157l0 1-1-1-1 0 1 2-4-2 0-1zM592 149l2 0 1 2zM542 145l-1 2-3 0zM521 142l0 1-2 0 0-2zM576 132l-1 1-3 0zM569 127l-2 3-5 2-1 1 0-1-4 1-4 3-2 0 3-10 2 0-1-1 1-2 2 0-2-2 2-3 1 2 0-3 3 2-2 6 3-5 3 3 0 2 1-1 1 1zM493 106l-3 0-1-3zM536 111l0 1-2 1-3 0 1-1-3-1 1-1-1-2zM553 122l-2 3-5 0-2-2-3-1-1-1-2 0-1-2 0-3-1 0 0-1-2 2 0-2 5-3-1-1 2-2 0 1 1-1 6 0 1 1-2 4 2-2 1 0 0-2 2 0 2 3-1 6 0 1-2-1zM504 92l1 1-1 1-3-1 1-1zM532 96l-1 1-3-2zM547 102l0 1-1 0 0 5-7 1-3 1-4-2 2 0-1-2 3 0-5 0 3-1-2-1 3 0 1-3-2 0 1-1 7-4-1 0 2 0zM480 220l0 1-3 4z"],["RU-KHA","Хабаровский край","M850 454l-1 0 1-1 3-2-1-3-3 2-2-1-3 4-2-1-4 1-3-3-4 0-1-1-2 3-1-2-3 0 1 4-2 0-2 2-2-5-2 0 1-1-1-2-2 0 0-3-2-2-3 1-1 0 0-2-1-1-1 2-1-1 0-3-1-1 1-1-1-3 2-3 1 0-3-4 6-5 1-4 5-6-3-1-1-3 11-2 0-4-2 0-1-3 0-4-2-1 0-1-4-1-2 4-4 1-2 2 1 2-7 5-1 2-1-1-3 2 0-2-3-5-4 2-4 0 0-6 2-1-1-4 4-6-1-3 2-1-1-1 2-1-1-3 2-1-6-2-3 3-6 3-2-3-2-7 1-1 1 0 0-2 2 1-1-3 0-1-4-3-4-1 1-1 2 0-1-5 2-2-7-4 1-1 4 0-2 0 1-2-2-3 2-1-2-6 2 0-2-3 1-2 2-2 1 0 2-2 4 0 1-1 1 0 2-1 0-4 1-3 7-1 2-5 0-3 1-2 1 1 2-1-6-9-1-2-3-2-1-3 2-2-1-2 1 0 0-2 2-2-1-8 1-1-3-4 2-2-1-2 3 1 1-1 6 2 1-2 3 2 0-2 2-1 0-3 3 0 1 1 0-2 2 2 2-1 0-5 3-1 3-3 6 1 2 2 1 0 4 4-1 2 2 3-2 1 0 5 3 1 2-3 6 2 0-1 1 0 5 5-1 1-3 1 2 3-1 2-3 0 0-2-1 1-1 0-3 3-6 4-2 3-2 1-3 6 1 9-2 7 2 6-2 3 0 4-3 10 1 2-1 0 0 4 2 2-1 0-1 9-3 8 0 4-3 6 0 3 1 2 3-2 1 1 7-5 3 6 1 3 2 1 2-3-1-2-2 0 1-4 2-1 0 4-1 0 3 1 1-2 0 5-1 2 1 1 4-6 1-5 1 2 0 5 2-1-2-7-3-3 5-1 2-4 5 1 2 2 4 1 8 0 1 1 0 3-4 1 5 0 2 2 1 4 5 1-1 1 2 2-1 6 0 2 1 1-1 1 3 3 0 3 2 4 3 4 2 0 0 3 3 3 1 3 0 1 1 3 0 1 1-1 1 3 2 4-2 12 1 6-4 1-1-2-1 0 2-3-1-1-3 0 0-3-2 1-2-2-1 1-2 4-3 3 0 1 3 1 0 2 5-2 0 2 2 0-3 7-3 0 1 4-2 4-2 2-2 0-1 2-3-1-2 2-1-2-3 0-1 1-2 2-1 3 2 3-3 3-2-5 0-2-2-2 2-4 1-3-4-3 0-4zM823 364l0 3-2 2zM829 361l1 0 0 6-4-2-1 3 0-6 2-1 1 1z"],["RU-IRK","Иркутская область","M565 396l3-1 2-3 0-5 3-3 3 1-1 1 3 3 2 1 0 2 2-1 2 2 3-1-1-2 4-4-2-4-1-1-2-3 2-2 3 0-1-6-4 0-1-1-2-6 1-1 0-2 2-2-1-2 6-4 0-3 3-3-1-3 3-5-2-1-3-5 1-1 0-3 2 0 0-1-1-1 1-5-1-2 5 1 1-2 3 0-1-3-1 0 2-1 3 5 0 2-2-1-1 4 5-1 3 3 1 5 1 2-1 4 1 1 3 0 1 2-2 6 2 4 0 3 5 2 0 6-2 0 1 1-2 6 0 8-2 2 1 2 1 0 2 3 1 1 3 0 2-2 0-2 7-1 2-1 1-3 1 2 2 0 0 2 1 4-1-3 5-2 1-2 0-4 3-3 2-7 1 0 2-4 3-2 6 1 4 3 2 0-2 2 2 1 0 3 1 1 3 0 0-1 1 1 2-3 4 2 1 1 0 3 2 3 0 3 3 1 1 3-3 2-4-2-3 1-1 1 1 2-1 1 1 3-2 2 4 6 3-1-1 2 1 2 0 2-1 1-1-1-3 3-4 0-1 0-4-1 3-3-2-1-3 3-3 0-1 6-4 1-1 3-4-2-1 1-3 0-2-3-2 1-2 0-2 1-3-3-2 5-4 0-5-1-1 4-2 0-5 3-1 4 2 0 2 3 2 0-2 1-2 5 2 9-1 5 4 0-5 19-14 11-6 9-6 3 0 5-3 0-4 2 0-3-2-1-2 1-1-3 0-2-4-3-2-3-3 0-2 0-4-5-5-2-4-4-1-4-3 1 0 1-1 1-3 1-1 2-2-1 1-1-1-1-5 1-1-2-2 0 0-2-3 0-2-3-4-2-2 1-4-5 0-1-3-3 1-2 1 0 2-2 3 1 2-5-1-2 1-3 2-1-1-6 3-4 1 1 2-2 0-3 2 0 0-5-2-1 1-2-2-1 4-10 8 1 3-1 2-4 2 0 3 8 2 2 2-2-1-5 1 0 1-3 3-2z"],["RU-CHU","Чукотский АО","M917 27l1-1 0 3-2-1zM851 48l1-1 0-1 2 0 2-2 2-1-1 1 2 0 2-2 2 1 0-2-4 2 5-3 0 1 1 0 0-2 1 0 3-2 0 1 1-1 1-2-2 2 3-3 1 2 0 1 1 0 2-2-3 0-1-1 3-2 3 0 1 2 0-2-1 0 3-1 3 2 4 0 1 1 2-2 3 1-2-2 1-1 3 1-3-2-2 2-1-2-4-1-2 3 1-5 1-1 0-2 0 1 1 0 2 1 0-1-1 1-1-1 2-2 0-2-2 3 2-6 4-1 6-4 1 1 0-2 1 0 0 1 1 0 1-3 1 0-1 2 2 4 4 0-5 4 4-2 2 1-1 1-1 4 0-1-1 2-1 0-2 3 3-2 1 0 0-1 3 1-1 3 2-3 2 0 2 7 0-2 1 0 1 2 0-2 1 1 1-2 2-1 0 2-2 1 0 1 1-1 2 0 0 2-1 2-2-2-2 1 3 0 0 2-1 2-4 0-2 2-2-1 1 1-1 1 1 1 0 2-1 0-3 2-2-2-3 0-5 5 1 3-2 5-3-1 0 1-5 0 1-1-4-3 2 3-2 1-2 0 1 0-1 1 3 0 0 2-1 0 4 2 5-1 4 4 0 2zM819 88l2 3 0 1-6 3-1-3zM819 36l0-4 2-2 6-3 1 3-1 7-1 2zM803 117l4-5-1-2 5-2 2-3 4-4-1-6 4 0 3 2 5-3 4 1 1-4 2 0-2 0 0-2 1 1-2-1 0-3-7-1-2 2 0-3-5-2 7-8 3-1 0-1-1 1-1-1 3-2 3-8 0 1 2-1-1-1-1 1 0-2 2 1 2-2 7-7 2-1-2 1 2 1 1-3 5-2-3 2 2-1 1-1 49 19 2 4 1 6-1-1 0 3-2 2-3 0-3 2-1 3 1-1 0-2 4-1 0 1-2 3 0 1-3 1 1 3-1 7 2-7-1-3 3 0 2 2-2-2 3-1-2-4 1-1 3 2 3-1 2-2-2-1 6 0-1 0 1 1 1-1-1 0 5 1-1 1 1-1-1 1 1 2 1-2 2 1 0-1-3-1 4 0-1 1 1 0 3-2 2 2 4-1 2 2 0 2 3 1-6 4-2 5-3-3 1 2-3 1 3 1 2-1-1 3 2 4 0 7-1-1 1 1 1 4-2 0 2 0 0 2-4-1 0 1-5-2-2 2 0 6-4 3 1 4-2 1 0 3-2 3-4 0-1-1 0 1-6 1-1 2-3 1-3-10-4 0-2 2-5-1-3 4-4 0-1 3-2 3-1 1-2 0-2 1-1 0-1 1 2 2-5 2 0 1-2 2 0 2 1 2-1 1-5 3-2-1-3 1-3 3-5-1-7 3-4-5-5 2-2-6-2-1-6 1-4-1-1-2 1-3-2 0-1-3 3-6 0-1 3-5 0-2 4-4-2-3-3-1 0-1-2 0-2-3-3 0zM826 39l1 2-1 4-3-1-2-2-2-6z"],["RU-YAN","Ямало-Ненецкий АО","M400 251l-2 0 0-4-1-1 1 1 0 1 1-1 2 2zM395 207l6 9-1 2 2 6-1 3 3-1 5-5 0-1 1 0-2-1-1-1 0-5 2-3-1 0-2-4-2 2 0-1 3-5 1 0 0 1 1-1 0-2 5-6-1-1-2 0 3-3-1 0 0-1 2-2 8-1 9-11 3-3 1 1-1 1 7 3 2 1-1 1 1 0 2 2-2 5-5 7-4 1 2 6-1 4-2 5-3 1-1 6-2 2-3 9 2 7-4 3-2 6-3 0-3 4-2-1 0 2-1 0-2 2-2-1 0 1-1 3-1-1-2 1-2 0-1-2 3-1-2 0-1-3-2 0-3-2 0 4 2 3 2 2 5 3 3 2 1 0 1-2 2-1 2 0 6-2 2-4 6-3 2-6 0-4 3-4 10 1-1 3 2 4-2 2 1 1-2 5-1 1 1 4 7 2 0-2-2 1 0-2-1 1-2-2 0-1-2 0 2-5 4-1-1-3 1-6-5-6-3-2-4 1-1-1-2 0-1-2 2-2 0-5 3-5 4-3 1-2 0-9-1-3 4-4 7-1 3-6 0-3 1-1 1 2 0 1-1 0 1 2-1 4-4 3 0 6-2 2 2 3 3 1 0 2 1-1 2 0 2 5 3 1 1-1-3 0 1-1-1-2 0-2-1 0 1-1-3 0-3-5 0-5 4-1 2 4 2 0 1-1 0-2-3-1 1-1 1 1 3-2 1 0 1 4 4 4-1 4-4-1-1 3 2 4 2 2-1 8-3 0-4 3-1-1 0 1-3 2 0 2 2 2 0 4 4 2 1 1 3 0 1-2 1 2-1 2 2 1-1 1 1 3 1 3-3 1 0 3-1 2-1 3-4-1 2 6-1 3-1 0 4 9-2 3 1 4-1 2 0 3 3 1 1 2-1 1 1 2 0 2-3 5 4 1 1 2 2 0 1 1 0 7-1 3-3 1-2 3-2 1 2 1 0 2 1 0-1 3-1 3-9 8-2-6-4 1-2-5-3-1-3 1-2-3 0-4-3-1-5 3-1 2-6-2-5 1-4-6 0-3-1-1-3 0-2-3-8-2 0-2-5-3 0-3-4 1-2-2-2 1-2-1 2-5 0-1-3-2 0-5 2-1-1-3-2-1-4-4-1 0-1 2-2-2-5 2-4-5 3-3-1-1-7-4-2 1-2-2-2 1-5-2 0-4-2-1-1-2 3-1 0-2 4-4-1-2 0-5 5 0 2-2 2-1 1 0 2-2 11 0 2-3 6-2 1-1-2 0 1-1 2 0 1-3-3-2 0-1 2-3 3-2 1-4-3-3 1-2zM466 191l0 1-3 2-4-2 5-3zM455 179l1 1-1 0-1 2-2-3 1-1zM445 173l-1 2-1-2-6-1 2-4 3 0 2 1-2 2 1 1 1-1zM461 176l-2 1 1-2 2 0z"],["RU-KHM","Ханты-Мансийский АО — Югра","M316 275l0-3 5-4 0-3 2-2 0-2 8-9 3-1 0-2 1-3 4-3 3-2 2 1 0 3 12-5 0 5 1 2-4 4 0 2-3 2 2 2 1 0 1 1-1 3 9 3 2-1 7 4 1 1-3 3 4 5 5-2 2 2 1-2 1 0 4 4 2 1 1 3-2 1 0 5 3 2 0 1-2 5 2 1 2-1 2 2 4-1 0 3 5 3 0 2 8 2 2 3 3 0 1 1 0 3 4 6 5-1 6 2 1-2 5-3 3 1 0 4 2 3 3-1 3 1 2 5 4-1 1 3 1 1 1 8 6 4 1 2-3 1 0 1-10 4-2 0-2-4-2 0-8 5-2-3-4-1 0-1-2-2-4 1-5-1 0-3-9-1-4-4-2 4-3 2 1 1-2 2-3 7-3-1-2 1-3 2-1 3-5 3-2-2-4-2-3-3-3-1 0-4-2-1-1-7-3-6-2 0-3-2-6-5-2 1 1 2-6 0-3 3-4-1-6 1-2-1-1 3-3 0-4-4 1-10-6-5 3-9-1-2 2-9 1-1 0-4-4-10-5-4 1-3z"],["RU-MAG","Магаданская область","M879 250l-1 1 1 2-4 1 0 3-3 4-4-1 5-5 0-2-3 2-5-2-2 3 1 1 0 1-2 1 1-2-9 4-1 3 3 1-2 1-1 0 0 1 1 1 2-1 1 1-3 2-2-1-1 1-1 2 1 1-2 1 0 1-4 1 1-1-4-5-2 0 0 1-6-2-2 3-4-1 1-5 2-2-2-2 1-2-4-4-1 0-4-3-4 0-1 0-1 2-1 1-4 1 1-4-2-2 1-2-6-6-3-6-2-2 2-3-1-4 5-2 0-1 1-1 1 1 2 0-1-4-3-1 0-3 3 0 2-2 1-4 2 0 3 2 2-1-1-2 2-2 1 0 0-2 1-3 2 1-1-5-3-2-2-3 1-5-4-4 0-2 1-1 1 1 1-1-3-4 0-1 2-1 0-1 2 0 1-3 3-1 0-2 4 0 1-1-1-3 3-3-2-1 0-2 4-1 3 5 7-3 5 1 3-3 3-1 2 1 5-3 1-1-1-1 1-1 2 2 3 0 1 3-1 2 3 1 1 2 4 2 0 2 2 1 0 3 2 1 4-1 4 4-1 4 3-1 1 1 0 1 3 1 3 15 1 2-2 1 1 3-3-2-1-3-1 4-1-2-2-1-1 1 1-2-2-1 0-2-4-4 0 6-2-1 1 1-3 0-1 1 1 1-3 3 0 2-3 2 1 2-1 4 3 3 0 6 2 2-1 8 2 6-1-1 0 1 2 1-1 1 3 2-1 0 2 3 0-1 0-1 2 0-2-1 3-2 3 0 1 2-2 2 1 0-3 1 1 2-1 2-3 0 0-1 0 1-2 1 1 2z"],["RU-KAM","Камчатский край","M985 209l1 1-3 0-6 0-2 1 0-2 2-2 2 2zM930 190l0 1-1 3 0 3 2 4-2-1 0-1-3-5-1 1 1-7zM928 115l-1 2 1 3-2 0 2 2 1 3-1 1 0 1 2 0-1 1 1 1-1 2 1-1 0 2 2-1-1 1-1 1 2 0 1 1-2 0 2 1-1 3 1 0 0 1-1 0 2 2-1 3 1 1-1 1 2 0 3 5-3 1-1-1 0-1-7 2 0 1-4 8 0 1-1 2 1 1-2 1 2 0 3 8-1 1-1 0-6-6 0 2 0 1 0-2 1 5-1 1 1 2-1 0 0 1 2 0 1 4-5-1 0 3 2 1-1 0-1-1-3 2 2 0 0 3 2 2 0 2 4 1-1 2 3 0 0 1-2-1 0 2 2 0 0 1-1 0 2 5 5 7 2 1 3-1 0 1 0-1-2-2 1-1 5-2 2 6 6 5 3-3 6 4 1 3-5 2 0-6-1 0 1 2-2 1 0 2 2 0 0 5 4 6 4 2 5 1 1 1 1 4-1 3-2 0-2 3 1 7 4 6 1 0 2 1-1 1 5 1-2 1-1-1-1 6 0 5-3-1 0 1 1 1 1-1 1 2 2 1-1 0 2 1 0 2 1-1 3 5 2 6-1 3 1 2 1 9-2-2-4-1-9-7-4-2 1 0 0-1-2 0-4-2-27-18-11-14-2-8 1 0-2-4-5-3 0-2 2 0 1-2-2-3 3-3 1 0-1 0-1-9 1 0-1 0-2-6-2-2 0-5-2-3 1-2-2-11-2-2 0-8 1-2 1 1-1-2 1-2-3 1-2-6-2 1-2-2 1-2-7-5 0-3 4-3-2 0 2-3-3 3-4 2-3 6 1 2 2 0 0 2 2 1 3 3 2-1 1 3-3-1 0 2 1 0-2 0-3-1 0-1-1-1-3 1 1-4-4-4-5 1-1-1 0-3-2-1 0-2-4-2-1-2-3-1 1-2-1-3-3 0-2-2-1 0 0-2 2-2 0-1 5-2-2-2 1-1 1 0 2-1 2 0 1-1 2-3 1-3 4 0 3-4 5 1 2-2 4 0 3 10 3-1 1-2 6-1 0-1 1 1 4 0 2-3 0-3 2-1-1-4 4-3 0-6 2-2 5 2 0-1z"],["RU-ZAB","Забайкальский край","M677 494l-2 0-5 4-3 4 0 3-2 1-3 0-4 3-6 1-5 4-3-1-1 2-8-1-7 1-6-4 0-4-2 0 0-2 2-3 5-3-5-3 1-1 0-3 2-1-2-2 2-3 3 0 1-1 3 2 5-5 5 1 3-4 4-3 3-5 3 0 0-2 8-3 4-4 1-4 0-1-2 0 0-2-2 0-1-1-1-4 8-7 4-7 7-3 1-4-1-2-5-5-3 1-3-10-2-1 0-2-3-3 1-4 4 1 1 0 4 0 3-3 1 1 1-1 0-2-1-2 1-2-3 1-4-6 2-2-1-3 1-1-1-2 1-1 3-1 4 2 3-1 3 8 2-1 0 2 3 3 0 2 3 1-1 2 1 1 0 1 2 1 2 0 3 2-3 2 1 3 3 0 2-3 3-1 3 7 2-3 2 1 2 7-1 4 2-2 1 3 2 1-1 2-2 0 2 3-1 1 3 3 3 4-9 5-4 9 1 2 3-1 3 0 0 3 2 2 0 3-4 5-1 13-2 6 3 0-1 4-4 2-6 8-6 0-9-3-3 3-3 0-7-3z"],["RU-KO","Коми","M316 273l-3 3-3 1-12-9-2 0-3 2-2-2-2 1-2-2-3 2-5-6-1 1-2-2 1-2-2-3-1 2-2-2-1 1-2-3-3 3 1 4-2 2-1-2-6 1-1-3-3 1-5-3-6 5-1-1 1-2-1-3 2-2-2-3 4-5 3 0-1-2 4-5 2-1 5 2 5-3-1-3 12-8-2-4-2 0-1-1-5 4-2-3-2 1-1-1 5-8 3 1 2-2 0-4 2-2 1-2-2-6 1-4 2 0 4 3 6 6-1 2 1 1 2-1 1 1 2-1 2 2 1 0 3 3 3-2-1-2 2-6-3-2 8-8 16 2 2-1 4 0 5 7 25 19 8 5 8-1 3-3 5 0 1-2 4 0 1-2 5 2-4 4 0 1 3 2-1 3-2 0-1 1 2 0-1 1-6 2-2 3-11 0-2 2-1 0-2 1-2 2-5-1-6 3-1 1-5 2 0-3-1-1-5 2-3 3-1 3 0 2-3 1-8 9 0 2-2 2 0 3-5 4z"],["RU-ARK","Архангельская область","M237 157l1 6 5 1 3-3 0-2-2-1 1-6 2-2 2 1 2-2 1 2 0 6 1 2-1 1-1-2-1 1 2 1 1 0 1 7 2 1-1-1 1 0 1 4 2-2 4-8 2-2 8 1 5 2 6-1 0 3-1 0 3 3 0 3-3 0 0 1 1-1 2 1-2 4 6-5 4 17 3 3 4-2 3 4-8 8 3 2-2 6 1 2-3 2-3-3-1 0-2-2-2 1-1-1-2 1-1-1 1-2-6-6-4-3-2 0-1 4 2 6-1 2-2 2 0 4-2 2-3-1-5 8 1 1 2-1 2 3 5-4 1 1 2 0 2 4-12 8 1 3-5 3-5-2-2 1-2-2 1-1-1-2-2-2-3 1 0-4-2-1-1-2 1-2-1-2-4 2-4-5 1-2-2-1-4 1-1-2-1 0 0-3-2 0-2-3 1-1-1 0-2-2-2 1-1-1 0-3-2 0 1-2-4-1 0-2-2-2-1 0 1-2-2-1 1-3-1-1 2-2 0-1 1-2 4-3 4-2 2-3-1-1 3-1 2-2-2-5 1-4 3-1 3-6 2 2zM365 143l3-2 2 0 1 2 2-2 0 1 1-1 1 1 0-2 2 0-1-1 1 0 1 1-2-3 2-1 3 2 0-1 1 0 0-2 1-1 4 2 3 0 3 6 0 1-3-1 2 2-1 0-3-1 2 1-1 2-2-2 0 3-1-1-1 1-1-1 0 2-1-1 1 1-2 3-3 2 0 1-3 8 1 10-1-1-1 1-1-2 1 3-2-3 0-2-1 0 0 3-2-4 0 2-1-4 0 2-1-1-1 1 0-5-1 3 0-3-3-2 0-2 1 2 2-4 1 2 0-1 2 1-1-1 1 0-2 0 0-2 3-1-3 0 1-2 1 0-3 0 1-4-1 2 0-2-1 1-2-1zM406 128l-1-1 1-1-2-2 4 1-1-1 1-1-2 0 0-2 2 0 0 2 4-2 2 2 0-2 3 0 0-1 6 0 3 1 0-1 1 0 1 1-2 0 1 1 2 0 0-1 1-1 4 2-1 1 2 0 0 1 3 0 3 1 3-1 2 1 1-2 6 0 2 1 1 2-2 4-3 2-13 0-5-1 0-1-1 1-7 0-1 1 0-2-4 2 0-1-1 1-2-1 2 2-2 0 0 1-2-2 0 2-1 1-1-3-2 3-2-3-1 5-1 0 0-1 0 1-1 0 0-1-2 2 0-4-1 2-1-1 1 3-2 2 0-2-2-3 2 3-1 2-1 1-1-3 0 3-3 1 0-1-1 2-1-2 0-2-1 1-2-4-3 0 0-1 2 0 0-1 5 0-3-1-1 0-1-3 5 0 0-1 3 0 1 3-1-4 2 1 0-1 1-1 3 2-2-2 1-2zM366 154l-3 2 1-6 2 1zM435 66l-3-3 3 1zM449 67l0-1 1 0 1 1 0 2zM431 53l-2-1 1-1-1-1-1-2 7 3 1 3-1 2 0-3-2 0zM463 75l-1 2-4 0-1-2-2 0 0-1 3-3 1 2 3 0zM454 70l0-1 1 0 2 1-1 1zM450 66l-2-1-1-2 2 1zM441 60l-2 0-3-2-1 1-2-1-1 0 0 2-1-1-1 0-1-1 2-1-3-1 0-1 2 0 2 2-1-2 1 1 1 0-2-2 3 1 1 2 3-1-1 0 0-1 3 1-1 0 2 1 0 1-2 0 2 1zM454 67l-1-4 3 5zM449 62l1-1 1 2 1 1 2 5-2 0zM457 62l-1-1 1 0 2 1 1 2zM469 67l-1 0 2 0 1 2-1 0zM461 61l-1 0 1-1 3 2-1 0zM451 78l0-1 2 2-1 1zM445 72l2-2 2 2-2 2zM439 66l0-1 2 0 1 2-1 1zM449 75l1-5 4 5-3-1 0 2-1-1-1 1zM460 70l4 2-3 0-1-2zM465 75l3 1 2-2 1 3 0 1-4 1-3-1 0-3zM452 62l1-1 2 2 0-2 2 3-3 0zM257 170l-1-3 2 1z"],["RU-AMU","Амурская область","M736 430l-1 0-9 5-3-4-3-3 1-1-2-3 2 0 1-2-2-1-1-3-2 2 1-4-2-7-2-1-2 3-3-7-7 5-2-4 3-2-3-2-2 0-2-1 0-1-1-1 3-4 2-1 6-1 2 2 4-1 4 2 2-2 3 1 5-1 6 5 4-1 2-1 2 1 2-2 2 1 1 1 2-1 1-1 1 0 3-2 3 0 0-2 4-1 3 1 3-1 1-1-1-2 4-3 7-3 3 0 9-6 2 2 3 0-2 1 1 3-2 1 1 1-2 1 1 3-4 6 1 4-2 1 0 6 4 0 4-2 3 5 0 2 3-2 1 1 1-2 7-5-1-2 2-2 4-1 2-4 4 1 0 1 2 1 0 4 1 3 2 0 0 4-6 2-5 0 1 3 2 1 0 1-3 3-1 4-1 0 1 1-1 1-6 5 3 4-1 0-2 3 1 3-1 1 1 1 0 3 1 1 1-2 1 1 0 2 1 0 3-1 2 2 0 3 2 0 1 2-1 1 2 0 1 3 0 2-2 1 1 4-3 3-3 1-3 0-6-3-1 1-2 1-3 0 0-2-2 0-4 3-3 0-3-1-1-5-3-1-3-5-4-2-1-4-1 1 0-1-7-6 0-2-2 0 1-2-2-1-3-1-1-3-2-1-1 1 0-1-1-1-5 0-1 0 0 2-10-2-2-1z"],["RU-BU","Бурятия","M553 487l-8-4-2-3-1 0 0-2 2-3 0-4 3 1 1-3 3-1 1-1 0-1 3-1 1 4 4 4 5 2 4 5 2 0 3 0 2 3 4 3 0 2 1 3 2-1 2 1 0 3 4-2 3 0 0-5 6-3 6-9 14-11 5-19-4 0 1-5-2-9 2-5 2-1-2 0-2-3-2 0 1-4 5-3 2 0 1-4 5 1 4 0 2-5 3 3 2-1 2 0 2-1 2 3 3 0 1-1 4 2 1-3 4-1 1-6 4-1 1-2 2 0 1 1-3 4-1 4 2 0 1 2 0 2 2 1 3 10 3-1 5 5 1 2-1 4-7 3-4 7-8 7 1 4 1 1 2 0 0 2 2 0 0 1-1 4-4 4-8 3 0 2-3 0-3 5-4 3-3 4-5-1-5 5-3-2-1 1-3 0-2 3 2 2-2 1 0 3-1 1 5 3-5 3-2 3 0 2-5 0-5-4-3 1-3-1-5-1-8 3-2 2-7 0-1-1-3 0-5-3-2-11-3-1-4 0-7-4z"],["RU-TOM","Томская область","M448 348l2 4 2 0 2 6 0 1-3 5 1 1 13 2 2 2 1 2 2 1 1 6 5 0 1 4-3 1-4 5 0 4 0 2 5 2 3 1 0 4-2 0-5 6 1 1-2 3-1 0-5 3-1-1-3-2-1 2-3-2-2 1-1-1-2 1-4 2 1 1-4-1-1 1-1 0-5 1 0-1-2 0-4 4-1-1-2-1 2-1 0-3-1-1 1-1-1 0 2-3-1-2-2 0-1 2-9-1-2-4-6-1-3-8-7-5-15-7-2-6 1-4-2-4 1-1 0-1 2-1-1-2 6-4 1-3 5-3 3 1 3-7 2-2-1-1 3-2 2-4 4 4 9 1 0 3 5 1 4-1 2 2 0 1 4 1 2 3 8-5z"],["RU-SVE","Свердловская область","M259 331l-1-1 1-3 3-3 0-3 4 1 2 0 1 1 3-6 3-1 1 1 0 2 3-1 1-1 0-3 1-1 7-1 2-2-2-2 4-4-2-7 5-3 2 1 7-6 4-4 1-4 2-2 3-4 2-2 2 3-1 3 5 4 4 10 0 4-1 1-2 9 1 2-3 8 0 2 6 4-1 10 1 2-2 8-6 0 0-1-5 1 1 1-3 2 0 2-2 4 2 0-1 1-1 1-2-2-3-1-3 3-4-5-1 1-2-2-3-1 0-1-5 2-1 1-1-3-3-3-1 2-2-1-6-5-3-4-4 2-1-3-2 1-1-2z"],["RU-NVS","Новосибирская область","M374 423l3-4-4 1-2-1 0 1-4 1 3-7-1-3 0-1-1-1 1-1-1-5 3-1-1-2 1 0-1-2 2 1 0-2 5-2 4 1-1-2 1-2-2-1 4-2 2-7 15 7 7 5 3 8 6 1 2 4 9 1 1-2 2 0 1 2-2 3 1 0-1 1 1 1 0 3-2 1 3 2 4-4 4 1-1 4 1 3-1 1 1 1-1 5 1 2-1 2 0 3-3 1-2 2-2-1-3 1-3-1-1 2-1-2-1 0-4 3-3 4-2-3 1-1-3-1-1-2 2-1-3 0 0-2-2-2-1-4-1 2-3 1-3-1-5 4-7-2-1 2-2 0-1-1 0-1-2 0 0 1-3 1-6-11 0-3z"],["RU-NEN","Ненецкий АО","M290 170l3-1 1-1 2-1 1-2-1-3 1-1 5-2 3-3 2 0-1-1 3-2 0-6 1 3 5 6 0 7-3 4-5-4-5 1 0 5-2 4 3 2-2 1 5 2 0 1 7-4 1-2 4 2 1 2 0-2 1-3 1 3 5 1 6 0 1 1 6 1-1 1 1 1-2 0 1 1 2 0 0-2 1 0-1 0 0-1 10 2 1 1-4-2 1 2-3 1-1 4-3-2-1 1 3 3 1-1 0 1 1 0 1 3 2-2 3-1 3 1 4 5 5-1 2 0-1 2 1-2 4 2-1 0 0 3-2 1-2 2 2 2 2 0 1-3 3 1 4 0 1-3-1-1 1-6 1-1 2 1 3-1 8 8 3 5 1 3-2 2 2-1-4 1-1 2 3 3-1 4-1 1-5-2-1 2-4 0-1 2-6 1-2 2-9 0-7-4-25-19-5-7-4 0-2 1-16-2-3-4-5 1-2-2zM338 166l-2 1 1-1-4 1-3-1-2-1 0-3 4-3 4-1 1 1zM381 189l-2 1-3-2 1-2-1-2-1 1 0-3 1-3 1 1 0-2 3 0 0 4 1 5z"],["RU-ALT","Алтайский край","M382 457l-4-21 3-1 0-1 2 0 0 1 1 1 2 0 1-2 6 2 6-4 3 1 3-1 1-2 1 4 2 2 0 2 3 0-2 1 1 2 3 1-1 1 2 3 3-4 4-3 1 0 1 2 1-2 3 1 3-1 1 2 3-3 4-1 1 5 1-1 4 5 2 6 3 1-1 3-2 0 3 3-2 3 1 3-2-1-2 2-1 2 1 1 0 2-3 0-1 1-3-2-3 5-2 0-1 1-10 2-2 2-1-1 0 1 4 2 0 2-1 2-4 0-1-4-4-3-2 0-1 1-2-1-3 2-6-2-2 0 0-3-3-1 2-3-3-2-3 0-1 3-3 1-1 0 0 1z"],["RU-KR","Карелия","M245 107l1-2 6 9-2 4 1 2 3 0 2 2-1 0 1 3 0 1-3-1 2 4 0 3-3 5 0-2-4 2-2-1-3 5-1 0 0 2-2 0 1 1-1 0-1 1-1-1-1 5 1 1 1-1 0 2-2 5 0 1-4 2-2-2-3 6-2 0-2 3 0 5 2 2-3 2-2 1 1 1-2 3-6 3-4-6-2 0-6-3 1-2-2-3-3-1 0-1-2-4-2 1 1 2-2 0 0-2-4 0-3-1-4-21 1-3 20 3 6-1 2-4 3-10 6 0 1-1 1-3 4-3 0-1 2-3 2 1 1-1-1-1 5-1 0-1 2 1zM247 146l-2 0 2-2 1 1z"],["RU-TY","Тыва","M544 482l-2 4-3 1-1 4-1 0-3 6 2 5 2 1 0 4-2 3-4 1-3 3-2-3-4 1-4-3-1 1-1-1-3 2-4-1-1-2-3 0-2-3 0-4-10-2-1-2-1 0-2 1-2-3-2 2-3 0-3 3-4 0-3 2-2 0-4 1-1 1-3 1 0-4-2-1 1 0 1-3 1 1 2-1-5-8 0-5-2-2 4-1 1 1 4 1 2-2 1 0 0-3 1-2 2-1 3 2 0 3 6 1 5 2 6 0 7-5 5-8 3 0 2-5-1-1 5-1 1 1 3-2 3 1 1-2 2 2 3-3 4 2 2 3 3 0 0 2 2 0 0 2 6-1 1 1-1 1 2 1 0 1-3-1 0 4-2 3 0 2 1 0z"],["RU-PRI","Приморский край","M859 480l-2-4 4-3-2-3 2-4 4-2 1 0 1 2 2-2 3 1 1-2 3 0 2-3 1-3-1-4 3 0 3-7-2 0 0-2-5 2 0-2-3-1 0-1 3-3 2-5 1 0 2 2 2-1 0 3 3 0 1 1-2 3 1 0 1 2 4-1-1 6 2 12-4 24 1 5-2 3-1 6 1 3-1 1 1 3-7 13-5 6-2 1-1-2-1 2-1-2-2 2-2 0 0 1-2-5-3 4-1 0 1-3-2 1-1 5-1 1 1 1-1 2 1 3-2-1-1 2-1 0 1-1-2 1 1-1-2 1 3 1 0 3-3-2 0-1-3 0 2-2 4-4-1-6-2-1-3-7-7-8 3-3 2-7 1 1 10-2 1-2-2-4 2-3-2-3 1-2-1-2z"],["RU-PER","Пермский край","M245 317l-1-5-2 2 0-5 1 0-2-1 2-2 0 2 3-2 2 0 0-1 2-2-1-1 2-1-1-2 2-1 2-3 1-4 1 0 2-4 2-1 1-2 2-2-2-2 0-3 9-5 0-3-5-5 2-2-1-4 3-3 2 3 1-1 2 2 1-2 2 3-1 2 2 2 1-1 5 6 3-2 2 2 2-1 2 2 3-2 2 0 11 8 4 0-9 13-7 6-2-1-5 3 2 7-4 4 2 2-2 2-8 2-1 4-3 1 0-2-1-1-5 3-1 4-1-1-2 0-4-1 0 3-3 3-3 1-2-1 0-4-3-1 1-3-4-1z"],["RU-TYU","Тюменская область","M327 385l-1-2-1 2-2-3-1-3 1-2-2 0-3-3 0-3-3-2 0-1-2 0-1-2-2 0 0-4-3-3 1 0-1-3 2-2 1 0 2-2-2 0 2-4 0-2 3-2-1-1 5-1 0 1 6 0 2-8 3 2 2 0 2-3 2 1 6-1 4 1 3-3 6 0 0-3 2 1 0 1 4 2 1 1 3 2 2-1 3 7 1 7 2 1 0 4 11 7 1 1-9 4-7-3-2 1-5-2 0-2-5-2 2-3-2-3-6 6-1 5-2 2 1 3 1-2 2 1-1 1 2 5 0 2-3 1-2-1-1 2-2 0 0 1-1 1-2 4-3 0 2 1-2 1 0 2-2 1-2 3-2 0-2-4-2-2z"],["RU-VLG","Вологодская область","M214 183l-5 7 1 1-1 3 2 1-1 2 1 0 2 2 0 2 4 2 2 5 2-1 2 2 1 0-1 1 2 3 2 1 0 2 1 0 1 2 4-1 2 1-1 2 4 5 4-2 1 2-1 2 1 2 2 1 1 5-3 2-1-1-3 2-3-2-1 2 1 1 2 2-3 2 0 2-1 1-3-3-3 2-2-1-2 0-4-4-1 0-3-3-1-4-2-1 1-1-1 0-1-2-2 0 0-3-2-1 1-2-3 2-5-3-3 2-3 0-3-4 1-6-1-3-1-1-3 2-3-5-2 0-1-1-2 1 2-6-1-2-5 1-1-2 2-2-1-2 1-1-2-2-1 0 0-1 2-1-1-3 3-1 3 3 1-1 0-1 1 1 2-1 1 0-1-1 3-2 0-3 5-2 3-3 3 1 3-1 1-1 5 3 2 0 2 1 0 3z"],["RU-BA","Башкортостан","M259 327l-1 4 4 2 1 2 2-1 1 3 2-1 1 2-3 3 0 1-2 2 2 0 1 2-4-1-3 1 0-1-1 0-1 1-1 0 0 2-1 0-2-2 1-2-4 2 2-3 2 0-4-5-3 2-3 3 2 3 0 5 4 0 1 2 4 0 1 1 5-1 1 3-4 2-3 4-2-2-3 1-2-1-6 8 0 3-1-1-4 4-1 5-3-1-1 2-3 2-3-1-2-4-1 1-5 0-1-4 0 2-1-1 1-1-1-2 2 0 1-3 0-2-3 0 3-1 3-3-2 0 0-2-4 2-2-2 2-2-1-2 0-1 1 1 1-2-2-1 2-5-3-6 0-6 4-8 6-4-1-1 0-4 3 2 7-2 1 0-1-3 1 0-1-2 7-1 3-2 1 5 3 1 4 1-1 3 3 1 0 5z"],["RU-MUR","Мурманская область","M271 86l4 2 3-1 3 2 3-1 0 4 3-2 1 2-2 1 2 0 0 1 2-1 0 2 2-2 0 6-2 0-1-3 1-1-3 1 2 1-1 1-2 0 2 0 1 2-2 0 2 1-3 0 2 0 2 2-3 0 1 1-1 0 0 1-3-1-1 0 1 0 3 1 2-1 2 3 0 4 1 0 1 0 0 14-2 6 0 2 1-2 0 7 0 1 1-1-2 6 1 0 0 2-4 4-1 3-4 2-9-1-7-4-6-16 0-5-2-1 1-1 1 1-1-2 1-1-2 0 1-3-1 1 0-1 1-4 1 0 0-4-2-2 1 2-1 2-2 1 0 5-3-3-3 1-1-2 2-4-6-10 4-3 11-1 2-5 0-4 4-3 4 0z"],["RU-OMS","Омская область","M337 399l-1-1 2-7-2-1 1-2 2-1 0-2 2-1-2-1 3 0 2-2 0-2 1-1 0-1 2 0 1-2 2 1 3-1-2-7 1-1-2-1-1 2-1-3 2-2 1-5 6-6 2 3-2 3 5 2 0 2 5 2 2-1 7 3 8-3 1 2-2 1 0 1-1 1 2 4-1 3 2 7-2 7-4 2 2 1-1 2 1 2-4-1-5 2 0 2-2-1 1 2-1 0 1 2-3 1 1 5-1 1 1 1 1 5-2 0-1 6-3-1 0 1-4 2-2-1-2 1-1-1-1 3-1-2-2-2-2 0-3 1 0-3 3-2 2 1 1-2-3 0-2-1 0-3-3-1-1 1 1 2-3-1 1-2 1 0-1-5-1 4-2-3-2 1-2-2-1 1 0-3 1 0 1-3 2-1z"],["RU-ORE","Оренбургская область","M242 387l-1 2 2 2-1 1 3 4 0 1 3 3 0 3-2 0-4 4-6-2-2-2-1-3-4 2-2-1 0-1 1 0-1-1-3-3-1-2 1-3 0-3-2 0-2-2-2 2-3-1 0-4-3-2-1 1-1-2-2 1-1-1-2 1-4 0-3-11-2 1 1 1-2 3-2 0 0-2 2-2-1-1 1-5-2-2 1-2 0-2-6-4 1-5-2 0-1-1-3 1 0-2-3-1 1-1 1 0-2-4 7 0 6-5 1 1 2-2 4 0 0-1 3-2 0-2 8-3-1-2 1-1 0-1 3 1 1 3 2 0-1 1-1 0-1 2 1 1 0 1 1 0-1 4 0 6 3 6-2 5 2 1-1 2-1-1 0 1 1 2-2 2 2 2 4-2 0 2 2 0-3 3-2 0 0 2 2-1 0 2-1 3-2 0 1 2-1 2 1 0 0-2 1 1 0 3 5 0 1-1 2 4 3 1 3-2 1-2 3 1-1-2 2-1 0 4 3-2 5 5-1 1-3 1z"],["RU-KIR","Кировская область","M222 292l0-2-2 0 2-2-1-3 2-2-3-1 2-4-1 0-2 2 0-2-3-2-2 0-2-2-3 0-2-1 1-2-2-2 3-2 1-2 2-1 3 4 4-2 1 0 0-4-5-4 0-2 6-2 3 1 2-1 1 1 1-1 1 1 2-1 0-3 1-2-1-1 4-3 0-2 3-2-2-2-1-1 1-2 3 2 3-2 1 1 0-2 5-2 3 4-1 1 2 2-4 5 1 2-3 0-4 5 2 3-2 2 1 3-1 2 1 1 6-5 5 3 3-1 1 3 6-1 1 3 5 4 0 3-3 3-1-1-4 3-1 3 2 2-2 1-1 3-2 1-1 2-3-2 0-2-1-1-2 1-3-4-3 0-2 1-1 3-3 3-3 1-2-2-2 1-2 5 1 1-3 2-1-1-2 1-1 5-2 0-1-4 1-1-1-1z"],["RU-VGG","Волгоградская область","M147 335l-2 0-2 3-5-1-5 4 0 3-2 1-3 0-3 1 0-3-1-2-6-1-3-2 0 2 0-1-4 0 1 4-2-4-2 1-1-2 1-1-1-2-2 2 1 1-2 1-2-3-2 1-2-1-3 1-3-3 1-1-2-1 3-8-3-3 3-2 1 1 0-2 5 3 3-2 1-2 0-2 1-1-2-2 6-4 0-6 1-4 5-2 0-4 5 1 3 0 1 3 5 3 0 5 5 3 0 1 2 0 3 4 1 3-1 2-3 1 0 2 2 2 2-1 1 1 0 2-1 2 2 2 3-1 0 1 0 3 1 2-1 1z"],["RU-SAR","Саратовская область","M180 342l-2 1-1-1-4 2-5-2-2-2-3 3-6-1-1-2-4 8-5-1 0-2 1-9-3-2 1-1-1-2 0-3 0-1-3 1-2-2 1-2 0-2-1-1-2 1-2-2 0-2 3 0 1-4-3-3 0-2-1-1-2 0-1 0 1-1-5-3 0-5 1-1 1-5 5-1 2-2 3-1 2 1 5 9 2 0 1-1 1 5 1-1 2 2 2 1 1 3 3-1 3 1 0 2 1 3 4 3 2 0 1 1 1-1 2 1 0 1-1 1 1 2-1 4 2-1 2 2-1 1 0 2 1 0 0 3 2 3-2 1 2 0 1 4z"],["RU-ROS","Ростовская область","M90 298l3 0 2-3 2 0 5 4 4-1 3 1 1-1-1 4 0 6-6 4 2 2-1 1 0 2-1 2-3 2-5-3 0 2-1-1-3 2 3 3-3 8 2 0-1 2 4 4-2 2 1 1 4-1 1 0 0 2-7 4-6 0-1 3-1 0 0-2-3 1-2-2 0-5-2-2-1-5-1 0-1 3-2-2-2 1-1-2-1 2-4-4 1-3 1-1-2-1-2-5 2 0-1-3 3-1 0-1-3-4-2-2-2 1-2-2 3-1-1-2 4 1 1 2 2 0-1-1 1-1 0-2-5-2 1-1 2 1-5-3 2 0 0-2 4-1 3 2 2 0 5 7 2-2 4 0 0-2 1 0 1-2-1-1 4-1 2 1-1-3z"],["RU-KEM","Кемеровская область","M470 412l0-1 1 2-2 1 0 2 3 3 2 6-6 4-3 3 2 6-3 5-1 1 1 1 3-1 1 2 1-1 0 3-2 1 2 3-4 3-1 3 1 0 1 2-2 3 2 3-2 1 1 1-5 3 0 1-2 1 1-4-2 1-2-3-3 1-2-1 0-1-1 0 0-2-1-2 2-3-3-3 2 0 1-3-3-1-2-6-4-5-1 1-2-5-1-2 2-3-1-2 1-5-1-1 1-1-1-3 1-4-1-1 5 0 2-1 3 1-1-1 4-2 2-1 1 1 2-1 3 2 1-2 3 2 1 1 5-3z"],["RU-AL","Республика Алтай","M446 512l-4 0-1-2-2-1-1-3-2-2 2-1 0-1-1-1-5 4-4-3-3 0-2-5 1-2-6-4 0-5 4 0 1-2 0-2-4-2 0-1 1 1 2-2 10-2 1-1 2 0 3-5 3 2 1-1 3 0 0-2-1-2 3-3 2 1 3 3 3-1 2 3 2-1-2 4-1 1-1 0-3 3 3 1-3 2 4 4 1 0 2-2 1 0 1 2 0 5 5 8-2 1-1-1-2 3 2 1 0 1 0 5-3 2-1-1 0 1-2 1-1-2 0 2-6-1-1 2z"],["RU-CHE","Челябинская область","M280 377l-6-2-1 2 0-2-3-2 0 1-1-2-2 0-1-2-1 0-1 1-1-1 0 2-3 1 2 2 2 1-1 1-1 0-1-1-2 2 5 5-1 2-1 0-3-3-3-2 0 1-5 1 0 6-4 0-5-1 0-2 3-1 1-1-5-5-3 2 0-3-1-1 1-2 4-4 1 1 0-3 6-8 2 1 3-1 2 2 3-4 2-1 2-2-1-2-5 1-1-1-4 0-1-2-4 0 0-5-2-3 2-1 1-2 2-2 2 1 3 4-2 0-2 3 4-2-1 2 2 2 1 0 0-2 1 0 1-1 1 0 0 1 3-1 4 1-1-2-2 0 1-1 1-1 0-1 1-2 2-1-1-2 1 0 0-1 10 9 2 1 1-2 2 1 2 6 0 2 0 1-1 0 1 3-2 1 1 2-2 0-1-1-1 1-1 0 0 3-1 1-2-1 0 3-2 0 1 2 3 0-1 2 5 1-1 3-1 0-1 1 1 2z"],["RU-TVE","Тверская область","M180 207l-3 0-1 3-2-1-1 2 0-1-1 5-2 1 1 3-6 3-1 2-1-1 1-4-3 0-2-1-3 1 0-2-6-3-1-4-2 2-1-1-4 1-3-3 1-4-2-2-2 1 0-2-3 1-3-2-2-5-2-2 1-1-2-3 2-2 2 0 2-2 1-4 2-1-1-1 1-2 3 0 2 4 3 0 0 1 8 3 1 3 3-1 4 0 1-2 2 0 2 2 1 5 2-1 2 2 3 0 2 3 3 3 5-1 2 2z"],["RU-SAK","Сахалинская область","M863 350l1 0-1-2 4 1 1 4 4 2 0 1 1-1 1 2 1 0 5 4 3 5 0 2-2-3 2 3 3 4 3 2 1 2 1 0-1-2 2 1 1 2-1 0 2 1 0-1 10 9 12 9 2 1 4 0 2 2-10-2-6 3 1 0 2-2-3 4 0 2 5 14 2 3 4 2 4 1 4 3 0 1 3 0-2-1 2-1 5 4 1 4-5-5-4 3-2-1-1 1 0 1 3 10-2 0-5-5-2-7-6-5-1-5-3-4-5-3-4-9-5-7-4-4-3-8-4-2-5-2 1 0-3-1-3-5-1-3-3-6-3-3 1-4 2 2 1-1 0-3-1 1-1-1 2-2-2-1 0 2-1-3-6-2zM980 435l1 0-2 3-1-1zM972 431l1 0 0 1-2 3-1 8 2 2-2 0-1-1 1-4-1-7zM980 407l1 0-3 5 0 5-2 1 0 7 0 3-1 1-1-3 1 1-1-1 1-2-2-1 1 0 0-5 1 0 1-4-2-2 3 1 1-2 1-5 1 0zM984 389l1-2 1 6-1 6-2 2 0-4zM988 368l1 4-1 2zM978 311l1 1 1 4-1 3 1 2-1 1-3-2 2-4-2-6zM977 306l2 1 1 2-1 1-2-1zM980 328l3 3 0 1-1 0z"],["RU-KDA","Краснодарский край","M36 348l-2-4-3 0 2-16-2-5 1-6-1 0-1-2 2-5-2-6 3 2 0-2 1 0-2-1 2 1 1 3-1 0 1 2 0-2 2 3 1 2 3-3-2 1 2-2 0 1 2 0 4-1 1 1-3 1 4-1 1 3 1 0 1-6-1-2 2-3 0 2 3 2 1 2 1-1-1 0 2-1 2 4-3 1 2 2 2-1 2 2 3 4 0 1-3 1 1 2-2 3 3 4 1 0-1 1-2 6-2-1-2-2-1 2-1 2-2 2 2 1-1 4 1 1-2 1-3 0 0 4-2 0 0 2-4 0-3-6-1 2-1-1-5 3z"],["RU-LEN","Ленинградская область","M171 136l12 3-1 3 4 21 3 1 4 0 0 2 2 0-1-2 2-1 2 4 0 1 3 1 2 3-1 1 0 2-4 1-2-1-3 3-5 2 0 3-3 2 1 1-3 1-1-1 0 1-1 1-3-3-2 1-1-2 0-2-1-1 0-5-1-1 0-2-5 0 0-2 2-3-2-1-1-2-5 1 0-2-5 0-2-3-2 2-2 0-1-3 2-6-2-5 1-2-1-2 4-1 2 1 1-1 3-2 1 0-1 3 3-1 0 2 4 1 1 3-1 1-1 5 3 2 1-2 2-3 0-5-2-1-1-2 2-6 0 2 3-2-4-1-1-2z"],["RU-NIZ","Нижегородская область","M181 282l2-1 0-1-4 2-3-1-2 2-3-2 1-1-2-1 0-8-2-2-2 0-2-3 1-2-2-2 0-3 5-1 1-2 7 0 2-1 2 1-1-1 1-3 2 1 4-3 4 3 2-1 0-1 2-1 2 0 1-1 1 2 6 1 4-3 3 4-1 1 3 1 7 8 1 3-2 0-4 2-3-4-6 5-5-3-2 2-2-1-1 1 1 2-2 1 0 4-5 2 0 5-6 2z"],["RU-KL","Калмыкия","M101 381l-4 2-4 1-2 1 1-2-2 1-1-1-1-4-4-5 1-3-5-14 1-5-2-4-1-5-5-1-1-1 2-2-2 0-2 1-1-4 1-2 1 2 2-1 2 2 1-3 1 0 1 5 2 2 0 5 2 2 3-1 0 2 1 0 1-3 6 0 6-4 1-2-1 0-4 1-1-1 2-4 6 0 2 3 2-1-1-1 2-2 1 2-1 1 1 2 3-1 1 6 1 1-2 4 0 5 5 1 0 1-4 0-2 6 1 5-4 0-1 1-2-2-2 0 2 3-2 2 2 2-7 2 5 3z"],["RU-KGN","Курганская область","M324 384l-2 1-3-1 1 1-2 1-2-1-2 1-13-4 0-1-2 1-2-2 0 1-2-1-1 3-2-2-1 0-1-1-4-2-2 1-1-1-3-1 1-1-1-2 1-1 1 0 1-3-5-1 1-2-3 0-1-2 2 0 0-3 2 1 1-1 0-3 1 0 1-1 1 1 2 0-1-2 2-1-1-3 1 0 0-3 1-2 5-2 0 1 3 1 2 2 1-1 4 5 3-3 3 1 1 1-2 3 1 3-1 0 3 3 0 4 2 0 1 2 2 0 0 1 3 2 0 3 3 3 2 0-1 2z"],["RU-TA","Татарстан","M234 315l1 2-1 0 1 3-8 2-3-2 0 4 1 1-6 4-3 4-1 0 0-4 1 0 1-1-2 0-1-5-3 0 1-3-2-3-1 0 1-1-4-1-2 2 0-2-2 0 0-2-1-1-3-5 2-4-5 0-2-2-1-4-2 0 0-1-2 1-2-1 1-2 3-1 1 2 1-1-1 2 1-2 2 1 0-1 2 0 0-3-2 0 1-1 5 0 0-1 4 0 1-1 2 1 1-1 3 1 0-1 1-1 2 2 2-1 0 1 1 0 1 1 1 0-1 1 3-1 2 2-2 3 1 1-1 1 0 3 1 1 3 1-3 1 1 2 0 1 2 0 0 1 2-1 2 3 1-1 1 1 1-1-1-2 4 0 0-2 1 2-2 0-2 3 2 2 1-2 1 2-5 1 0 1z"],["RU-STA","Ставропольский край","M68 336l2 4 2-1 2 0-2 2 1 1 5 1 1 5 2 4-1 6 3 4 2 9-1 3-2 1-6 0 0 2-4-1 3 3-3 3-2-4-2 2-2 0 0-2-3-4 3-1-2 0-2-4-2 1-3-3 0-2-4-3 1-3-2-1 1-2 4 1-2-2-1-4 1-1-2-1 0-2 1-2 2 0 2-1-1-1 1-4-2-1 2-2 1-2 1-2 3 3 2-3z"],["RU-KOS","Костромская область","M183 231l4-3 7-1 1-3 3 0 2-2 6 3 3-2-1 2 2 1 0 3 2 0 1 2 1 0-1 1 2 1 1 4 3 3 1 0 4 4 2 0 2 1 3-2 3 3-3 2 1 1-1 2 0 3-2 1-1-1-1 1-1-1-2 1-3-1-6 3-3-2-2-1 1-1-3-4-4 3-6-2-1-1 1-3-4 1 2-3-3 2-1-1 3-3-5-2 0-5-4 2-7-5 3-2 1 0z"],["RU-KK","Хакасия","M466 436l-1-4 2-2 2 2 2 5 3-1 0 1 4-1 2 2 0 2 2-1 1 2-1 2 3 3 1 6-1 3 0 4 2 1 1 2-4 3 0 2-7 5-2 4-3 0-1 2 0 3-1 0-4 2-1-1-2 0 0-1-4 1-2 2-5-3 0-1 3-2-3-1 3-3 1 0 4-2 0-1 5-3-1-1 2-1-2-3 2-3-1-2-1 0 1-3 4-3-2-3 2-1 0-2-1 0-1-2-3 1-1-1 1-1 3-4z"],["RU-PSK","Псковская область","M130 155l2-4 3 0 2 1 3-4 8-4 3 2 0 1-1 2 2 5-2 5 1 3-3 0-2 1 0 2-1 0 1 4-1 0-1 3-4 0 0 3-1 0-3 1 1 2-3 0-1 2 1 1-2 1-1 4-2 2-2 0-2 2-1-3-3 0-1-1 1-5-4-4 0-1 2-1 0-3-2-1 1-3-1-1 8-7-1-2 5-1z"],["RU-NGR","Новгородская область","M176 185l-1 2 1 2-2 1 0 1 1 0 2 2-1 1 1 2-2 2-2-1-2-3-3 0-2-2-2 1-1-5-2-2-2 0-1 2-4 0-3 1-1-3-8-3 0-1-3 0-3-6 3-1 1 0 0-3 4 0 1-3 1 0-1-4 1 0 0-2 2-1 5 1 2-2 2 3 5 0 0 2 5-1 1 2 2 1-2 3 0 2 5 0 0 2 1 1 0 5 1 1z"],["RU-SAM","Самарская область","M210 316l-1 1 1 0 2 3-1 3 3 1-1 1-2-1 0 1-1 1 1 2-8 3 0 2-3 2 0 1-4 0-2 2-1-1-6 5-7 0 1-2-1-4-2 0 2-1-2-3 0-3-1 0 0-3-3-1 1-4-1-2 4-1-1-2 1-1-2 0 2-5 2 0 1 1 2-2 2 2 0-2 1 3 3-1 3 4 2 0 0 2 1-1 2 0 3-2 1-3 1 2 0 2 2 0 0 2 2-2z"],["RU-VOR","Воронежская область","M94 288l0-2 3-1 0-2 3-3 2-1 0-4 1 0 1 0 1-1 0-1-1 0-1-2 1-1 1 1 0-3 1 0 2-3 1 0 2 1 1-3 4 2 0 3 3 0 0 5 3 2 3 4 0 2-2 1 1 1 3 2 2 6 1-1-1 2 1 1 0 5-1 1-3-1-3-5-3 0-5-1 0 4-2 0 0 1-4 1 0 1-3-1-4 1-7-6 0-3z"],["RU-DA","Дагестан","M57 402l0-4 3-2 5 1 2-1 3 2 3-6 6-1-1-2 1-1-4-1 1-1-3-5 2-2-3-3 3 1 2-1-1-1 1-1 2 1 3 0 1-1 2 1 3 4 2 5-2 0-3 2 2 6-2 5-3 1-1 1 5-2 1 1-5 2-2 2 1 0-4 2 1 3-2 2-2 12 0 2-4 1-3-1-3 1-3-3-1-3 1-3-1-1 1-5-2 0 1-1z"],["RU-SMO","Смоленская область","M115 192l2-3 7-2 2 5 1 1-1 1 2 2 2 5 3 2 3-1 0 2 2-1 1 2 0 4 3 2-1 3-6 4-4 1-2-1-2 1-2-2-1 0-2 1 0-2-2-3-7 3-2-2-1 1-7 0 0-3 2-1 0-3-2-3 4-1 0-5 2-3 2 0 0-4z"],["RU-AST","Астраханская область","M125 346l-3 2 2 5-1 2-2 0-1 3 0 2 2-1 4 5-1 6-2 9-3 0 0-2-2 0 2 9 0-1-2 0 0 1 0-1-2 0 0-1-1 1 0-1-1-1 0 2-1 0 1 0-2 2 0-3-3 0-1 0-3-2-1 1 0-4-2 3 0-4-1 3 1-2-5-3 7-2-2-2 2-2-2-3 2 0 2 2 1-1 4 0-1-5 2-6 4 0-1-1-3 0-1-2 1-6 1-2-1-1-1-6 4 0 0 1 0-2 3 2 5 0 2 3z"],["RU-MOS","Московская область","M141 226l-1-2-2 0-1-4-2-1 0-1 3-3 1 1 3-4 4-1 1 1 2-2 1 4 6 3 0 2 3-1 2 1 3 0-1 4 1 2-2 1-5 7 2 2-1 4 3 2-4 7-4-2 1 1-2 1-2-2-4 1-3-2-1 1 0 1-3 0 1-4 2 0-1-4 1-1-1-1-2 0 0-4 1-2 11-1 1-1-1-3-3 2-1-1-2 1 0-2-2 2-2 0z"],["RU-PNZ","Пензенская область","M148 274l3-2 1 1 0 2 2-1-1 1 1 0 0 1 1 0 2 2 1-1 3 2 0 2-1 3 2 4 2 0 1-2 2 1 2 1 0 2 4 3 1 2-3 5 1 4-5 6-2 1-1-3-2-1-4 1-1-3-2-1-2-2-1 1-1-5-1 1-2 0-2-5-3-2 0-2-1 0 0-1 3-1 2-4-1-4 1 0 0-4 1 0z"],["RU-UD","Удмуртия","M242 313l-5 2-6-2 0-1 5-1-1-2-2 2-1-2 2-3 2 0-1-1-1-1 1 2-4 0 0 2-2 1-2-3-2 1 0-1-2 0 0-1-2-2 4-1-2-1 2-5 2-1 1 1 3-2-1-1 2-5 2-1 2 2 3-1 3-3 1-3 4-2 4 5 2-1 1 1 0 2 3 2-4 8-2 2-1 0 1 2-2 1 1 1-2 2 0 1-2 0-3 2 0-2-2 2 2 1z"],["RU-RYA","Рязанская область","M136 263l1-4-3 0-2-2 1-2 0-1 5-6 2-1 2 0 0-1 1-1 3 2 4-1 2 2 2-1-1-1 5 2 1 1-1 2 3 1-1 2 1 0 0 2 3 4-1 1 0 1 2 2-2 1 0 2-1 2-2 0 0 1-4-2 0 2 1 0 0 1-1 1-1-2-1 3-2 0-5-5-2 1-3 0-1-4-2-1-1 1z"],["RU-ULY","Ульяновская область","M200 303l-2 4 3 3 0 2-3 4-3 0-1 1-5-6-3 1-1-3 0 2-2-2-2 2-1-1-2 0-2 5 2 0-1 1 1 2-2 1-2-3-2 1-1-1-2 0-4-5 2-1 5-6-1-4 3-5-2-3 3-1 6 3 0-2 2-4 1 4 3 2-1 2 2 1 2-1 0 1 2 0 1 4 2 2z"],["RU-YEV","Еврейская АО","M819 468l-2-1-1-4 3-2-1-4 3-1 2-2 2 0-1-4 3 0 1 2 2-3 1 1 4 0 3 3 4-1 2 1 3-4 2 1 3-2 0 4-2 1-3 3-2 2-1 3-3 1-2 4-1 0 1 4-5 3-8 3-2-2-2-1-1-3-1-2z"],["RU-YAR","Ярославская область","M195 224l-1 3-7 1-3 3-2-1-3 2-1-1-1 0-1-1-3-1-7 3-1-4-2 0 2-6 6-3-1-3 2-1 0-5 2 0 0-1 2 1 0-3 2-1 2 1 2-1 1 1 2 0 3 5 3-2 2 4-1 6z"],["RU-BRY","Брянская область","M102 215l8 0 1-1 3 2-1 3 2 2-2 4-2 1 2 4-3 3 0 2-4-2-1 3-4 0-2 2-1-1-2 1-2-2-2 1 0-2 3-2 1-4-2-1 0-1-1-2-3-1-1-4-3 1-2-2 0-2 1-3 6-3 1-4 3 0 2 6 4 1z"],["RU-TAM","Тамбовская область","M132 266l4-2 2 1 1-1 2 1 1 4 3 0 2-1 4 4-3 2 0 2-1 0-2 13-7 1-2 2-5 1-2-1 1-2-1 1-1-2-1-4-3-2-1-1 2-1-2-3 5-2 0-8z"],["RU-KRS","Курская область","M91 238l3-2 2 2 2-1 1 1 2-1 3 4-1 2 4 4 0 2 1 6 0 2 1 0 1 2 0 2 2 2-1 3-2-1-1 0-2 3-1 0 0-2-3-5-7-2-3-5-1 1-2-1-2-2 0-2 1 0-1-1 2-2-3-3 1-1-2-3 2 0 0-1 1 0 1-2z"],["RU-KLU","Калужская область","M120 235l-3-2-4 0-1-2 1-1-2-4 2-1 2-4-2-2 1-2-1-2 3 0 4-2 2 3 0 2 2-1 1 0 2 2 2-1 2 1 4-1 2 2 1 4 3 1 0 5-4 4-2 1-1-3-3 4-5-5 0 2-4 0z"],["RU-VLA","Владимирская область","M166 232l3-2 2 2 1 1-3 3 0 2 4 0 1 5 4 4-1 2 3 1 0 2-1 3 1 1-2-1-2 1-7 0-1 2-4 1-3-3 0-2-1 0 1-2-3-1 1-2-2-1 4-7-3-2 1-4-2-2 7-8 0 1-1 2 2 0z"],["RU-BEL","Белгородская область","M82 258l0-3 2-2 0 1 3-4 2 4 2 1 1-1 3 5 4 2 1-1 5 6 1 4-3 1 1 2 1 0 0 1-1 1-1 0-1 0 0 4-2 1-3 5-3 1-1-1-1-7-3-1 2-8-6-4 0-2-1-1 1-2z"],["RU-CR","Республика Крым","M25 273l1 0 1 1 1 5-1 2 2 2-2 2 1 2-3 7 2 2 2 0 0 2 3 1 0 4-2-1-2 1-4-4 0-3-6-1-2-3-2-2-6-1-2-3 1 1 2-3 1 0 0-2 3-2-1-3 0-4-2-3 1-1 8 3 3 4 1 0 0-2z"],["RU-MO","Мордовия","M159.75 278.25l-0.5-1-0.75-0.75-1.25 0.5 0.25 0.25-0.75 0.75-0.25-0.75-0.5 0.25-1-0.75-0.25-1-1 0.25 0.5-0.5-0.5-0.5-0.75 0 0.75-0.5-0.75-0.25-0.5 0.75 0.25-1.25-0.25-1 2-0.25 0.25-0.5 0-1.5 0.5-0.25 0.75 1.75 0.75-0.5 0.75 0 0-1.75-2-0.25 0.75-1.25 0 0.75 1.75 0.75 1-0.25 0.5 0.5 0.5-0.75-0.25-0.25 0.75-0.5 0.5 0.5 0.25-0.5 0.75 0 0.25-1 0.75-0.5-0.5-0.25 0-0.5-0.25-0.75 0.5-0.75 1 0 0 1.5 0.75 0.25 0 0.5 1.25 1.25 0.25 0.75 1.5-0.5 1.75 1 0.75 1.5-0.25 1.5 1 1.5-0.75 0.5 0.75 1-1 0.75 1 2-0.25 0.75 0.5 0.75 1 0.25-0.25 0.5-1 0.25 1.25 0.5 0.5 1.25 1 1 0.5-0.25 0-1.25 1-0.25 0.25-0.75 0.75-0.25 0.75 0-0.25 0.75 1.5-0.75 1 0.75 2.25-1.5 0.5 0.5 1-0.5 0.75 0.5-0.25 1-0.5 0-0.25 0.5-1 0 0 0.5 1.5 1 1 0.25-0.25 1.25 1.25-0.75 0 0.75-0.5 0.75 0 1.25-2 2.25 0 0.75-1 0 0.5 0.75-1.25 0.5 0.75 0.5-1 0-0.25 0.75 0.75 0.5 0 0.75-0.5 0.25-1.75-0.75-1-0.25-2.5-1.5-2.25 0.5-1.25-0.25-0.75 0.5-2.25-2 0-1.75-0.5-0.25-1.25-1.5-1.25 0-0.75-0.75-0.75 0.5-0.5 2-1.5-0.75 0-1.5-0.75-0.25 0-1.25-1-0.5-0.25-0.75 0-1 0.25-0.5 0.5 0.25 0.25-1.25-0.75-1.75 0-0.5z"],["RU-TUL","Тульская область","M133 254l-2-1-1 2-2-2-2 3-3-1 0-2-1-1 0-3 1-1-3-5 0-6-1-2 3-2 4 0 0-2 5 5 3-4 1 3 4-2 0 4 2 0 1 1-1 1 1 4-2 0-2 5z"],["RU-ORL","Орловская область","M122 252l-3 2-2 0-2 4-5 1-1-2-1 0 0-2-1-3 0-5-4-4 1-2-3-2 0-3 4 0 1-3 4 2 0-2 2-2 1 2 2 0 5 1 0 3-1 2 1 2 0 2 3 5-1 1z"],["RU-LIP","Липецкая область","M136 264l-8 4 0 8-5 2-1-3-3-2 0-2 0-1-1-2-2 0 0-3-5-2-1-3 2-2 3 0 2-4 2 0 1-2 2 0 1 3 3 1 2-3 2 2 1-2 2 1 0 1-1 2 2 2 3 0z"],["RU-IVA","Ивановская область","M190 235l0 5 5 2-3 2 0 1 1 1 3-2-2 2 4 0-1 1-1 3-2 0-2 1 0 1-2 1-4-3-4 3-2-1 0-2-3-1 1-2-4-4-1-3 0-2-4 0 0-2 3-3-2-3 3-1 3 1 1 1 1 0 5 4 1 0 2 2z"],["RU-ME","Марий Эл","M220.25 289.75l0.5 1-2.5 0.25 0.5-0.5-1 0-0.5-0.75 0.75 0 0-0.75-1.25-0.5-1 0.5-0.5-0.5 0.25-0.75-1 1-0.75 0 0-1-0.75 0 0-0.75-2 0.5 0 1.25-0.25-0.5-2.25 0.5-0.5-0.25 0-0.5-1.25 1.25-1.75-1-1 0.75-0.25-0.25-0.75-3.25 1-2.25-1.5-2-0.25-0.75 1.25-2-2.25-1-3.25-0.25-0.75-1.25-2.5-0.75-0.75-0.75 1.25-1.25-0.25-1.75 0.5-0.5 0.5 0.25 1-1-0.75-1 0.25-0.25-0.5-0.75 0.25-0.75 1-0.5 1.75 1 1.25-1.25 1.25-0.5 2 1.5 0.75-0.25 1 1.5 0.75 0 0 0.5 1 1 0.75 1.5-0.75 1 2 0.75 0 0.75 1.75-0.75 1.25 0.5 0.25-0.5 0.25 1.5 0.25 0 0 0.5 0.5-0.25 0.5 0.75 0.5 0 0.5-0.5 0.5 0 0-0.25 1 0 0.25 1 1.25 0.25 0 0.5 0.75 0.5 0.25 0.5-0.5 0.75 0.5 0.5 1.75-0.75 0.5-0.75 1.25 0.25-0.25 0.75-1.5 0.75 0 0.75-0.5 1 0.5 1 1.25 0 0.75 1-1.25 1.75 1 1.75-0.25 1.25z"],["RU-CU","Чувашия","M204 289l-2.25 0.25-1-0.25 0-0.25-0.75 0.25-0.5 1-1-0.25-2.25 0.75-0.75-0.5-1 1 0.5 0.5 0.5-0.5 0.25 0.75 0.25-0.5 0.5 0 0.25 0.75-1 1.75-0.5 0.5-1.25-0.5 0.25 1-0.75 0.25-1.25-0.75-1 1.5 0.5-1.5-0.75 0.75-1.25-1.75 0-0.5-1.5 1-2 0-0.25-1.25-1.75-0.5-0.75-4 1-1 0-1.25 0.75-1-0.25-0.5-1.25 0.75 0.25-1.25 1.75-1.25 1.25 0 1-0.75 1.75 0 0-1.5-0.75-0.75 0.5-1-0.25-0.75 0.25-0.75 0.75-0.25 0.25 0.25 0.25-0.5 1 0.25 1-0.5 0.25-0.75 1.75-0.25 1.5 0.25 1 0.5 0.75 1.25 3.25 0.25 2.25 1-1.25 2 0.25 0.75 1.5 2-1 2.25 0.5 2.75z"],["RU-CE","Чеченская Республика","M57.75 393.25l0.25-2.75-0.5-1 1.75-0.25 0-0.5 1.25-0.75 1-1.25 1-0.5 0.25-1 2.25-2.75-0.5-2.5 0.75-0.75 1 0.75 1-0.5 0.75 0.5 1.25-1.5 0.5 0 0.75 0.75-0.5 0.75 1.25 1.5 1.5-0.75 0.5 0.25 0.75 2 1 0.5 1 2-0.75 0.25-0.25 1 0.75-0.25 0.75 1 1-0.5 1.25 0.25 0.5 0.5-1 1.25 1 1-0.25 0.75 0.25 0.5-2.75-0.25-1.5 1-1.75 0-0.5 1 0 1-1 0.75 0 0.5-1 0.25-0.25 0.75 0.75 0.5-1 0.5-0.25 0.75-1.75-0.25 0-0.75-0.75 0-0.25-1-1 0-0.75 1.25-1.25-0.5-1.25 0.75 0-0.75-2.25 0.25-0.75-0.5 0-0.75-0.75-1.5z"],["RU-KC","Карачаево-Черкесия","M37.75 353l-0.75-4 3-2 1.75-0.75 1.5 1 0.75-2 0.25 0.25 2 3.5-0.5 0.75 0.5 0-0.5 0.5 0.5 0 0.25 0.75 1.75-0.25 0.75 0.5 1.75-0.25 0.75-1-0.25-1 0.75-0.25 2.25 1 0.25 0.5-0.75 1.25 1.5 3 0.25 0.5-0.5 0.5 1.5 1.25-0.25 0.5-2.75-1-0.5 0.25-0.75 1.75 0.75 0.75 0.5-0.5 0.75 0.75-0.75 0.25 0.5 0.75-0.75 0 0.25 0.75-2.25 1.75-2-1-1 1.25-1.5 0.25-1 0.75-1 0.25-1.25-1.25-1.25-0.75-2.75-3.75-0.25-2 0.25-0.5-0.75-0.75-0.25-1.5z"],["RU-KGD","Калининградская область","M85 124l-1 6 2 4-2 3-4 0-2 2-8-23 3 1 4-1 2 4 5 1-5-1 1 4 1 1 3-2z"],["RU-KB","Кабардино-Балкария","M45.5 367l-0.75-2.75 1-0.25 1-0.75 1.5-0.25 1-1.25 2 1 1.5-0.75 1 1 1.25 0.25 1.25 1 1 0.25 0 1-0.5 1.25 1.5 0.5 1.5 2.25 1.25-0.5 1.25 0.5 1.75 3 1.75 0.75-0.5 0.25-1.25-0.25-1.5 1-0.5 1.25 0.5 0.75-2 1-0.5 0.75-0.5 0 0-0.5-1.5-0.5 0.25-0.75 0-0.5-1.25 0-0.5 1.25-1 0.25 0.25-0.5-0.75-1 0.25-0.75-2.75 0.75-2.75 0.25-0.5-1-1.25 0-0.75-1.75-0.25-2.5 0.5-0.5-0.25-1.75-1.25-1.25z"],["RU-AD","Адыгея","M48 327.25l0.25 2.75 2 1.75 0.25 1-0.25 3.5-1.5 2.5-0.25 1.5-1.25 1.5-1-0.75 1-0.5 1.25-2.75-0.75-1-1 0.5-0.75 0-0.5 0.5-0.25 1-1.75 2-1.25 0-2 1.75 0 1-3.25 0.5-0.75-3 0-1.25-0.75-0.5-0.25-1 0.75-0.25 1-0.75 0.25-0.75 0.75-0.25 0.5 0.5-0.75 1.75 0.25 0.5 2.5-0.5-0.5-1.25 0.5-1-0.5-1 1.75-0.25 1-0.75 0.5 0 1.25-0.75 1 0.5 1-1.75 0.5-0.25-0.25-0.5 0.75-0.75-1.75-0.5 0.25-1-0.75 0 0-0.25 1 0 0-0.5-0.75-1-1 0.5 0.25 0.75-0.25 1-1 0-0.75-0.5-2.25-3.25-0.5-3.25-0.25-1 1-0.5 0.25 1.25 1 0.25-0.25 1.25 0.5 0.75 1.75 1.75 3.25 0.25z"],["RU-SE","Северная Осетия","M48.5 382.25l-0.75-2.25 1.5-0.25 0.25-0.25-1.25-4.5 1 0 0.5 1 2.75-0.25 2.75-0.75-0.25 0.75 0.75 1-0.25 0.5 1-0.25 0.5-1.25 1.25 0 0 0.5-0.25 0.75 1.5 0.5 0 0.5 0.5 0 0.5-0.75 2-1-0.5-1 1.25-1.5 0.5 1 2.25 1.75 0.5 1.25-0.75 1.25-1.25 1-0.5-1.25-0.75 0.25-0.5-0.5 0.5-0.5-0.5-0.5-2.25 1.5 0.5 0.5-1.5 1.75 0.25 0.75 0-0.5 0.5 0.25-0.25 3.25-1.25 1.5-1.25 0-1.25-2-1.25 1.25-0.75-1-2-1.25-1.25 0-1.25-1z"],["RU-IN","Ингушетия","M57.25 389.5l-0.5-2.25-2 0.75 0.5-2.75 1-0.75 1.25 2 1.75-0.25 0.75-1 0.25-2 0-1.75-0.5 0 0 0.5-0.25-1 1.5-1.5-0.5-0.5 2.25-1.25 0.5 0.25-0.5 0.5 0.5 0.5 0.75-0.25 0.5 0.25-0.25 0.5 0.75 1.5 0 1.5-2.25 2.75-0.5 1.25-0.75 0.25-1 1.25-1.25 0.75 0 0.5z"],["RU-MOW","Москва","M139.75 231.25l1-1 0.75-2.25 1.25 0.25 1-1.5 1-0.75 0.5 0.5-0.75 0.75 0.5 0.75 2-1 1.5 0.75 0.5-1 2-0.5 0.25-0.75 0.25 0.25-0.5 0.5 1 0.75 0.25 1-0.75 2-2 0.5-1-0.5-2.75 1.25 0-0.75-1 0-0.25 0.75-1.25 0.5-1 0 0-0.75-1.75 0.75zM152 223.5l0 0.75-1 0.25 0-0.75zM148 225.25l0.25 0.5-0.5 0.25-1-1 0.75-0.25z"],["RU-SPE","Санкт-Петербург","M168 150.5l0.5 3.25 1.5-0.25 0.25-0.5-0.5-1.75 1.25-1.5 0-1-0.5-1-0.75-0.5 1.5 0.25 1 5.25 0 0.5-1 0.5-0.25 1.25-1.25 0.75-0.25 2-0.75 0.25-1-0.75-1 0-1-1.25 1.25-3.75 0-1.5zM168.75 150.75l-0.25 0 0.25-1z"],["RU-SEV","Севастополь","M6.25 286.5l-0.25-1 0.5-1-0.5-0.5 0.25-1.75 1.5 1.25 0-0.5 0.75-0.25 0.75-0.75 1 0-0.25 1.5-1-0.25-0.5 0.5 0.5 0.5-0.25 0.75-1 0.25 0.25 1-0.75 1z"],["RU-DPR","Донецкая Народная Республика","M72.9 301l1-1-0.8-1.4 0.1-0.7 0.7-0.3-0.5-2 0.9-1.1-0.7-1.1 0.3-0.4 0.8 0.2 0.4-1.3-0.4-0.7 0.8-0.5 0-0.6 1.2-1 1-0.1-0.2-0.3 0.7-0.2 0.5-0.6-0.1-0.5 0.7-0.7-0.8-1.6 0.9 0.1 0.5-0.8 1-0.4-0.7-0.6-0.1-0.8 0.3-0.2 0.4 0.2-0.1-0.7-0.7-0.5-1-1.8-0.6 0 0.3 0.7-0.1 0.4-2.4-1-1.1 0-0.5 0.6-0.8-0.5-1 0.3-0.3-0.8-0.5 0.1-0.2-0.4-0.5 0.5-0.3-1.3-0.6-0.3-0.6-1-1.7 1.6 0.2 0.5-0.9 0.2 0.2 0.4 0.6-0.2 0.3 0.5-0.4 0.4-0.9 0-0.4 0.4-0.4-0.1-0.9 0.7 0.1 0.9-0.9 0.9-0.6-0.1-1 0.9-0.7-0.2-0.3-1.7-0.5-0.5-1.2 0.8-0.3 0.8-0.6-0.6-0.3 0.1 0 0.4-0.7 0.7 0.3 0.6-0.8 1.1 0.1 0.4-0.4 0-0.4 0.6 0.3 0.3-0.1 1.2 0.5 0.2-0.3 2.3 0.5 0.7-1.3 0.5-0.2-0.7-1 0.3-0.3-0.3-0.5-0.9-0.9 0.9-0.6-0.5 0 1.2-0.5 0.9 0.1 1.1-0.4 0-0.2 0.5-1-0.5-0.4 0.6 1.7 0.9 0 1.3 2.4-0.1 1.1 0.3 0.6 1.1 1.1 0.9 0.7 1.4 0.4 0.2 0.1 0.6-0.7 0.2 0.8 0.2 0.9 1 0.8-0.7-0.7-0.4 1.7-0.1 0.1-2 4.1-0.9 2.9 1.9 2.1 0.1 1.5 2.1 0.9-0.4z"],["RU-LPR","Луганская Народная Республика","M97.4 295.3l-2.4-2.6-0.1-2.8-0.9-1.9 0.1-2 0.3-0.1-0.6-0.1-0.8-1.1-0.9-6.3-0.4-0.5-2.7-0.9 0.1-0.4-0.5 0-0.6 0.4 0.6 0.9-0.1 0.6-0.7-0.4-0.1 0.6-1.2-0.3 0.2 0.5-0.6 0.5-1 0.1-0.7 0.7-1.6 0.1-1.1 1 0.1 0.5-1.1-0.1 0.1 0.9-0.7-0.1 0.1 0.9 0.7 0.6-1 0.4-0.5 0.8-0.9-0.1 0.8 1.6-0.7 0.7 0.1 0.5-0.5 0.6-0.7 0.2 0.2 0.3-1 0.1-1.2 1 0 0.6-0.8 0.5 0.4 0.7-0.4 1.3-0.8-0.2-0.3 0.4 0.7 1.1-0.9 1 0.5 2.1-0.7 0.3-0.1 0.5 0.8 1.6-1 1 0.6 0.8-0.9 0.4 3.4 4.8 2-2 4-0.1 0-1.4 0.3-0.5 0.7 0 0.9-1.8-0.8-1.1 0.4-0.2 3.4-0.9 1.9 0.9-0.7-2.8 1.9 0.9 2.8 0 2-2.8 0.6-0.2 1.4 0z"],["RU-ZAP","Запорожская область","M42.6 287.4l1.6 1.9-0.2 1.1 0.7-0.2 1.2 0.3 2.2 1.8 0 1.3-1.1 0.3-0.1-0.2 0 0.3 2.3-0.6 1.8 0.8 0.4-0.6 1 0.4 0.2-0.4 0.4 0-0.1-1.1 0.5-0.9 0-1.2 0.6 0.5 0.9-0.9 0.5 0.9 0.3 0.3 1-0.3 0.2 0.7 1.3-0.6-0.5-0.6 0.3-2.3-0.5-0.2 0.1-1.2-0.3-0.3 0.4-0.6 0.4 0-0.1-0.4 0.8-1.1-0.3-0.6 0.5-0.4-1.2-1.6-0.7-0.4-0.1-0.6 0.2-0.4-0.5-0.2-0.3-0.6 0.2-0.3 0.2 0.3 0.8-0.4-0.1-0.5 0.3-0.7 0.6-0.1-0.5-0.4 0.6-0.6-1.1-1 0-1.4-1.3-0.9-0.8-2.3-0.7-1-1.7-1.4 0.2-0.6-1.3 0.5-0.2 1.3-1-0.4-0.3 0.1-0.1 1.1-0.9 0.4 0.2 0.5-1.9 0.7-0.1 0.5-0.5 0.2-1.2-2.7-3-2.4-1.8 2.3 0.4 0.6 0.6 0 0.5 0.7-0.6 0-2.5 2.6-0.3 0.7 0.2 1.2-0.4 0.9-0.3 0.3-0.4-0.2-0.9 0.3-0.8-0.5-0.3 0.2 0.2 1-0.7 0.4-0.4 0.7 0.4 0.7-0.4 0.3 0.5 1.6-1.6 1.6 0.1 0.3 1.7 0.1 0.8-1.1 0.4 0-0.5 0.6 0.1 0.7-1 0.5 0.1 0.5 0.4 0.1-1.5 0.2 3.2 0.3 1.3 0.7 1.9 0.3z"],["RU-KHE","Херсонская область","M31.3 282.4l1.4 0 0 0.3 0.8 0.7 0.8 0.3-0.1-0.4 1.6-1.5-0.5-1.6 0.4-0.3-0.4-0.7 0.4-0.7 0.7-0.4-0.2-1 0.3-0.2 0.8 0.5 0.9-0.3 0.5 0.2 0.6-1.2-0.2-1.2 0.3-0.7 2.5-2.6 0.6 0-0.4-0.6-0.6 0-0.5-0.7 1.8-2.3-1.1-2.6-1.6-1.8 0-0.6 0.6-0.6-2-1.2 0.2-0.7-0.5-1.8-1.6 1.4-0.3-0.3 0.3-0.5-0.6 0.1-0.2 1.2-1 0.4-0.4 0.6-1-0.5-0.2-0.5-1.2 0.1-0.3 0.2 0 1.6-0.7 0 0.1-0.6-0.3-0.1-0.3 0.3 0.1 0.5-1.6-1.2 0.4 1.2-0.9-0.7-0.7-0.9-0.2-1.6-0.6 0.1-0.6-1.1-0.7 0-0.4-1.1-1.1-0.1-1.1-1.4-0.8 0.9 0.2 1.1-0.4 0.6 1 0.5-0.1 1 0.5 0.5 2 1.3-2.2-0.9-0.4 0-0.1 0.2-0.7-0.3-0.7-2.3-1.2-2.1-0.6 0 0.6 1.7-0.4 0.8-1-0.4-0.7-1.2-0.6-0.2-0.2 0.5 0.3 0.7 0.5-0.3-0.1 1.5 0.3 0.2-0.3 1.1 0.7 1.1-0.5 0-0.4 0.5 0.6 2.3 2 1.7 0.4 1.2 0.7 0.9 0.5-0.3 0.2 1.1 0.4 0.2 1.1 0-1.2 0.5 0.6 0.8-0.6 0.1 0.5 0.5-0.2 0.8 0.3 0.6-0.9 0.6 0.8 0.6 1.8-0.9 0.7 0 1.1 0.8 0.3 0.6 0.8 4.2-0.8 2.5 1.8 2-1.8 2 0.9 1.9-0.5 1.1 0.8-0.3 0.6-1.1-0.5-1.1 0.7-1zM23.5 272.6lzM32.3 284.3l-1 0 1.5 1.1 2-0.1-1.2 0zM19 265.6l1.5 3.8 0.3 0-0.1-0.8-0.5-0.4zM16.2 255.5l0 0.4 0.2 1.5 1.3 4-1.4-5.2 0.1-0.8 0.7-0.9z"]]};
 
-var SP_SMALL = { 'RU-MOW': 1, 'RU-SPE': 1 };
+var SP_SMALL = { 'RU-MOW': 1, 'RU-SPE': 1, 'RU-SEV': 1 };
 var SP_BINS = [ 5, 20, 50, 100, 200, 500, 1000, 2000 ];
 function spNum(n) { return (+n || 0).toLocaleString('ru-RU'); }
 var spCc = (function() {
@@ -71028,7 +71260,9 @@ html.zm-theme-dark .zm-card {
 .zm-row .zm-label { opacity: .65; flex-shrink: 0; }
 .zm-row > span:last-child { overflow-wrap: anywhere; }
 
-.zm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.zm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; max-width: 100%; }
+.zm-row > .zm-badge, .zm-awg-if .zm-badge, .zm-zc-row > .zm-badge, .zm-svc-card .zm-badge { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.zm-row > .zm-badge .zm-dot, .zm-awg-if .zm-badge .zm-dot { margin-top: 1px; }
 .zm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 @keyframes zm-dot-live { 0% { transform: scale(1); opacity: .55; } 70% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(2.5); opacity: 0; } }
 .zm-ok .zm-dot, .zm-sx-info .zm-dot { position: relative; }
@@ -71148,13 +71382,14 @@ html.zm-theme-dark .zm-config-editor { border-color: rgba(255,255,255,.14); }
 
 .zm-lists-intro { margin: 0 0 12px; }
 .zm-list-card { padding: 0; margin-bottom: 12px; overflow: hidden; }
-.zm-list-head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; user-select: none; outline: none; transition: background .15s; }
+.zm-list-head { display: flex; align-items: center; gap: 10px 14px; padding: 14px 20px; cursor: pointer; user-select: none; outline: none; transition: background .15s; flex-wrap: wrap; }
+.zm-list-head > .zm-list-chev, .zm-list-head > .zm-badge, .zm-list-head > .zm-list-count, .zm-list-head > .zm-list-dirty { flex: 0 0 auto; }
 @media (hover: hover) { .zm-list-head:hover { background: rgba(127,127,127,.06); } }
 .zm-list-head:focus-visible { box-shadow: inset 0 0 0 2px rgba(34,158,217,.55); }
 .zm-list-chev { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(127,127,127,.12); font-size: 16px; font-weight: 700; line-height: 1; transition: transform .2s; }
 .zm-list-open .zm-list-chev { transform: rotate(90deg); }
-.zm-list-titles { flex: 1 1 auto; min-width: 0; }
-.zm-list-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.zm-list-titles { flex: 1 1 150px; min-width: 0; }
+.zm-list-title { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .zm-list-path { margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zm-list-count { flex: 0 0 auto; min-width: 92px; justify-content: center; }
 .zm-list-body { padding: 4px 20px 18px; border-top: 1px solid rgba(127,127,127,.15); }
