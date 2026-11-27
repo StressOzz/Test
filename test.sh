@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.000
+# Version: 5.919
 ZM_VERSION_EOF
 set -e
 
@@ -29857,7 +29857,7 @@ _st_sec_excl_model() { _st_excl_emit "$1" "$ST_SEC_DIR/$1/exclude"; }
 _st_excl_fit() {
 	local s have now
 	have="$(awk -F'\t' '$1 == "xdom" || $1 == "xpfx" { print $2 "\t" $3 }' "$ST_DIR/model.svc" 2>/dev/null | sort -u)"
-	now="$({ _st_excl_model 2>/dev/null; for s in $(_st_secs); do _st_sec_excl_model "$s"; done; } | awk -F'\t' '{ print $2 "\t" $3 }' | sort -u)"
+	now="$({ _st_excl_model 2>/dev/null; for s in $(_st_secs); do _st_sec_live "$s" && _st_sec_excl_model "$s"; done; } | awk -F'\t' '{ print $2 "\t" $3 }' | sort -u)"
 	[ "$have" = "$now" ]
 }
 
@@ -40272,6 +40272,11 @@ function bypass_info(c) {
 	return { domains: domain_lines(m), subnets: subnet_lines(m) };
 }
 
+function sec_bypass_info(c, sec) {
+	let byp_sec = "zm_byp_" + sec, m = c.get_all(CFG, byp_sec) || {};
+	return { domains: domain_lines(m), subnets: subnet_lines(m) };
+}
+
 function legacy_bypass_info(c) {
 	let r = [];
 	c.foreach(CFG, "section", (m) => {
@@ -41761,16 +41766,17 @@ function cmd_set() {
 	write_device_lists(c, sec, full, excl, all);
 
 	if (bp) {
+		let byp_sec = "zm_byp_" + sec;
 		if (length(bdom) || length(bsub)) {
-			if (c.get(CFG, BYPASS) == null) c.set(CFG, BYPASS, "section");
-			c.set(CFG, BYPASS, "zm_label", "Исключения");
-			c.set(CFG, BYPASS, "connection_type", "exclusion");
-			c.delete(CFG, BYPASS, "disabled");
-			set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], bdom, bsub);
-			c.delete(CFG, BYPASS, "zm_refs");
-			c.reorder(CFG, BYPASS, 1);
+			if (c.get(CFG, byp_sec) == null) c.set(CFG, byp_sec, "section");
+			c.set(CFG, byp_sec, "zm_label", "Исключения · " + (is_main ? "основная" : label));
+			c.set(CFG, byp_sec, "connection_type", "exclusion");
+			c.delete(CFG, byp_sec, "disabled");
+			set_lists(c, byp_sec, { s: [], r: [], n: [], l: [] }, [], bdom, bsub);
+			c.delete(CFG, byp_sec, "zm_refs");
+			c.reorder(CFG, byp_sec, is_main ? 1 : (c.get(CFG, sec) ? c.get(CFG, sec)[\".index"] + 1 : 10));
 		}
-		else if (c.get(CFG, BYPASS) != null) c.delete(CFG, BYPASS);
+		else if (c.get(CFG, byp_sec) != null) c.delete(CFG, byp_sec);
 	}
 
 	if (!c.get(CFG, "settings")) c.set(CFG, "settings", "settings");
@@ -50799,7 +50805,7 @@ var PHASE_TEXT = {
 	check: 'проверяем', remove: 'удаляем', sub: 'настраиваем подписку'
 };
 
-var STEER_TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'byp', label: 'Исключения', common: true }, { id: 'set', label: 'Настройки', common: true } ];
+var STEER_TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'byp', label: 'Исключения' }, { id: 'set', label: 'Настройки', common: true } ];
 var SEC_BOUND = { sub_noauto: 1, lists: 1, devs_set: 1, sub_status: 1, sub_probe: 1, sub_tcp: 1, lat_mode: 1, node_pol: 1, sub_home: 1, sub_links_get: 1, sub_set: 1, sub_links: 1, sub_update: 1, sub_remove: 1, sub_node: 1, sub_group: 1, sub_filter: 1, sub_hide: 1, sub_pick: 1, sub_ping: 1, sub_insecure: 1, sub_happ: 1 };
 
 function latClass(ms) {
@@ -52450,9 +52456,14 @@ return view.extend({
 		}
 
 		function loadExcl() {
+			var want = secCur, gen = secGen;
 			exclLoading = true;
+			exclData = null;
+			exclDraft = null;
+			exclDirty = false;
 			renderExcl();
-			zm.steerAction('list_get', 'exclude').then(function(res) {
+			stC('list_get', 'exclude').then(function(res) {
+				if (want !== secCur || gen !== secGen) return;
 				exclLoading = false;
 				if (res.error) { exclData = null; renderExcl(); zm.toast(res.error, 'error'); return; }
 				exclData = res;
@@ -52460,12 +52471,16 @@ return view.extend({
 				exclDirty = false;
 				renderExcl();
 				if (hasSecs() && !busy) renderMain();
-			}).catch(function() { exclLoading = false; renderExcl(); });
+			}).catch(function() {
+				if (want !== secCur || gen !== secGen) return;
+				exclLoading = false;
+				renderExcl();
+			});
 		}
 
 		function saveExcl(action, arg, okText) {
 			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-			zm.steerAction(action, arg).then(function(res) {
+			stC(action, arg).then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				exclDraft = null;
 				exclDirty = false;
@@ -52528,13 +52543,18 @@ return view.extend({
 			exclCard.innerHTML = '';
 			exclCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			exclCard.appendChild(E('h3', {}, 'Исключения'));
-			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти домены и IP всегда идут напрямую, мимо WARP и VPN — даже если входят в выбранный сервис.' + (hasSecs() ? ' Исключения общие — действуют во всех секциях.' : '')));
+			var multi = hasSecs(), mainSec = isMain();
+			exclCard.appendChild(E('h3', {}, 'Исключения' + (multi ? ' · «' + secName(secCur) + '»' : '')));
+			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти домены и IP всегда идут напрямую, мимо WARP и VPN — даже если входят в выбранный сервис.'
+				+ (!multi ? '' : mainSec
+					? ' Список основной секции проверяется первым, поэтому действует на любой запрос к этим адресам — остальным секциям его можно не повторять.'
+					: ' Список только этой секции: на устройства и сервисы других секций он не влияет.')));
 			if (exclLoading && !exclData) { exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…')); return; }
 			var nd = exclData ? (parseInt(exclData.domains, 10) || 0) : 0, np = exclData ? (parseInt(exclData.subnets, 10) || 0) : 0;
 			exclCard.appendChild(row('Состояние', !(nd + np) ? badge('zm-off', 'исключений нет')
 				: !data.installed ? badge('zm-warn', 'заработают после установки Steer')
 				: data.stopped ? badge('zm-off', 'Steer выключен')
+				: secOff(secCur) ? badge('zm-warn', 'секция выключена — не применяются')
 				: badge('zm-ok', 'действуют — идут напрямую')));
 			if (nd + np) exclCard.appendChild(row('В списке', E('span', {}, 'доменов: ' + nd + ' · IP и подсетей: ' + np)));
 			exclEditor = E('textarea', {
@@ -52553,7 +52573,7 @@ return view.extend({
 			exclEditor.addEventListener('input', function() { exclDirty = ebar.dirty(); exclDraft = exclEditor.value; });
 			if (exclDirty && exclDraft !== null) { exclEditor.value = exclDraft; exclEditor.dispatchEvent(new Event('input')); }
 			if (nd + np) exclCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-				return zm.ask('Очистить исключения?\n\nЭти адреса снова пойдут так, как велят сервисы.').then(function(ok) { if (!ok) return; saveExcl('list_reset', 'exclude', 'Исключения очищены'); });
+				return zm.ask('Очистить исключения' + (multi ? ' секции «' + secName(secCur) + '»' : '') + '?\n\nЭти адреса снова пойдут так, как велят сервисы.' + (multi ? ' Списки других секций останутся.' : '')).then(function(ok) { if (!ok) return; saveExcl('list_reset', 'exclude', 'Исключения очищены'); });
 			} }, 'Очистить') ]));
 			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одному на строку: домен (поддомены включаются сами), IP-адрес или подсеть. Сайты исключайте доменом: подсеть не остановит сайт, который Steer ловит по имени — устройство тогда ходит на подменный адрес, а не на настоящий.'));
 			exclCard.appendChild(ebar);
@@ -53946,6 +53966,7 @@ return view.extend({
 				if (Object.keys(ks).some(function(k) { return k !== 'custom' && !!c[k] !== !!pick[k]; })) return true;
 			}
 			if (customDirty) return true;
+			if (exclDirty) return true;
 			return !!devPick && devSig(devPick) !== devSig(devSaved());
 		}
 
@@ -53958,12 +53979,14 @@ return view.extend({
 					hideMode = false; hidePick = mkHide(); autoPick = mkNoAuto(); pickWho = ''; linksOpen = false; subInput = '';
 					connPick = null; ifChoose = false; ifSel = null; nameDraft = null; wayOpen = false; warpPick = null; ownOpen = false; extPick = null;
 					customData = null; customDraft = null; customDirty = false; findRes = null;
+					exclData = null; exclDraft = null; exclDirty = false; exclLoading = false;
 					if (!data.blocker) loadCustom();
 				}
 				if (toConn && isCommon(tab)) { tab = 'conn'; try { localStorage.setItem('zm.steer.tab', tab); } catch (e) {} }
 				renderAll();
 				if (subShow()) loadSub();
 				if (tab === 'dev' && !devList) loadDevs();
+				if (tab === 'byp') loadExcl();
 			}
 			if (id === secCur || !draftDirty()) { go(); return; }
 			zm.ask('Выбор в секции «' + secName(secCur) + '» не сохранён.\n\nПерейти в «' + secName(id) + '» без сохранения?').then(function(ok) { if (ok) go(); });
@@ -54123,7 +54146,7 @@ return view.extend({
 			secCard.classList.toggle('zm-sec-dim', common);
 			secCard.appendChild(E('h3', {}, [ 'Секции ', badge(n > 1 ? 'zm-ok' : 'zm-off', n + ' ' + plural(n, 'секция', 'секции', 'секций')) ]));
 			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, common
-				? 'WARP, исключения и настройки — общие для всех секций. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
+				? 'WARP и настройки — общие для всех секций. Нажмите на секцию, чтобы настроить её подключение, сервисы, устройства и исключения.'
 				: n > 1 ? 'Каждая секция ведёт свои сервисы через своё подключение: VPN, WARP или готовый туннель роутера.'
 					: 'Секция — свои сервисы через своё подключение. Например, видео через VPN, нейросети через WARP, игры через туннель SSTP или AmneziaWG.'));
 			var tiles = ids.map(function(id) {
@@ -54356,6 +54379,7 @@ return view.extend({
 						if (was !== isCommon(tab)) renderSecs();
 						if (tab === 'conn' && subShow()) loadSub();
 						if (tab === 'dev' && !devList) loadDevs();
+						if (tab === 'byp' && !exclData && !exclLoading) loadExcl();
 					} }, t.label);
 				})));
 			});
