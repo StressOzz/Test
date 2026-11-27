@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.497
+# Version: 5.998
 ZM_VERSION_EOF
 set -e
 
@@ -245,7 +245,8 @@ MT_URL_ITDOG="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrick
 MT_URL_IH1="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/config.yaml"
 MT_URL_IH2="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/MagiTrickle/configOLD.yaml"
 EXCLUDE_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/zapret-hosts-user-exclude.txt"
-FLOWSEAL_ZIP="${GH_MAIN}/Flowseal/zapret-discord-youtube/archive/refs/heads/main.zip"
+FLOWSEAL_ZIP="${GH_MAIN}/StressOzz/Zapret-Manager/raw/refs/heads/main/files/Flowseal_str.zip"
+FLOWSEAL_ZIP_ALT="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/Flowseal_str.zip"
 FLOWSEAL_FAKE_RAW="${GH_MAIN}/Flowseal/zapret-discord-youtube/raw/refs/heads/main/bin"
 STR_URL="${GH_RAW}/StressOzz/Zapret-Manager/refs/heads/main/files/StrYoutube"
 ZAPRET_VER="72.20260307"
@@ -21561,8 +21562,15 @@ do_flowseal_download() {
 	command -v unzip >/dev/null 2>&1 || $INSTALL unzip >&2
 
 	rm -f "$zip"
-	if ! _zm_fetch "$FLOWSEAL_ZIP" "$zip" 180 || ! unzip -tq "$zip" >/dev/null 2>&1; then
-		echo "ОШИБКА: архив Flowseal не скачался — ${ZM_FETCH_ERR:-архив пришёл повреждённым}. Проверьте соединение с GitHub"
+	local _fsu _ferr=""
+	for _fsu in "$FLOWSEAL_ZIP" "$FLOWSEAL_ZIP_ALT"; do
+		[ -n "$_fsu" ] || continue
+		rm -f "$zip"
+		if _zm_fetch "$_fsu" "$zip" 180 && [ -s "$zip" ] && unzip -tq "$zip" >/dev/null 2>&1; then _ferr=""; break; fi
+		_ferr="${ZM_FETCH_ERR:-архив пришёл повреждённым}"
+	done
+	if [ -n "$_ferr" ] || [ ! -s "$zip" ]; then
+		echo "ОШИБКА: архив стратегий не скачался — ${_ferr:-архив пришёл повреждённым}. Проверьте соединение с GitHub"
 		rm -f "$out" "$zip"
 		[ -s "$dst" ] && echo "   · Остался прежний список Flowseal — его стратегии можно выбирать"
 		return 1
@@ -21571,7 +21579,9 @@ do_flowseal_download() {
 	echo "   ✓ Архив скачан и проверен: $(_zm_size_txt "$(wc -c < "$zip" | tr -d ' ')")"
 
 	mkdir -p "$tmp"; unzip -oq "$zip" -d "$tmp" || { echo "ОШИБКА распаковки"; rm -rf "$out" "$zip" "$tmp"; return 1; }
-	local base="$tmp/zapret-discord-youtube-main"
+	# Архив приходит без вложенной папки — .bat лежат в корне; старый вариант с папкой тоже поддерживаем
+	local base="$tmp"
+	[ -d "$tmp/zapret-discord-youtube-main" ] && base="$tmp/zapret-discord-youtube-main"
 
 	echo "==> Разбираем .bat-стратегии"
 	find "$base" -type f -name 'general*.bat' ! -name 'general (ALT5).bat' | while read -r F; do
@@ -21608,11 +21618,13 @@ do_flowseal_download() {
 	left=$(grep -oE '%[A-Za-z_]+%' "$out" | sort -u | tr '\n' ' ')
 	[ -n "$left" ] && echo "!! В стратегиях остались неизвестные плейсхолдеры: $left"
 
-	if [ -d /opt/zapret ]; then
+	local fbd="$base/bin"
+	[ -d "$fbd" ] || fbd="$tmp/bin"
+	if [ -d /opt/zapret ] && [ -d "$fbd" ]; then
 		echo "==> Добавляем fake-файлы из архива Flowseal"
 		mkdir -p /opt/zapret/files/fake
 		local fb fn
-		for fb in "$base"/bin/*.bin; do
+		for fb in "$fbd"/*.bin; do
 			[ -s "$fb" ] || continue
 			fn=$(basename "$fb")
 			case "$fn" in ACTIVE_*) continue ;; esac
