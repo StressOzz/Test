@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.900
+# Version: 5.000
 ZM_VERSION_EOF
 set -e
 
@@ -52567,11 +52567,11 @@ return view.extend({
 			else if (dg.vpn === 'off') items.push([ 'fail', 'Трафик через подписку не идёт', 'проверьте задержку узлов на вкладке «VPN» или выберите другой узел' ]);
 			else if (tn.length) tn.forEach(function(t) {
 				var who = tn.length > 1 ? 'Туннель ' + t.n + ': ' : '';
-				var extW = data.warp_mode === 'iface';
-				if (t.warp === 'on') items.push([ 'ok', who + 'трафик идёт через ' + warpName() + (t.colo ? ' (сервер ' + t.colo + ')' : ''), '' ]);
-				else if (t.warp === 'notls') items.push([ 'warn', who + 'соединение есть, но HTTPS не открывается', 'WARP поднялся без TLS — часть сайтов может не открыться', 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
+				var ownW = data.warp_mode === 'own', extW = data.warp_mode === 'iface';
+				if (t.warp === 'on') items.push([ 'ok', who + 'трафик идёт через ' + warpName() + (t.colo ? ' (сервер ' + t.colo + (t.city ? ', ' + t.city : '') + ')' : '') + (t.seen ? ' · сайты видят: ' + country(t.seen) : ''), '' ]);
+				else if (t.warp === 'notls') items.push([ 'warn', who + 'соединение есть, но HTTPS не открывается', 'WARP поднялся без TLS — часть сайтов может не открыться', extW ? 'нажмите «Подобрать точку входа» в «Подключении»' : ownW ? 'замените конфиг в «Подключении»' : 'нажмите «Сменить точки входа» в «Подключении»' ]);
 				else items.push([ tn.length > 1 && dg.warp === 'on' ? 'warn' : 'fail', who + 'трафик через ' + warpName() + ' не идёт',
-					extW ? 'нажмите «Перезапустить туннель» или «Подобрать точку входа»' : 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
+					extW ? 'нажмите «Перезапустить туннель» или «Подобрать точку входа» в «Подключении»' : ownW ? 'нажмите «Перезапустить туннель» или замените конфиг в «Подключении»' : 'нажмите «Перезапустить туннели» или «Сменить точки входа» в «Подключении»' ]);
 			});
 			else if (dg.warp === 'on') items.push([ 'ok', 'Трафик идёт через WARP' + (dg.colo ? ' (сервер ' + dg.colo + ')' : ''), '' ]);
 			else if (dg.warp === 'off') items.push([ 'fail', 'Трафик через WARP не идёт', 'нажмите «Перезапустить туннели» или «Сменить точки входа»' ]);
