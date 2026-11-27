@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.295
+# Version: 5.996
 ZM_VERSION_EOF
 set -e
 
@@ -6402,7 +6402,8 @@ STL_MIN="2.0.0"
 # Ядро steer 2.0.5 — версия до перехода на плагины. Выбрана при установке — закреплена: обновлений не ищем
 STL_LEGACY="2.0.5"
 STL_PIN="$ST_DIR/engine.pin"
-STL_MODS="vless xsteer obfs tgws hysteria2 proxy"
+# С 2.2.0 все протоколы — плагины одного пакета steer-core; старые пакеты steer-<модуль> ядро снимает само
+STL_MODS="vless hysteria2 proxy xsteer obfs tgws warpbox awg"
 STL_REL_URLS="${STL_REL_URLS:-https://raw.githubusercontent.com/splify2/releases/main/version.json https://cdn.jsdelivr.net/gh/splify2/releases@main/version.json https://splify2.github.io/releases/version.json}"
 STL_PKG_URLS="${STL_PKG_URLS:-https://github.com/splify2/releases/releases/download/steer-v@V@ https://github.com/splify2/steer/releases/download/v@V@ https://gitlab.com/xyzmean/steer/-/raw/dist}"
 STL_WARP_OUT="zm_warp"
@@ -6440,13 +6441,23 @@ _stl_ver_ok() { _zm_re "$1" '^[0-9]+\.[0-9]+\.[0-9]+$' && [ "${1%%.*}" -ge 2 ]; 
 stl_present() { local p; p="$(command -v steer 2>/dev/null)" && [ -x "$p" ]; }
 stl_version() { steer --version 2>/dev/null | awk 'NR == 1 { print $2 }'; }
 stl_v2() { _stl_ver_ok "$(stl_version)"; }
-_stl_mod_x() { [ -x "$STL_SBIN/steer-$1" ] || [ -s "$STL_PLUG/$1/plugin.json" ]; }
+# Установленный плагин ядра. 2.1/2.2 раскладывают его как <id>/bin/… с MANIFEST; старые сборки — отдельным
+# бинарником steer-<id> или <id>/plugin.json. Считаем плагин стоящим по любому из признаков.
+_stl_mod_x() {
+	local d="$STL_PLUG/$1" b
+	[ -x "$STL_SBIN/steer-$1" ] && return 0
+	[ -s "$d/plugin.json" ] && return 0
+	[ -e "$d/MANIFEST" ] && return 0
+	for b in "$d/bin"/*; do [ -e "$b" ] && return 0; done
+	return 1
+}
 stl_has() {
 	stl_v2 || return 1
 	case "$1" in
 		vpn|vless) _stl_mod_x vless ;;
 		hy2|hysteria2) _stl_mod_x hysteria2 ;;
-		proxy) _stl_mod_x proxy ;;
+		proxy|trojan|shadowsocks|ss|socks|http|vmess) _stl_mod_x proxy ;;
+		xsteer|obfs|warpbox|awg|tgws) _stl_mod_x "$1" ;;
 		*) return 1 ;;
 	esac
 }
@@ -29389,7 +29400,7 @@ stl_apply() {
 	while [ "$ck" = 0 ] && [ "$i" -lt 8 ]; do
 		i=$((i + 1))
 		x=""; [ -z "$plg" ] && stl_v2 && ! _st_ver_lt "$(stl_version)" 2.1.0 &&
-			x="$(printf '%s\n' "$err" | sed -n 's/.*нужен плагин \([a-z0-9_-]*\).*/\1/p; s/.*требует пакет steer-\([a-z0-9_-]*\).*/\1/p' | grep -E '^(vless|hysteria2|proxy)$' | awk '!s[$0]++' | tr '\n' ' ')"
+			x="$(printf '%s\n' "$err" | sed -n 's/.*нужен плагин \([a-z0-9_-]*\).*/\1/p; s/.*требует пакет steer-\([a-z0-9_-]*\).*/\1/p' | grep -E '^(vless|hysteria2|proxy|xsteer|obfs|tgws|warpbox|awg)$' | awk '!s[$0]++' | tr '\n' ' ')"
 		if [ -n "$(echo $x)" ]; then
 			plg=1
 			_stl_say "Ядро steer не нашло плагины протоколов: $(echo $x | sed 's/ /, /g') — ставим"
