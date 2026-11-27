@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.998
+# Version: 5.799
 ZM_VERSION_EOF
 set -e
 
@@ -8101,7 +8101,7 @@ _st_vpn_devs_all() { local s; _st_sec_with main eval 'echo $STL_VPN_DEVS'; for s
 _st_feats_all() { local s; { _st_sec_with main _st_use_vpn && _st_sec_with main _st_sub_feats; for s in $(_st_secs_vpn); do _st_sec_with "$s" _st_sub_feats; done; } | tr ' ' '\n' | grep . | awk '!x[$0]++' | tr '\n' ' '; }
 
 _st_checkall() {
-	local f b n free ovl ld v
+	local f b n ex
 	mkdir -p "$ST_RUN" 2>/dev/null
 	f="$ST_RUN/chk.$$"
 	: > "$f" 2>/dev/null || { echo '{"error":"на роутере некуда записать проверку"}'; return 1; }
@@ -8113,7 +8113,7 @@ _st_checkall() {
 	if stl_running; then
 		printf 'svc\tok\tСлужба steer запущена\t\t\n' >> "$f"
 	else
-		printf 'svc\tfail\tСлужба steer не запущена\tсервисы идут напрямую, мимо туннеля\tнажмите «Запустить» на вкладке «Подключение»\n' >> "$f"
+		printf 'svc\tfail\tСлужба steer не запущена\tправила не применяются, трафик идёт напрямую\tнажмите «Запустить» на вкладке «Подключение»\n' >> "$f"
 	fi
 	if [ -f "$ST_OFF" ]; then
 		printf 'svc\twarn\tSteer выключен кнопкой «Стоп»\tправила сняты, трафик идёт как без панели\tнажмите «Запустить»\n' >> "$f"
@@ -8136,13 +8136,14 @@ _st_checkall() {
 	else
 		printf 'net\twarn\tНе выбрано ни одного сервиса или устройства\tSteer запущен, но направлять нечего\tвыберите сервисы на вкладке «Сервисы» или устройства на вкладке «Устройства»\n' >> "$f"
 	fi
+	# Туннели показываем только когда они есть: при выходе через подписку или WARP
+	# отдельных туннель-интерфейсов не бывает, и пугать там нечем
 	n="$(_st_tun_ifaces 2>/dev/null | grep -c .)"
 	if [ "${n:-0}" -gt 0 ]; then
 		printf 'net\tok\tТуннелей в работе: %s\t%s\t\n' "$n" "$(_st_tun_ifaces 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')" >> "$f"
-	else
-		printf 'net\twarn\tТуннелей нет\tSteer пойдёт мимо туннеля\tвыберите выход на вкладке «Подключение»\n' >> "$f"
 	fi
-	case "$(_st_exit 2>/dev/null)" in
+	ex="$(_st_exit 2>/dev/null)"
+	case "$ex" in
 		warp)  printf 'net\tok\tГлавный выход — WARP\t\t\n' >> "$f" ;;
 		vpn)   printf 'net\tok\tГлавный выход — подписка (VPN)\t\t\n' >> "$f" ;;
 		iface) printf 'net\tok\tГлавный выход — туннель-интерфейс\t\t\n' >> "$f" ;;
@@ -8162,42 +8163,15 @@ _st_checkall() {
 	else
 		printf 'dns\twarn\tНа роутере нет nslookup\tпроверить имена нечем\tпоставьте пакет bind-host или busybox с nslookup\n' >> "$f"
 	fi
-	case "$(_st_dnsmode 2>/dev/null)" in
-		router) printf 'dns\tok\tDNS считается на роутере\t\t\n' >> "$f" ;;
-		*)      printf 'dns\tok\tDNS идёт через туннель\t\t\n' >> "$f" ;;
+	case "$ex" in
+		none) printf 'dns\tok\tDNS идёт через провайдера\t\t\n' >> "$f" ;;
+		*) case "$(_st_dnsmode 2>/dev/null)" in
+			router) printf 'dns\tok\tDNS считается на роутере\t\t\n' >> "$f" ;;
+			*)      printf 'dns\tok\tDNS идёт через туннель\t\t\n' >> "$f" ;;
+		   esac ;;
 	esac
-	free="$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)"
-	[ -n "$free" ] || free="$(awk '/^MemFree:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)"
-	if [ -n "$free" ]; then
-		if [ "$free" -ge 40 ]; then
-			printf 'res\tok\tСвободно памяти: %s МБ\t\t\n' "$free" >> "$f"
-		elif [ "$free" -ge 15 ]; then
-			printf 'res\twarn\tМало свободной памяти: %s МБ\tпри нехватке роутер может сбрасывать туннели\tзакройте лишние сервисы или включите ZRAM в разделе «Система»\n' "$free" >> "$f"
-		else
-			printf 'res\tfail\tПамяти почти нет: %s МБ\tтуннели будут рваться\tвыключите лишние сервисы и включите ZRAM\n' "$free" >> "$f"
-		fi
-	fi
-	ovl="$(df -kP /overlay 2>/dev/null | awk 'NR == 2 { print int($4 / 1024) }')"
-	if [ -n "$ovl" ]; then
-		if [ "$ovl" -ge 5 ]; then
-			printf 'res\tok\tСвободно на флеше: %s МБ\t\t\n' "$ovl" >> "$f"
-		elif [ "$ovl" -ge 1 ]; then
-			printf 'res\twarn\tМало места на флеше: %s МБ\tобновления и списки могут не поместиться\tпочистите в разделе «Система» → «Очистка»\n' "$ovl" >> "$f"
-		else
-			printf 'res\tfail\tФлеш заполнен: %s МБ\tпанель не сможет обновиться\tосвободите место в разделе «Система» → «Очистка»\n' "$ovl" >> "$f"
-		fi
-	fi
-	ld="$(awk '{ print $1 }' /proc/loadavg 2>/dev/null)"
-	if [ -n "$ld" ]; then
-		v="$(awk -v l="$ld" -v c="$(nproc 2>/dev/null || echo 1)" 'BEGIN { r = l / (c + 0 > 0 ? c + 0 : 1); if (r < 0.9) print "ok"; else if (r < 1.6) print "warn"; else print "fail" }')"
-		case "$v" in
-			ok) printf 'res\tok\tНагрузка на процессор: %s\t\t\n' "$ld" >> "$f" ;;
-			warn) printf 'res\twarn\tВысокая нагрузка: %s\tправила могут применяться с задержкой\tзагляните в раздел «Мониторинг»\n' "$ld" >> "$f" ;;
-			*) printf 'res\tfail\tПроцессор перегружен: %s\tтуннели тормозят\tзагляните в раздел «Мониторинг»\n' "$ld" >> "$f" ;;
-		esac
-	fi
 	awk -F "$(printf '\t')" -v AT="$(date +%s 2>/dev/null)" "$ZM_JESC_AWK"'
-		BEGIN { T["svc"] = "Установка и служба"; T["net"] = "Подключение"; T["dns"] = "DNS"; T["res"] = "Роутер"; n = 0 }
+		BEGIN { T["svc"] = "Установка и служба"; T["net"] = "Подключение"; T["dns"] = "DNS"; n = 0 }
 		{ n++; L[n] = $0; if (!(($1) in seen)) { seen[$1] = 1; ord[++gc] = $1 } }
 		END {
 			printf "{\"at\":%d,\"groups\":[", AT + 0
@@ -52635,7 +52609,7 @@ return view.extend({
 			checkCard.style.display = data.installed && !data.blocker ? '' : 'none';
 			if (!data.installed || data.blocker) return;
 			checkCard.appendChild(E('h3', {}, 'Проверка'));
-			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Одна кнопка проверяет всё сразу: службу и ядро, туннели и выход, правила, DNS и сам роутер.'));
+			checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Одна кнопка проверяет всё сразу: ядро и службу, подключение, правила и DNS.'));
 			var busyAll = diagBusy || chkBusy;
 			checkCard.appendChild(E('div', { 'class': 'zm-actions' }, [
 				E('button', { 'class': 'cbi-button cbi-button-action zm-chk-run', 'disabled': busyAll || busy ? '' : null, 'click': function() { runDiag(false); } },
@@ -52646,11 +52620,11 @@ return view.extend({
 			]));
 			if (busyAll) {
 				checkCard.appendChild(E('div', { 'class': 'zm-chk-bar' }, [ E('i', {}) ]));
-				checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Смотрю службу, туннели, DNS и роутер — это несколько секунд.'));
+				checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Смотрю ядро, службу, подключение и DNS — это несколько секунд.'));
 			}
 			var groups = chkGroups(), t = chkTally(), total = t.ok + t.warn + t.fail;
 			if (!total && !busyAll) {
-				checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить всё» — панель спросит ядро steer, туннели, DNS и ресурсы роутера и покажет одну сводку.'));
+				checkCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Нажмите «Проверить всё» — панель спросит ядро steer, службу, подключение и DNS и покажет одну сводку.'));
 			}
 			if (total) {
 				var now = new Date();
