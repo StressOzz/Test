@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.799
+# Version: 5.900
 ZM_VERSION_EOF
 set -e
 
@@ -13341,14 +13341,29 @@ _zm_v6_map() {
 	command -v ubus >/dev/null 2>&1 || return 0
 	ubus call dhcp ipv6leases 2>/dev/null > "$raw" || { rm -f "$raw"; return 0; }
 	if [ -s "$raw" ]; then
-		tr -d '\r' < "$raw" | tr -d '\n' | sed 's/}[[:space:]]*,[[:space:]]*{/}\n{/g' | awk '
+		# odhcpd отдаёт аренды как {"duid":…,"hostname":…,"ipv6-addr":[{"address":…}]} — полей mac/ipv6
+		# у него нет. MAC достаём из DUID-LLT (00010001+время+mac) и DUID-LL (00030001+mac).
+		awk '
+			BEGIN { RS = "\001" }
 			{
-				mac = ""; ip6 = ""; host = ""
-				if (match($0, /"mac"[ \t]*:[ \t]*"[^"]*"/)) { t = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", t); sub(/".*$/, "", t); mac = tolower(t) }
-				if (match($0, /"ipv6"[ \t]*:[ \t]*"[^"]*"/)) { t = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", t); sub(/".*$/, "", t); ip6 = t }
-				if (match($0, /"hostname"[ \t]*:[ \t]*"[^"]*"/)) { t = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", t); sub(/".*$/, "", t); host = t }
-				if (ip6 != "" && ip6 !~ /^fe80:/) print (mac == "" ? "-" : mac) "\t" ip6 "\t" host
-			}' | sort -u > "$out"
+				s = $0; gsub(/[\r\n\t]/, " ", s)
+				n = split(s, L, /"duid"[ ]*:[ ]*"/)
+				for (k = 2; k <= n; k++) {
+					c = L[k]; duid = tolower(substr(c, 1, index(c, "\"") - 1)); mac = "-"; host = ""
+					if (substr(duid, 1, 8) == "00010001" && length(duid) >= 28) mac = substr(duid, 17, 12)
+					else if (substr(duid, 1, 8) == "00030001" && length(duid) >= 20) mac = substr(duid, 9, 12)
+					if (mac != "-" && mac ~ /^[0-9a-f]+$/) mac = substr(mac, 1, 2) ":" substr(mac, 3, 2) ":" substr(mac, 5, 2) ":" substr(mac, 7, 2) ":" substr(mac, 9, 2) ":" substr(mac, 11, 2)
+					else mac = "-"
+					if (match(c, /"hostname"[ ]*:[ ]*"[^"]*"/)) { t = substr(c, RSTART, RLENGTH); sub(/^"hostname"[ ]*:[ ]*"/, "", t); sub(/"$/, "", t); host = t }
+					if (!match(c, /"ipv6-addr"[ ]*:[ ]*\[[^]]*\]/)) continue
+					a = substr(c, RSTART, RLENGTH)
+					while (match(a, /"address"[ ]*:[ ]*"[^"]*"/)) {
+						t = substr(a, RSTART, RLENGTH); a = substr(a, RSTART + RLENGTH)
+						sub(/^"address"[ ]*:[ ]*"/, "", t); sub(/"$/, "", t); t = tolower(t)
+						if (t != "" && t !~ /^fe80:/) print mac "\t" t "\t" host
+					}
+				}
+			}' "$raw" | sort -u > "$out"
 	fi
 	rm -f "$raw"
 	# SLAAC-адреса odhcpd не выдаёт в аренду — берём их из соседей IPv6 на LAN
@@ -21594,11 +21609,14 @@ do_flowseal_download() {
 
 	local fbd="$base/bin"
 	[ -d "$fbd" ] || fbd="$tmp/bin"
+	# В нынешнем архиве Flowseal папки bin/ нет — .bat и .bin лежат в корне, поэтому ищем ещё и рядом с распаковкой
+	[ -d "$fbd" ] || fbd="$base"
 	if [ -d /opt/zapret ] && [ -d "$fbd" ]; then
-		echo "==> Добавляем fake-файлы из архива Flowseal"
+		local fbn=0
+		fbn=$(find "$fbd" -maxdepth 2 -type f -name '*.bin' ! -name 'ACTIVE_*' 2>/dev/null | wc -l | tr -d ' ')
+		[ "${fbn:-0}" -gt 0 ] && echo "==> Добавляем fake-файлы из архива Flowseal ($fbn)"
 		mkdir -p /opt/zapret/files/fake
-		local fb fn
-		for fb in "$fbd"/*.bin; do
+		find "$fbd" -maxdepth 2 -type f -name '*.bin' 2>/dev/null | while IFS= read -r fb; do
 			[ -s "$fb" ] || continue
 			fn=$(basename "$fb")
 			case "$fn" in ACTIVE_*) continue ;; esac
@@ -31508,7 +31526,9 @@ _st_spec_apply() {
 		if [ $# -gt 0 ] || ! grep -qE '^(dev	all|sdev	[^	]*	all)	' "$m"; then rm -f "$m"; echo "ОШИБКА: для выбранных сервисов нет ни одного списка"; return 1; fi
 	fi
 	stl_apply "$m" || { rm -f "$m"; return 1; }
-	grep -v '^\(lan\|main\|mif\|warp\|wpick\|vpn\|tun\|so\|stun\|xdom\|xpfx\|over\)	' "$m" | grep -v '^dev	byp	' > "$ST_DIR/model.svc" 2>/dev/null
+	# xdom/xpfx теперь идут внутри блоков секций (а не в шапке модели) — оставляем их в model.svc,
+	# иначе быстрое применение (_st_spec_quick0) теряет исключения, а _st_excl_fit всегда «не совпадает»
+	grep -v '^\(lan\|main\|mif\|warp\|wpick\|vpn\|tun\|so\|stun\|over\)	' "$m" | grep -v '^dev	byp	' > "$ST_DIR/model.svc" 2>/dev/null
 	rm -f "$m"
 	_st_own "steer-spec"
 	rm -f "$ST_RB_STEER"
