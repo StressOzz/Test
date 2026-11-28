@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.199
+# Version: 5.299
 ZM_VERSION_EOF
 set -e
 
@@ -7868,6 +7868,12 @@ _st_vpn_check() {
 
 ST_SUB_VIA="$ST_DIR/sub.via"
 ST_SUB_VIA_ERR="$ST_DIR/sub.via.err"
+# Опция «Обновлять подписку через VPN» убрана. В ядре Steer VPN — это outbound внутри самого
+# процесса, а не канал маршрутизации роутера: привязать curl не к чему (zm_vpn/zmv_* — метки
+# выхода, а не сетевой путь), а самодельные ip rule/route в чужую таблицу рвут запрос.
+# Поэтому подписка всегда качается напрямую, а старая отметка sub.via стирается при каждом
+# запуске — иначе включённая когда-то галочка снова вернула бы ошибку «панель не ответила».
+rm -f "$ST_SUB_VIA" "$ST_SUB_VIA_ERR" 2>/dev/null
 _zm_bin() { local d IFS=:; for d in ${PATH:-/usr/sbin:/usr/bin:/sbin:/bin}; do [ -n "$d" ] && [ -x "$d/$1" ] && [ ! -d "$d/$1" ] && { echo "$d/$1"; return 0; }; done; return 1; }
 
 ST_SUB_FELL="$ST_DIR/sub.node.fell"
@@ -8544,8 +8550,8 @@ steer_action() {
 			_job_running steer_lists && return 0
 			job_start steer_lists do_steer_lists "$([ "$mode" = missing ] && echo missing || echo all)" >/dev/null ;;
 		sub_via)
-			mkdir -p "$ST_VDIR"
-			if [ "$mode" = on ]; then touch "$ST_SUB_VIA"; else rm -f "$ST_SUB_VIA"; _st_sub_via_clear; fi
+			# Галочки в панели больше нет. На случай старой открытой страницы — только выключение.
+			rm -f "$ST_SUB_VIA"; _st_sub_via_clear
 			printf '{"ok":true}\n' ;;
 		wfix) _st_wfix_set "$mode" ;;
 		wfix_tick) _st_wfix_tick; printf '{"ok":true}\n' ;;
@@ -33084,11 +33090,11 @@ steer_status() {
 	fi
 	# Почему последняя попытка обновить подписку через VPN не удалась (для карточки подписки)
 	local svwhy="" svage=null
-	[ -f "$ST_SUB_VIA" ] && _st_sub_via_why && { svwhy="$ST_VIA_WHY"; svage="${ST_VIA_AGE:-null}"; }
+	# причина неудачи «через VPN» больше не нужна: опции нет
 	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"sub_via_why":"%s","sub_via_age":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s],"pin":"%s","newest":"%s","legacy":"%s","main_vpn":%s,"nopq":{"mode":"%s","auto":"%s","on":%s}}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$([ -f "$ST_SUB_VIA" ] && echo true || echo false)" "$(esc "$svwhy")" "$svage" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_torrent)" "$(_st_quic)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" false "$(esc "$svwhy")" "$svage" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_torrent)" "$(_st_quic)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
 		"$(_st_owns "pkg kmod-amneziawg" || _st_owns "pkg amneziawg-tools" && echo true || echo false)" \
 		"$(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p" | grep -cvE '^zmwarp[0-9]*$')" \
 		"$(_st_xsets_json)" "$(esc "$pin")" "$(esc "$newest")" "$STL_LEGACY" \
@@ -33814,7 +33820,7 @@ _st_grps_json() {
 }
 
 _st_autogrp_sync() {
-	local quiet="$1" u t="$ST_RUN/ag.$$" n g dv viaarg
+	local quiet="$1" u t="$ST_RUN/ag.$$" n g dv
 	[ -s "$ST_SUB_URL" ] || { rm -f "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.all" "$ST_SUB_GRPS.v2" "$ST_SUB_GRP"; return 0; }
 	[ -s "$ZM_AG_JQ" ] || return 0
 	u="$(head -n1 "$ST_SUB_URL")"
@@ -33826,9 +33832,7 @@ _st_autogrp_sync() {
 		_st_sub_vpn_dev && dv="$ST_SUB_VPN_DEV" && _st_sub_route_on "$dv" "$u" && vm=1 || { [ -n "$quiet" ] || echo "   ! Группы АВТО через VPN не обновились: $(_st_sub_via_err) — остались прежними"; return 1; }
 	fi
 	rm -f "$t"
-	viaarg=""
-	[ -n "$vm" ] && ! _stl_redir_dev "$dv" && viaarg="--interface $dv"
-	curl ${vm:+-4} -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" $viaarg -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
+	curl ${vm:+-4} -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" ${vm:+--interface $dv} -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
 	[ -n "$vm" ] && _st_sub_route_off
 	if [ ! -s "$t" ]; then
 		rm -f "$t"
@@ -34134,6 +34138,10 @@ _st_sub_check() {
 	return 1
 }
 
+# --- Устарело: опция «Обновлять подписку через VPN» убрана из панели.
+# Функции ниже (поиск устройства, ip rule/route в отдельную таблицу, curl --interface)
+# больше никем не вызываются — оставлены только чтобы не ломать старые сборки.
+
 _st_sub_vpn_dev() {
 	local d
 	ST_SUB_VPN_WHY=""; ST_SUB_VPN_DEV=""
@@ -34289,12 +34297,7 @@ _st_sub_get_via() {
 	_st_sub_vpn_dev || { _st_sub_via_note "$(_st_sub_via_err)"; echo "   ! $(_st_sub_via_err) — подписку не обновили, остаётся прежний список"; return 1; }
 	dv="$ST_SUB_VPN_DEV"
 	_st_sub_route_on "$dv" "$u" || { _st_sub_via_note "$(_st_sub_via_err)"; echo "   ! Не удалось направить запрос подписки в VPN ($(_st_sub_via_err)) — список не обновлён"; return 1; }
-	[ -n "$STL_VER_C" ] || STL_VER_C="$(stl_version)"
-	if _stl_redir_dev "$dv"; then
-		echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main}; ядро steer $STL_VER_C уводит трафик роутера в туннель само)"
-	else
-		echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main})"
-	fi
+	echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main})"
 	if [ -f "$ST_SUB_URL.happ" ]; then
 		_st_sub_happ_prep
 		_st_sub_curl "$c" "$dv" "$@" happ && rc=0
@@ -34311,7 +34314,6 @@ _st_sub_get_via() {
 
 _st_sub_get() {
 	local c
-	[ -f "$ST_SUB_VIA" ] && { _st_sub_get_via "$@"; return; }
 	if [ -f "$ST_SUB_URL.happ" ] && c="$(_zm_bin curl)"; then
 		_st_sub_happ_prep
 		echo "   · Подписку качаем как для Happ"
@@ -34324,11 +34326,7 @@ _st_sub_get() {
 _st_sub_curl() {
 	local c="$1" dv="$2" u="$3" out="$4" info="$5" t="$4.via" h="$4.via.hdr" j id os md ua k v x try ifa="" v4=""
 	STL_SUB_URL=""; STL_SUB_TITLE=""; STL_SUB_WARN=""; STL_SUB_ERR=""
-	# Устройство выхода на ядре steer 2.1 и новее (zm_vpn, zmv_*) — это не точка маршрута,
-	# а метка выхода: в туннель запрос уводит таблица маршрутов ST_SUB_RT, а привязка сокета
-	# к такому устройству (--interface) отправляет его мимо туннеля — панель «не отвечает».
-	# Привязываемся только к старым ядрам, где отдельного перенаправления нет.
-	[ -n "$dv" ] && { _stl_redir_dev "$dv" || ifa="--interface $dv"; v4="-4"; }
+	[ -n "$dv" ] && { ifa="--interface $dv"; v4="-4"; }
 	j="$(_stl_t 10 steer sub-hwid 2>/dev/null)"
 	id="$(printf '%s' "$j" | jsonfilter -e '@.hwid' 2>/dev/null | tr -cd 'A-Za-z0-9._:-')"
 	os="$(printf '%s' "$j" | jsonfilter -e '@.os' 2>/dev/null | tr -d '\r\n')"
@@ -35213,6 +35211,7 @@ _st_bind() {
 	ST_SUB_PICK="$d/sub.pick"; ST_LAT_MODE="$d/lat.mode"; ST_SUB_PING="$d/sub.ping"; ST_SUB_ORDER="$d/sub.order"
 	ST_SUB_GRP="$d/sub.group"; ST_SUB_GRPS="$d/sub.autogrp"
 	ST_SUB_VIA="$d/sub.via"; ST_SUB_VIA_ERR="$d/sub.via.err"
+	rm -f "$ST_SUB_VIA" "$ST_SUB_VIA_ERR" 2>/dev/null
 	STL_VPN_DEVS="$STL_VPN_DEV ${STL_VPN_PFX}_vless ${STL_VPN_PFX}_hy2 ${STL_VPN_PFX}_trojan ${STL_VPN_PFX}_ss ${STL_VPN_PFX}_socks ${STL_VPN_PFX}_http ${STL_VPN_PFX}_vmess"
 }
 
@@ -38036,10 +38035,6 @@ _si_components() {
 		_si_row "DNS" "$([ "$(_si_j "$j" '@.dnsmode')" = router ] && echo через роутер || echo через туннель) · DoH $(_si_j "$j" '@.doh_mode')" ""
 		_si_row "Если туннель упал" "$([ "$(_si_j "$j" '@.onfail')" = drop ] && echo без интернета || echo напрямую)" ""
 		_si_row "Списки сервисов через VPN" "$(_si_yes "$(_si_j "$j" '@.lists_via')")" ""
-		sv=""; [ "$(_si_j "$j" '@.sub_via')" = true ] && sv="$(_si_j "$j" '@.sub_via_why')"
-		sa="$(_si_j "$j" '@.sub_via_age')"
-		case "$sa" in ''|*[!0-9]*) sa=0 ;; esac
-		_si_row "Подписка через VPN" "$(_si_yes "$(_si_j "$j" '@.sub_via')")$([ -n "$sv" ] && printf ' · не обновилась %s мин назад: %s' "$((sa / 60))" "$sv")" "$([ -n "$sv" ] && echo warn)"
 		_si_row "Автоперезапуск" "$(_si_every "$(_si_j "$j" '@.autorestart')")" ""
 		_si_end
 	fi
@@ -51850,30 +51845,6 @@ return view.extend({
 					refresh();
 				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 			}));
-			setCard.appendChild(zm.swRow(!!data.sub_via, 'Обновлять подписку через VPN', 'Подписка будет скачиваться только через VPN. Если VPN сейчас не поднят — подписка не обновится, останется прежний список. Помогает, если сайт подписки у провайдера не открывается.', function() {
-				if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-				var on = !data.sub_via;
-				zm.steerAction('sub_via', on ? 'on' : 'off').then(function(res) {
-					if (res.error) { zm.toast(res.error, 'error'); return; }
-					data.sub_via = on;
-					zm.toast(on ? 'Подписка будет обновляться через VPN' : 'Подписка будет обновляться напрямую', 'info');
-					renderSet();
-				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
-			}));
-			// Режим включён, но обновиться нечем: без этого человек видит только застывший
-			// список серверов и не догадывается, что виноват включённый тумблер.
-			if (data.sub_via) {
-				var svw = String(data.sub_via_why || ''), sva = parseInt(data.sub_via_age, 10);
-				if (!data.vpn_up || svw) {
-					var svt = !data.vpn_up
-						? 'VPN сейчас не поднят — подписка не обновится, пока туннель не заработает. Останется прежний список серверов.'
-						: 'Обновление через VPN не удалось' + (isNaN(sva) ? '' : ' (' + fmtAge(sva) + ')') + ': ' + svw + '. Подписка осталась прежней.';
-					setCard.appendChild(E('div', { 'style': 'margin:8px 0 0;display:flex;align-items:flex-start;gap:8px' }, [
-						badge('zm-warn', 'через VPN не обновилась'),
-						E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, svt)
-					]));
-				}
-			}
 		}
 
 		function topBox() {
