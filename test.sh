@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.999
+# Version: 5.199
 ZM_VERSION_EOF
 set -e
 
@@ -29339,11 +29339,16 @@ _stl_overs() {
 # Исключения дополнительной секции: правило встаёт прямо перед её сервисами и
 # действует для тех же клиентов, поэтому чужие секции оно не задевает.
 _stl_xscope() {
-	# Устройства, на которые действуют исключения секции: у основной — только её явный
-	# список «only» (иначе исключения глобальные), у прочих секций — все её устройства
-	# («only» и «весь трафик», без bypass-устройств).
+	# Устройства, на которые действуют исключения секции. Область действия повторяет область
+	# действия её же правил: есть список «only» — исключения идут на «only» плюс устройства
+	# «весь трафик» (у основной секции это её `dev all`, у прочих — `sdev ... all`); списка нет —
+	# правила секции глобальные, и исключения тоже. Bypass-устройства не участвуют.
 	local q="$xz"
-	[ "${xsec:-main}" = main ] || q="$xz $xc"
+	if [ "${xsec:-main}" = main ]; then
+		[ -n "$xz" ] && q="$xz $xc"
+	else
+		q="$xz $xc"
+	fi
 	printf '%s' "$(printf '%s\n' $q | awk 'NF && !s[$0]++' | tr '\n' ' ' | sed 's/ $//')"
 }
 
@@ -40346,8 +40351,23 @@ function byp_info(c, sec, main) {
 	return { domains: domain_lines(m), subnets: subnet_lines(m) };
 }
 
+// Исключения основной секции. Через byp_info() сюда не пройти: byp_name("", BYPASS)
+// не считает пустое имя основной секцией и отдаёт «zm_byp_», а такой секции нет —
+// список всегда выходил пустым, и проверка «Исключения» в панели молчала.
 function bypass_info(c) {
-	return byp_info(c, "", BYPASS);
+	let m = c.get_all(CFG, BYPASS) || {};
+	return { domains: domain_lines(m), subnets: subnet_lines(m) };
+}
+
+// Сколько строк исключений всего — по всем секциям, а не только по основной.
+function byp_total(c) {
+	let n = 0;
+	c.foreach(CFG, "section", (m) => {
+		let nm = m[".name"];
+		if (nm != BYPASS && !match(nm, /^zm_byp_/)) return;
+		n += length(domain_lines(m)) + length(subnet_lines(m));
+	});
+	return n;
 }
 
 // Номер секции в конфиге (0-based). Cursor.get() с двумя аргументами отдаёт СТРОКУ типа,
@@ -43322,8 +43342,8 @@ function cmd_diag() {
 				dead = "сервер на Xray 26.9.8+ пускает только с ключом X25519MLKEM768, а его отправляет лишь расширенный sing-box 2.7.2 или новее";
 			add(ms > 0 ? (ms < 1500 ? "ok" : "warn") : "fail", what, ms > 0 ? "отвечает за " + ms + " мс" : dead);
 		}
-		let bp = bypass_info(c), bn = length(bp.domains) + length(bp.subnets);
-		if (bn) add("ok", "Исключения", nn_ru(bn, "строка", "строки", "строк") + " — идут напрямую, мимо всех секций");
+		let bn = byp_total(c);
+		if (bn) add("ok", "Исключения", nn_ru(bn, "строка", "строки", "строк") + " — идут напрямую, не через туннель");
 	}
 	let ks = cursor().get_all(CFG, "settings") || {};
 	if (flag(ks.block_leaks) && fs.access(NS_LIB + "/kill_switch.sh")) {
@@ -43529,10 +43549,16 @@ function where_scan(host, ip, win) {
 	for (let it in items) for (let t in it.targets) if (names[t] == null) names[t] = it.name;
 	let won = false;
 	for (let x in sections(c, "section")) {
-		let n = x[".name"], byp = n == BYPASS;
+		// Исключения бывают не только у основной секции: у остальных это zm_byp_<секция>.
+		// Раньше такие секции отсекались как «не подключение», и домен из списка
+		// исключений секции в разборе «куда пойдёт» не находился вовсе.
+		let n = x[".name"], own = match(n, /^zm_byp_(.+)$/), byp = n == BYPASS || own != null;
 		if (!byp && !is_conn(x)) continue;
-		let on = byp || n == p.sec || s(x.disabled) != "1", rf = sec_refs(x);
-		let st = byp ? "x" : on ? "on" : "dis", label = byp ? "" : sec_label(x, n == p.sec);
+		let om = own != null ? (c.get_all(CFG, own[1]) || {}) : null;
+		let on = om != null ? s(om.disabled) != "1" : byp || n == p.sec || s(x.disabled) != "1";
+		let rf = sec_refs(x);
+		let st = byp ? "x" : on ? "on" : "dis";
+		let label = byp ? (om != null ? sec_label(om, own[1] == p.sec) : "") : sec_label(x, n == p.sec);
 		let add = (name, list, entry) => {
 			let e = { state: st, sec: label, name, list, entry: entry ?? "", win: false };
 			if (!won && on && n == win) { e.win = true; won = true; }
@@ -68919,7 +68945,7 @@ return view.extend({
 			function open(name) { if (common) tabTo('conn'); switchSec(name); }
 			secCard.appendChild(E('h3', {}, [ 'Секции ', badge(list.length > 1 || isNew ? 'zm-ok' : 'zm-off', nn(list.length + (isNew ? 1 : 0), 'секция', 'секции', 'секций')) ]));
 			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, common
-				? 'Исключения, список «Мимо Forkozz» и настройки действуют для всех секций сразу. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
+				? 'Список «Мимо Forkozz» и настройки действуют для всех секций сразу, а исключения у каждой секции свои. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
 				: 'Каждая секция ведёт свои сервисы через своё подключение. На вкладке «Устройства» можно пустить через секцию весь трафик выбранных устройств или ограничить её правила отдельными устройствами.'));
 			var tiles = list.map(function(s) {
 				var on = s.name === draft.sec, n = secSel(cfg, s), extra = (s.domains || 0) + (s.subnets || 0), f = (s.full || []).length;
@@ -68934,7 +68960,7 @@ return view.extend({
 			if (isNew) tiles.push(node(secName(), 'ещё не сохранена', true, function() {}, E('span', { 'class': 'zm-lat zm-lat-mid' }, 'черновик'), 'zm-sec'));
 			else if (list.length < SEC_MAX) tiles.push(E('div', { 'class': 'zm-node zm-sec zm-sec-add', 'title': 'Свои списки через другой VPN', 'click': function() { open('new'); } }, [ E('span', { 'class': 'zm-sec-add-text' }, 'Создать новую секцию') ]));
 			secCard.appendChild(E('div', { 'class': 'zm-nodes' }, tiles));
-			if (list.length > 1 && !common) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут DNS и скачивание списков. Правила секции действуют для её устройств, а если устройства не выбраны — для всех. Подходит нескольким секциям — сработает левая. Один сервис можно включить в разных секциях с разными устройствами. Исключения общие.'));
+			if (list.length > 1 && !common) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут DNS и скачивание списков. Правила секции действуют для её устройств, а если устройства не выбраны — для всех. Подходит нескольким секциям — сработает левая. Один сервис можно включить в разных секциях с разными устройствами. Исключения у каждой секции свои.'));
 		}
 
 		function tabTo(id) {
