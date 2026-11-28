@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.299
+# Version: 5.199
 ZM_VERSION_EOF
 set -e
 
@@ -29240,11 +29240,7 @@ _stl_rule() {
 	else
 		r="{\"name\":$(_stl_js "$lab"),\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
 	fi
-	if [ -n "$top" ]; then
-		# Свой список секции стоит наверху: выше обычных правил, но ниже блока исключений,
-		# который _stl_spec выпускает первым (xdr/xglob).
-		crules="$crules${crules:+,}$r"
-	else rules="$rules${rules:+,}$r"; fi
+	if [ -n "$top" ]; then crules="$crules${crules:+,}$r"; else rules="$rules${rules:+,}$r"; fi
 }
 
 _stl_dns_need() { case " $dnsn " in *" $1:$2 "*) ;; *) dnsn="$dnsn $1:$2" ;; esac; }
@@ -29336,31 +29332,12 @@ _stl_overs() {
 	printf '%s' "$o"
 }
 
-# Исключения дополнительной секции: правило встаёт прямо перед её сервисами и
-# действует для тех же клиентов, поэтому чужие секции оно не задевает.
-_stl_xscope() {
-	# Устройства, на которые действуют исключения секции. Область действия повторяет область
-	# действия её же правил: есть список «only» — исключения идут на «only» плюс устройства
-	# «весь трафик» (у основной секции это её `dev all`, у прочих — `sdev ... all`); списка нет —
-	# правила секции глобальные, и исключения тоже. Bypass-устройства не участвуют.
-	local q="$xz"
-	if [ "${xsec:-main}" = main ]; then
-		[ -n "$xz" ] && q="$xz $xc"
-	else
-		q="$xz $xc"
-	fi
-	printf '%s' "$(printf '%s\n' $q | awk 'NF && !s[$0]++' | tr '\n' ' ' | sed 's/ $//')"
-}
-
 _stl_spec() {
 	local tab k a b c d m lists="" rules="" outs="" lan="" lid="" lab="" srs="" dom="" pfx=""
 	local clients="" drules="" cid dout byp="" xd="" xp="" xc="" xr="" x="" dnsj="" dnsn="" dnt=""
-	local xsec="" xrec="" xglob="" xdr="" xs xd2 xp2 xc2 xn xb xnm xz="" xf="" xq=""
 	local body wp=latency main="" mout="" out="" sec="" sfm="" sfa="" sam="" saa="" sall="" so="" t u dvs="" STL_CID="" mf="$1" mif="" cu="" crules="" taken="" svn="" fob=""
 	tab="$(printf '\t')"
 	mkdir -p "$STL_TMP"
-	xrec="$STL_TMP/xrec.$$"
-	: > "$xrec"
 	while IFS="$tab" read -r k a b c; do
 		case "$k" in
 			main) main="$a" ;;
@@ -29405,13 +29382,11 @@ _stl_spec() {
 			vpn) [ "$main" = vpn ] && { t="$(_stl_vpn_outs "$mf" "$a")"; [ -n "$t" ] && outs="$t${outs:+,}$outs"; } ;;
 			sec)
 				_stl_rule; lid=""; srs=""; dom=""; pfx=""; cu=""; svn=""
-				[ -n "$xd$xp" ] && [ "$xsec" != - ] && { xq="$(_stl_xscope)"; printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xq:--}" >> "$xrec"; }
-				xd=""; xp=""; xc=""; xz=""; xsec="$a"
 				sec="$a"; out=""; dnt="${a#s}"; sfm=""; sfa=""; sam=""; saa=""; sall=""
 				if [ "$a" = main ]; then out="$mout"; sec=""; else
 					for t in $so; do [ "${t%%:*}" = "$a" ] && out="${t#*:}"; done
 				fi
-				[ -n "$out" ] || { xsec=-; continue; }
+				[ -n "$out" ] || continue
 				if [ "$out" = "$mout" ]; then dnt=""; elif [ "$out" = "$STL_WARP_OUT" ]; then dnt=w; fi
 				while IFS="$tab" read -r u d m x; do
 					[ "$u" = sdev ] && [ "$d" = "$a" ] || continue
@@ -29424,16 +29399,15 @@ _stl_spec() {
 					fi
 					[ "$m" = only ] || continue
 					_stl_client "$x"
-					xz="$xz $STL_CID"
 					case "$x" in *:*) sfm="$sfm${sfm:+,}\"$STL_CID\"" ;; *) sfa="$sfa${sfa:+,}\"$STL_CID\"" ;; esac
 				done < "$mf"
 				x="" ;;
 			svc) _stl_rule; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; svn="$b"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
-			srs) srs="$srs${srs:+,}$(_stl_js "${b:-$a}")" ;;
-			dom) dom="$dom${dom:+,}$(_stl_js "${b:-$a}")" ;;
-			pfx) pfx="$pfx${pfx:+,}$(_stl_js "${b:-$a}")" ;;
-			xdom) if [ -n "$b" ]; then xd="$xd${xd:+,}$(_stl_js "$b")"; else xd="$xd${xd:+,}$(_stl_js "$a")"; fi ;;
-			xpfx) if [ -n "$b" ]; then xp="$xp${xp:+,}$(_stl_js "$b")"; else xp="$xp${xp:+,}$(_stl_js "$a")"; fi ;;
+			srs) srs="$srs${srs:+,}$(_stl_js "$a")" ;;
+			dom) dom="$dom${dom:+,}$(_stl_js "$a")" ;;
+			pfx) pfx="$pfx${pfx:+,}$(_stl_js "$a")" ;;
+			xdom) xd="$xd${xd:+,}$(_stl_js "$a")" ;;
+			xpfx) xp="$xp${xp:+,}$(_stl_js "$a")" ;;
 			dev)
 				if [ "$a" = byp ]; then dout="$ST_DIRECT_OUT"; byp=1; else dout="$mout"; fi
 				[ -n "$dout" ] || continue
@@ -29458,40 +29432,20 @@ _stl_spec() {
 	_stl_fo_apply
 	grep -q "^over$tab" "$mf" && outs="$(_stl_overs "$outs" "$mf")"
 	[ -n "$crules" ] && rules="$crules${rules:+,}$rules"
-	[ -n "$xd$xp" ] && [ "$xsec" != - ] && { xq="$(_stl_xscope)"; printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xq:--}" >> "$xrec"; }
-	# Исключения по секциям: у каждой секции свой список, правило привязано к её устройствам.
-	if [ -s "$xrec" ]; then
-		while IFS="$tab" read -r xs xd2 xp2 xc2; do
-			[ "$xd2" = - ] && xd2=""; [ "$xp2" = - ] && xp2=""; [ "$xc2" = - ] && xc2=""
-			[ -n "$xd2$xp2" ] || continue
-			xn="$ST_EXCL_LIST"
-			[ "$xs" = main ] || xn="$ST_EXCL_LIST${xs#s}"
-			xb=""
-			[ -n "$xd2" ] && xb="\"domains_file\":[$xd2]"
-			[ -n "$xp2" ] && xb="$xb${xb:+,}\"prefixes_file\":[$xp2]"
-			lists="$lists${lists:+,}\"$xn\":{$xb}"
-			xnm="$(_stl_js "Исключения$([ "$xs" = main ] || printf ' · «%s»' "$(_st_sec_name "$xs")")")"
-			if [ -n "$xc2" ]; then
-				xf=""
-				for cid in $(printf '%s\n' $xc2 | awk '!s[$0]++'); do xf="$xf${xf:+,}\"$cid\""; done
-				xdr="$xdr${xdr:+,}{\"name\":$(_stl_js "$(_stl_ident "x_${xs}")"),\"for\":[$xf],\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"scope\":\"device\",\"resolve\":\"realip\"}"
-			else
-				xglob="$xglob${xglob:+,}{\"name\":$xnm,\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"resolve\":\"realip\"}"
-			fi
-			byp=1
-		done < "$xrec"
+	[ -n "$rules$drules" ] || return 1
+	if [ -n "$xd$xp" ]; then
+		body=""
+		[ -n "$xd" ] && body="\"domains_file\":[$xd]"
+		[ -n "$xp" ] && body="$body${body:+,}\"prefixes_file\":[$xp]"
+		lists="\"$ST_EXCL_LIST\":{$body}${lists:+,}$lists"
+		rules="{\"name\":\"Исключения\",\"to\":\"$ST_EXCL_LIST\",\"out\":\"$ST_DIRECT_OUT\",\"resolve\":\"realip\"}${rules:+,}$rules"
+		for cid in $(printf '%s\n' $xc | awk '!s[$0]++'); do
+			xr="$xr${xr:+,}{\"name\":$(_stl_js "$(_stl_ident "x_$cid")"),\"for\":[\"$cid\"],\"to\":\"$ST_EXCL_LIST\",\"out\":\"$ST_DIRECT_OUT\",\"scope\":\"device\",\"resolve\":\"realip\"}"
+		done
+		[ -n "$xr" ] && drules="$xr${drules:+,}$drules"
+		byp=1
 	fi
-	rm -f "$xrec"
-	[ -n "$rules$drules$xdr$xglob" ] || return 1
 	[ -n "$byp" ] && outs="$outs${outs:+,}\"$ST_DIRECT_OUT\":{\"kind\":\"direct\"}"
-	# Исключения идут ПЕРВЫМИ: ядро берёт первое совпавшее правило, и раньше общий список
-	# исключений (xglob) стоял после правил устройств «весь трафик» — для таких устройств
-	# исключённые домены и IP уходили в туннель. Порядок: общие исключения, исключения
-	# секций (по своим устройствам), правила устройств.
-	x="$xglob"
-	[ -n "$xdr" ] && x="$x${x:+,}$xdr"
-	[ -n "$drules" ] && x="$x${x:+,}$drules"
-	drules="$x"; x=""
 	[ -n "$drules" ] && [ -n "$rules" ] && drules="$drules,"
 	rules="$drules$rules"
 	# Страховка: правило, указывающее на несуществующий выход, ядро отвергает вместе со всей
@@ -29918,29 +29872,10 @@ _st_dev_key() {
 
 _st_work_main() { [ -n "$(_st_sel)" ] || _st_devs_all; }
 
-# Исключения секции: $2.lst / $2.pfx → строки модели с меткой секции $1.
-_st_excl_emit() {
-	[ -s "$2.lst" ] && printf 'xdom\t%s\t%s\n' "$1" "$2.lst"
-	[ -s "$2.pfx" ] && printf 'xpfx\t%s\t%s\n' "$1" "$2.pfx"
-	return 0
-}
-
-# Список исключений секции: у основной он лежит там же, где лежал всегда.
-_st_excl_base() { if [ -n "$ST_SEC" ]; then printf '%s' "$ST_SEC_DIR/$ST_SEC/exclude"; else printf '%s' "$ST_USER_DIR/exclude"; fi; }
-
-_st_sec_excl_model() { _st_excl_emit "$1" "$ST_SEC_DIR/$1/exclude"; }
-
-# Быстрое применение годится, только если набор списков исключений не изменился.
-_st_excl_fit() {
-	local s have now
-	have="$(awk -F'\t' '$1 == "xdom" || $1 == "xpfx" { print $2 "\t" $3 }' "$ST_DIR/model.svc" 2>/dev/null | sort -u)"
-	now="$({ _st_excl_model 2>/dev/null; for s in $(_st_secs); do _st_sec_live "$s" && _st_sec_excl_model "$s"; done; } | awk -F'\t' '{ print $2 "\t" $3 }' | sort -u)"
-	[ "$have" = "$now" ]
-}
-
 _st_excl_model() {
 	local id st set
-	_st_excl_emit main "$ST_DIR/user/exclude"
+	[ -s "$ST_DIR/user/exclude.lst" ] && printf 'xdom\t%s\n' "$ST_DIR/user/exclude.lst"
+	[ -s "$ST_DIR/user/exclude.pfx" ] && printf 'xpfx\t%s\n' "$ST_DIR/user/exclude.pfx"
 	[ -s "$ST_TCH_XSETS" ] && [ -s "$ST_TCH_DIRECT" ] && _st_tch_on || return 0
 	for id in $(cat "$ST_TCH_XSETS"); do
 		st="$(awk -F'|' -v k="$id" '$1 == k { print $4; exit }' "$ST_TCH_DIRECT")"
@@ -29948,23 +29883,19 @@ _st_excl_model() {
 		echo "   → Мимо Steer: «$(awk -F'|' -v k="$id" '$1 == k { print $2; exit }' "$ST_TCH_DIRECT")»" >&2
 		for set in $(echo "$st" | tr ',' ' '); do
 			_st_srs_get "$set" || { _rb_warn "Список $set для «Мимо Steer» не скачался — пропускаем его в этот раз" >&2; continue; }
-			[ -s "$ST_DIR/lists/$set.dom" ] && printf 'xdom\tmain\t%s\n' "$ST_DIR/lists/$set.dom"
-			[ -s "$ST_DIR/lists/$set.pfx" ] && printf 'xpfx\tmain\t%s\n' "$ST_DIR/lists/$set.pfx"
+			[ -s "$ST_DIR/lists/$set.dom" ] && printf 'xdom\t%s\n' "$ST_DIR/lists/$set.dom"
+			[ -s "$ST_DIR/lists/$set.pfx" ] && printf 'xpfx\t%s\n' "$ST_DIR/lists/$set.pfx"
 		done
 	done
 	return 0
 }
 
 do_steer_excl() {
-	local rc nd np s sp=""
+	local rc nd np
 	_st_phase rules
 	rm -f "$ST_STOP_FLAG"
 	nd="$(cat "$ST_DIR/user/exclude.lst" 2>/dev/null | grep -c .)"; np="$(cat "$ST_DIR/user/exclude.pfx" 2>/dev/null | grep -c .)"
-	for s in $(_st_secs); do
-		[ -s "$ST_SEC_DIR/$s/exclude.lst" ] || [ -s "$ST_SEC_DIR/$s/exclude.pfx" ] || continue
-		sp="$sp, «$(_st_sec_name "$s")» — доменов $(cat "$ST_SEC_DIR/$s/exclude.lst" 2>/dev/null | grep -c .), IP и подсетей $(cat "$ST_SEC_DIR/$s/exclude.pfx" 2>/dev/null | grep -c .)"
-	done
-	_rb_say "Исключения основной секции: доменов $nd, IP и подсетей $np${sp}$([ -s "$ST_TCH_XSETS" ] && echo ", готовых списков $(grep -c . "$ST_TCH_XSETS")")"
+	_rb_say "Исключения: доменов $nd, IP и подсетей $np$([ -s "$ST_TCH_XSETS" ] && echo ", готовых списков $(grep -c . "$ST_TCH_XSETS")")"
 	if _st_owns "steer-spec" && _st_work; then
 		if _st_use_vpn; then _st_spec_quick; else _st_spec_quick_warp; fi
 		rc=$?
@@ -31518,6 +31449,7 @@ _st_model_head() {
 			*) printf 'so\t%s\twarp\n' "$s" ;;
 		esac
 	done
+	_st_excl_model
 }
 
 _st_model() {
@@ -31529,7 +31461,6 @@ _st_model() {
 	for s in $(_st_order_all); do
 		if [ "$s" = main ]; then
 			printf 'sec\tmain\n'
-			_st_excl_model
 			rm -f "$ST_RUN"/used.*
 			for id; do _st_svc_lists "$id"; done
 			_st_dev_model all
@@ -31539,7 +31470,6 @@ _st_model() {
 		_st_sec_live "$s" || continue
 		rm -f "$ST_RUN"/used.*
 		printf 'sec\t%s\n' "$s"
-		_st_sec_excl_model "$s"
 		for id in $(_st_sec_with "$s" _st_sel); do
 			_st_sec_with "$s" _st_svc_lists "$id"
 		done
@@ -31603,9 +31533,7 @@ _st_spec_apply() {
 		if [ $# -gt 0 ] || ! grep -qE '^(dev	all|sdev	[^	]*	all)	' "$m"; then rm -f "$m"; echo "ОШИБКА: для выбранных сервисов нет ни одного списка"; return 1; fi
 	fi
 	stl_apply "$m" || { rm -f "$m"; return 1; }
-	# xdom/xpfx теперь идут внутри блоков секций (а не в шапке модели) — оставляем их в model.svc,
-	# иначе быстрое применение (_st_spec_quick0) теряет исключения, а _st_excl_fit всегда «не совпадает»
-	grep -v '^\(lan\|main\|mif\|warp\|wpick\|vpn\|tun\|so\|stun\|over\)	' "$m" | grep -v '^dev	byp	' > "$ST_DIR/model.svc" 2>/dev/null
+	grep -v '^\(lan\|main\|mif\|warp\|wpick\|vpn\|tun\|so\|stun\|xdom\|xpfx\|over\)	' "$m" | grep -v '^dev	byp	' > "$ST_DIR/model.svc" 2>/dev/null
 	rm -f "$m"
 	_st_own "steer-spec"
 	rm -f "$ST_RB_STEER"
@@ -32553,7 +32481,6 @@ _st_spec_quick0() {
 	for f in $(awk -F'\t' '$1 == "srs" || $1 == "dom" || $1 == "pfx" { print $2 }' "$ST_DIR/model.svc"); do [ -s "$f" ] || return 2; done
 	_st_secs_fit || return 2
 	_st_devs_fit || return 2
-	_st_excl_fit || return 2
 	if { ! _st_use_vpn && _st_warp_on; } || _st_warp_used; then [ -s "$ST_WARP_UP" ] || return 2; fi
 	_st_engine_ready || return 1
 	_st_vpn_any && _st_vpn_zone on
@@ -33171,7 +33098,7 @@ _st_tunnels_json() {
 	printf '[%s]' "$out"
 }
 
-_st_ufile() { if [ "$1" = custom ]; then printf '%s' "$ST_CUSTOM"; elif [ "$1" = exclude ]; then _st_excl_base; else printf '%s' "$ST_USER_DIR/$1"; fi; }
+_st_ufile() { if [ "$1" = custom ]; then printf '%s' "$ST_CUSTOM"; else printf '%s' "$ST_USER_DIR/$1"; fi; }
 
 _st_cust_split() {
 	local s m="$ST_DIR/custom.split"
@@ -33188,7 +33115,7 @@ _st_cust_split() {
 
 _st_list_effective() {
 	local id="$1" set f any=0
-	if [ "$id" = exclude ]; then ST_LIST_SRC=user; f="$(_st_excl_base)"; cat "$f.lst" "$f.pfx" 2>/dev/null; return 0; fi
+	if [ "$id" = exclude ]; then ST_LIST_SRC=user; cat "$ST_USER_DIR/$id.lst" "$ST_USER_DIR/$id.pfx" 2>/dev/null; return 0; fi
 	f="$(_st_ufile "$id")"
 	if [ -s "$f.lst" ] || [ -s "$f.pfx" ]; then ST_LIST_SRC=user; cat "$f.lst" "$f.pfx" 2>/dev/null; return 0; fi
 	for set in $(_rb_svc_field "$id" 8 | tr ',' ' '); do
@@ -40344,83 +40271,15 @@ function sec_list(c, p) {
 	return r;
 }
 
-// Исключения основной секции живут в отдельной секции BYPASS, у остальных — в zm_byp_<sec>.
-// Имя считаем ТОЛЬКО здесь: раньше запись и чтение расходились, и список «переезжал»
-// из секции в секцию, а при сохранении копировался в чужую.
-function byp_name(sec, main) {
-	return sec == main ? BYPASS : "zm_byp_" + sec;
-}
-
-function byp_info(c, sec, main) {
-	let m = c.get_all(CFG, byp_name(sec, main)) || {};
-	return { domains: domain_lines(m), subnets: subnet_lines(m) };
-}
-
-// Исключения основной секции. Через byp_info() сюда не пройти: byp_name("", BYPASS)
-// не считает пустое имя основной секцией и отдаёт «zm_byp_», а такой секции нет —
-// список всегда выходил пустым, и проверка «Исключения» в панели молчала.
 function bypass_info(c) {
 	let m = c.get_all(CFG, BYPASS) || {};
 	return { domains: domain_lines(m), subnets: subnet_lines(m) };
-}
-
-// Сколько строк исключений всего — по всем секциям, а не только по основной.
-function byp_total(c) {
-	let n = 0;
-	c.foreach(CFG, "section", (m) => {
-		let nm = m[".name"];
-		if (nm != BYPASS && !match(nm, /^zm_byp_/)) return;
-		n += length(domain_lines(m)) + length(subnet_lines(m));
-	});
-	return n;
-}
-
-// Номер секции в конфиге (0-based). Cursor.get() с двумя аргументами отдаёт СТРОКУ типа,
-// а .index есть только у словаря пакета (get_all без секции): индексация строки в ucode —
-// это Reference error, а не null, поэтому раньше byp_pos() падал на живой секции.
-function sec_idx(c, name) {
-	let pkg = c.get_all(CFG), s = pkg ? pkg[name] : null;
-	return s && type(s[".index"]) == "int" ? s[".index"] : -1;
-}
-
-// Позиция секции исключений: строго ВЫШЕ своей секции. uci_reorder_section() ждёт 0-based
-// позицию в списке, из которого перемещаемая секция уже удалена, поэтому «сразу перед
-// секцией» — это si - 1, если исключения уже стояли выше неё, и si в остальных случаях.
-function byp_pos(c, sec, byp_sec, is_main) {
-	if (is_main) return 0;
-	let b = sec_idx(c, byp_sec), si = sec_idx(c, sec);
-	if (si < 0) return b >= 0 ? b : 0;
-	return (b >= 0 && b < si) ? si - 1 : si;
-}
-
-// Осиротевшие zm_byp_<main> из прошлых сборок: переносим содержимое в BYPASS и убираем секцию,
-// иначе она продолжает работать как «фантомное» глобальное исключение.
-// set_lists объявлена ниже: ucode связывает имя в момент компиляции функции, поэтому без
-// предобъявления вызов из byp_migrate() уходит в глобальную область, где его нет, — и падает
-// с «set_lists is not a function, got null».
-let set_lists;
-function byp_migrate(c, main) {
-	let legacy = "zm_byp_" + main;
-	if (main == "" || c.get(CFG, legacy) == null) return false;
-	let m = c.get_all(CFG, legacy) || {}, cur = c.get_all(CFG, BYPASS) || {};
-	let d = uniq([ ...domain_lines(cur), ...domain_lines(m) ]);
-	let n = uniq([ ...subnet_lines(cur), ...subnet_lines(m) ]);
-	if (length(d) || length(n)) {
-		if (c.get(CFG, BYPASS) == null) c.set(CFG, BYPASS, "section");
-		c.set(CFG, BYPASS, "zm_label", "Исключения · основная");
-		c.set(CFG, BYPASS, "connection_type", "exclusion");
-		c.delete(CFG, BYPASS, "disabled");
-		set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], d, n);
-	}
-	c.delete(CFG, legacy);
-	return true;
 }
 
 function legacy_bypass_info(c) {
 	let r = [];
 	c.foreach(CFG, "section", (m) => {
 		if (m[".name"] == BYPASS || s(m.connection_type) != "exclusion") return;
-		if (match(m[".name"], /^zm_byp_/)) return;
 		push(r, {
 			name: m[".name"], label: sec_label(m, false), enabled: s(m.disabled) != "1",
 			domains: domain_lines(m), subnets: subnet_lines(m),
@@ -41697,7 +41556,6 @@ function rs_info() {
 
 function cmd_get(want) {
 	let c = cursor(), p = pick(c), sec = p.sec, main = p.sec;
-	if (byp_migrate(c, main)) { c.save(CFG); c.commit(CFG); }
 	want = s(want);
 	if (want != "" && want != main && index(p.conns, want) >= 0) sec = want;
 	let m = c.get_all(CFG, sec) || {}, st = c.get_all(CFG, "settings") || {}, mm = c.get_all(CFG, main) || {};
@@ -41710,7 +41568,7 @@ function cmd_get(want) {
 		label: sec_label(m, sec == main),
 		enabled: sec == main || s(m.disabled) != "1",
 		sections: sec_list(c, p),
-		bypass: byp_info(c, sec, main),
+		bypass: bypass_info(c),
 		legacy_bypass: legacy_bypass_info(c),
 		exists: m[".type"] != null && sec_configured(m),
 		mode: mode == "json" ? "links" : mode,
@@ -41907,23 +41765,16 @@ function cmd_set() {
 	write_device_lists(c, sec, full, excl, all);
 
 	if (bp) {
-		// mainsec, а не main: в cmd_set нет переменной main — byp_name() получал null
-		// и исключения основной секции уезжали в zm_byp_<основная> вместо BYPASS.
-		let byp_sec = byp_name(sec, mainsec);
 		if (length(bdom) || length(bsub)) {
-			if (c.get(CFG, byp_sec) == null) c.set(CFG, byp_sec, "section");
-			c.set(CFG, byp_sec, "zm_label", "Исключения · " + (is_main ? "основная" : label));
-			c.set(CFG, byp_sec, "connection_type", "exclusion");
-			c.delete(CFG, byp_sec, "disabled");
-			set_lists(c, byp_sec, { s: [], r: [], n: [], l: [] }, [], bdom, bsub);
-			c.delete(CFG, byp_sec, "zm_refs");
-			c.reorder(CFG, byp_sec, byp_pos(c, sec, byp_sec, is_main));
+			if (c.get(CFG, BYPASS) == null) c.set(CFG, BYPASS, "section");
+			c.set(CFG, BYPASS, "zm_label", "Исключения");
+			c.set(CFG, BYPASS, "connection_type", "exclusion");
+			c.delete(CFG, BYPASS, "disabled");
+			set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], bdom, bsub);
+			c.delete(CFG, BYPASS, "zm_refs");
+			c.reorder(CFG, BYPASS, 1);
 		}
-		else if (byp_sec == BYPASS) {
-			// Основная секция: чистим списки, но саму BYPASS не удаляем — на неё смотрит движок.
-			if (c.get(CFG, BYPASS) != null) set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], [], []);
-		}
-		else if (c.get(CFG, byp_sec) != null) c.delete(CFG, byp_sec);
+		else if (c.get(CFG, BYPASS) != null) c.delete(CFG, BYPASS);
 	}
 
 	if (!c.get(CFG, "settings")) c.set(CFG, "settings", "settings");
@@ -43289,7 +43140,6 @@ function cmd_secdel(sec) {
 	if (sec == "" || sec == p.sec) fail("основную секцию удалить нельзя");
 	if (index(p.conns, sec) < 0) fail("такой секции нет");
 	c.delete(CFG, sec);
-	c.delete(CFG, byp_name(sec, p.sec));
 	for (let k in [ "dns_outbound_section", "download_lists_via_proxy_section" ])
 		if (s(c.get(CFG, "settings", k)) == sec) c.set(CFG, "settings", k, p.sec);
 	c.save(CFG);
@@ -43347,8 +43197,8 @@ function cmd_diag() {
 				dead = "сервер на Xray 26.9.8+ пускает только с ключом X25519MLKEM768, а его отправляет лишь расширенный sing-box 2.7.2 или новее";
 			add(ms > 0 ? (ms < 1500 ? "ok" : "warn") : "fail", what, ms > 0 ? "отвечает за " + ms + " мс" : dead);
 		}
-		let bn = byp_total(c);
-		if (bn) add("ok", "Исключения", nn_ru(bn, "строка", "строки", "строк") + " — идут напрямую, не через туннель");
+		let bp = bypass_info(c), bn = length(bp.domains) + length(bp.subnets);
+		if (bn) add("ok", "Исключения", nn_ru(bn, "строка", "строки", "строк") + " — идут напрямую, мимо всех секций");
 	}
 	let ks = cursor().get_all(CFG, "settings") || {};
 	if (flag(ks.block_leaks) && fs.access(NS_LIB + "/kill_switch.sh")) {
@@ -43554,16 +43404,10 @@ function where_scan(host, ip, win) {
 	for (let it in items) for (let t in it.targets) if (names[t] == null) names[t] = it.name;
 	let won = false;
 	for (let x in sections(c, "section")) {
-		// Исключения бывают не только у основной секции: у остальных это zm_byp_<секция>.
-		// Раньше такие секции отсекались как «не подключение», и домен из списка
-		// исключений секции в разборе «куда пойдёт» не находился вовсе.
-		let n = x[".name"], own = match(n, /^zm_byp_(.+)$/), byp = n == BYPASS || own != null;
+		let n = x[".name"], byp = n == BYPASS;
 		if (!byp && !is_conn(x)) continue;
-		let om = own != null ? (c.get_all(CFG, own[1]) || {}) : null;
-		let on = om != null ? s(om.disabled) != "1" : byp || n == p.sec || s(x.disabled) != "1";
-		let rf = sec_refs(x);
-		let st = byp ? "x" : on ? "on" : "dis";
-		let label = byp ? (om != null ? sec_label(om, own[1] == p.sec) : "") : sec_label(x, n == p.sec);
+		let on = byp || n == p.sec || s(x.disabled) != "1", rf = sec_refs(x);
+		let st = byp ? "x" : on ? "on" : "dis", label = byp ? "" : sec_label(x, n == p.sec);
 		let add = (name, list, entry) => {
 			let e = { state: st, sec: label, name, list, entry: entry ?? "", win: false };
 			if (!won && on && n == win) { e.win = true; won = true; }
@@ -50959,7 +50803,7 @@ var PHASE_TEXT = {
 	check: 'проверяем', remove: 'удаляем', sub: 'настраиваем подписку'
 };
 
-var STEER_TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'byp', label: 'Исключения' }, { id: 'set', label: 'Настройки', common: true } ];
+var STEER_TABS = [ { id: 'conn', label: 'Подключение' }, { id: 'svc', label: 'Сервисы' }, { id: 'dev', label: 'Устройства' }, { id: 'byp', label: 'Исключения', common: true }, { id: 'set', label: 'Настройки', common: true } ];
 var SEC_BOUND = { sub_noauto: 1, lists: 1, devs_set: 1, sub_status: 1, sub_probe: 1, sub_tcp: 1, lat_mode: 1, node_pol: 1, sub_home: 1, sub_links_get: 1, sub_set: 1, sub_links: 1, sub_update: 1, sub_remove: 1, sub_node: 1, sub_group: 1, sub_filter: 1, sub_hide: 1, sub_pick: 1, sub_ping: 1, sub_insecure: 1, sub_happ: 1 };
 
 function latClass(ms) {
@@ -52610,14 +52454,9 @@ return view.extend({
 		}
 
 		function loadExcl() {
-			var want = secCur, gen = secGen;
 			exclLoading = true;
-			exclData = null;
-			exclDraft = null;
-			exclDirty = false;
 			renderExcl();
-			stC('list_get', 'exclude').then(function(res) {
-				if (want !== secCur || gen !== secGen) return;
+			zm.steerAction('list_get', 'exclude').then(function(res) {
 				exclLoading = false;
 				if (res.error) { exclData = null; renderExcl(); zm.toast(res.error, 'error'); return; }
 				exclData = res;
@@ -52625,16 +52464,12 @@ return view.extend({
 				exclDirty = false;
 				renderExcl();
 				if (hasSecs() && !busy) renderMain();
-			}).catch(function() {
-				if (want !== secCur || gen !== secGen) return;
-				exclLoading = false;
-				renderExcl();
-			});
+			}).catch(function() { exclLoading = false; renderExcl(); });
 		}
 
 		function saveExcl(action, arg, okText) {
 			if (busy) { zm.toast('Дождитесь окончания текущей операции', 'warning'); return; }
-			stC(action, arg).then(function(res) {
+			zm.steerAction(action, arg).then(function(res) {
 				if (res.error) { zm.toast(res.error, 'error'); return; }
 				exclDraft = null;
 				exclDirty = false;
@@ -52697,18 +52532,13 @@ return view.extend({
 			exclCard.innerHTML = '';
 			exclCard.style.display = data.blocker ? 'none' : '';
 			if (data.blocker) return;
-			var multi = hasSecs(), mainSec = isMain();
-			exclCard.appendChild(E('h3', {}, 'Исключения' + (multi ? ' · «' + secName(secCur) + '»' : '')));
-			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти домены и IP всегда идут напрямую, мимо WARP и VPN — даже если входят в выбранный сервис.'
-				+ (!multi ? '' : mainSec
-					? ' Список основной секции проверяется первым, поэтому действует на любой запрос к этим адресам — остальным секциям его можно не повторять.'
-					: ' Список только этой секции: на устройства и сервисы других секций он не влияет.')));
+			exclCard.appendChild(E('h3', {}, 'Исключения'));
+			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Эти домены и IP всегда идут напрямую, мимо WARP и VPN — даже если входят в выбранный сервис.' + (hasSecs() ? ' Исключения общие — действуют во всех секциях.' : '')));
 			if (exclLoading && !exclData) { exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Загружаем список…')); return; }
 			var nd = exclData ? (parseInt(exclData.domains, 10) || 0) : 0, np = exclData ? (parseInt(exclData.subnets, 10) || 0) : 0;
 			exclCard.appendChild(row('Состояние', !(nd + np) ? badge('zm-off', 'исключений нет')
 				: !data.installed ? badge('zm-warn', 'заработают после установки Steer')
 				: data.stopped ? badge('zm-off', 'Steer выключен')
-				: secOff(secCur) ? badge('zm-warn', 'секция выключена — не применяются')
 				: badge('zm-ok', 'действуют — идут напрямую')));
 			if (nd + np) exclCard.appendChild(row('В списке', E('span', {}, 'доменов: ' + nd + ' · IP и подсетей: ' + np)));
 			exclEditor = E('textarea', {
@@ -52727,7 +52557,7 @@ return view.extend({
 			exclEditor.addEventListener('input', function() { exclDirty = ebar.dirty(); exclDraft = exclEditor.value; });
 			if (exclDirty && exclDraft !== null) { exclEditor.value = exclDraft; exclEditor.dispatchEvent(new Event('input')); }
 			if (nd + np) exclCard.appendChild(E('div', { 'class': 'zm-actions' }, [ E('button', { 'class': 'cbi-button cbi-button-remove', 'click': function() {
-				return zm.ask('Очистить исключения' + (multi ? ' секции «' + secName(secCur) + '»' : '') + '?\n\nЭти адреса снова пойдут так, как велят сервисы.' + (multi ? ' Списки других секций останутся.' : '')).then(function(ok) { if (!ok) return; saveExcl('list_reset', 'exclude', 'Исключения очищены'); });
+				return zm.ask('Очистить исключения?\n\nЭти адреса снова пойдут так, как велят сервисы.').then(function(ok) { if (!ok) return; saveExcl('list_reset', 'exclude', 'Исключения очищены'); });
 			} }, 'Очистить') ]));
 			exclCard.appendChild(E('p', { 'class': 'zm-hint' }, 'По одному на строку: домен (поддомены включаются сами), IP-адрес или подсеть. Сайты исключайте доменом: подсеть не остановит сайт, который Steer ловит по имени — устройство тогда ходит на подменный адрес, а не на настоящий.'));
 			exclCard.appendChild(ebar);
@@ -54120,7 +53950,6 @@ return view.extend({
 				if (Object.keys(ks).some(function(k) { return k !== 'custom' && !!c[k] !== !!pick[k]; })) return true;
 			}
 			if (customDirty) return true;
-			if (exclDirty) return true;
 			return !!devPick && devSig(devPick) !== devSig(devSaved());
 		}
 
@@ -54133,14 +53962,12 @@ return view.extend({
 					hideMode = false; hidePick = mkHide(); autoPick = mkNoAuto(); pickWho = ''; linksOpen = false; subInput = '';
 					connPick = null; ifChoose = false; ifSel = null; nameDraft = null; wayOpen = false; warpPick = null; ownOpen = false; extPick = null;
 					customData = null; customDraft = null; customDirty = false; findRes = null;
-					exclData = null; exclDraft = null; exclDirty = false; exclLoading = false;
 					if (!data.blocker) loadCustom();
 				}
 				if (toConn && isCommon(tab)) { tab = 'conn'; try { localStorage.setItem('zm.steer.tab', tab); } catch (e) {} }
 				renderAll();
 				if (subShow()) loadSub();
 				if (tab === 'dev' && !devList) loadDevs();
-				if (tab === 'byp') loadExcl();
 			}
 			if (id === secCur || !draftDirty()) { go(); return; }
 			zm.ask('Выбор в секции «' + secName(secCur) + '» не сохранён.\n\nПерейти в «' + secName(id) + '» без сохранения?').then(function(ok) { if (ok) go(); });
@@ -54300,7 +54127,7 @@ return view.extend({
 			secCard.classList.toggle('zm-sec-dim', common);
 			secCard.appendChild(E('h3', {}, [ 'Секции ', badge(n > 1 ? 'zm-ok' : 'zm-off', n + ' ' + plural(n, 'секция', 'секции', 'секций')) ]));
 			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, common
-				? 'WARP и настройки — общие для всех секций. Нажмите на секцию, чтобы настроить её подключение, сервисы, устройства и исключения.'
+				? 'WARP, исключения и настройки — общие для всех секций. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
 				: n > 1 ? 'Каждая секция ведёт свои сервисы через своё подключение: VPN, WARP или готовый туннель роутера.'
 					: 'Секция — свои сервисы через своё подключение. Например, видео через VPN, нейросети через WARP, игры через туннель SSTP или AmneziaWG.'));
 			var tiles = ids.map(function(id) {
@@ -54533,7 +54360,6 @@ return view.extend({
 						if (was !== isCommon(tab)) renderSecs();
 						if (tab === 'conn' && subShow()) loadSub();
 						if (tab === 'dev' && !devList) loadDevs();
-						if (tab === 'byp' && !exclData && !exclLoading) loadExcl();
 					} }, t.label);
 				})));
 			});
@@ -68950,7 +68776,7 @@ return view.extend({
 			function open(name) { if (common) tabTo('conn'); switchSec(name); }
 			secCard.appendChild(E('h3', {}, [ 'Секции ', badge(list.length > 1 || isNew ? 'zm-ok' : 'zm-off', nn(list.length + (isNew ? 1 : 0), 'секция', 'секции', 'секций')) ]));
 			secCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, common
-				? 'Список «Мимо Forkozz» и настройки действуют для всех секций сразу, а исключения у каждой секции свои. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
+				? 'Исключения, список «Мимо Forkozz» и настройки действуют для всех секций сразу. Нажмите на секцию, чтобы настроить её подключение, сервисы и устройства.'
 				: 'Каждая секция ведёт свои сервисы через своё подключение. На вкладке «Устройства» можно пустить через секцию весь трафик выбранных устройств или ограничить её правила отдельными устройствами.'));
 			var tiles = list.map(function(s) {
 				var on = s.name === draft.sec, n = secSel(cfg, s), extra = (s.domains || 0) + (s.subnets || 0), f = (s.full || []).length;
@@ -68965,7 +68791,7 @@ return view.extend({
 			if (isNew) tiles.push(node(secName(), 'ещё не сохранена', true, function() {}, E('span', { 'class': 'zm-lat zm-lat-mid' }, 'черновик'), 'zm-sec'));
 			else if (list.length < SEC_MAX) tiles.push(E('div', { 'class': 'zm-node zm-sec zm-sec-add', 'title': 'Свои списки через другой VPN', 'click': function() { open('new'); } }, [ E('span', { 'class': 'zm-sec-add-text' }, 'Создать новую секцию') ]));
 			secCard.appendChild(E('div', { 'class': 'zm-nodes' }, tiles));
-			if (list.length > 1 && !common) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут DNS и скачивание списков. Правила секции действуют для её устройств, а если устройства не выбраны — для всех. Подходит нескольким секциям — сработает левая. Один сервис можно включить в разных секциях с разными устройствами. Исключения у каждой секции свои.'));
+			if (list.length > 1 && !common) secCard.appendChild(E('p', { 'class': 'zm-hint' }, (mainName() === 'Основная' ? 'Основная секция' : 'Основная секция — «' + mainName() + '»') + ': через неё идут DNS и скачивание списков. Правила секции действуют для её устройств, а если устройства не выбраны — для всех. Подходит нескольким секциям — сработает левая. Один сервис можно включить в разных секциях с разными устройствами. Исключения общие.'));
 		}
 
 		function tabTo(id) {
@@ -70478,10 +70304,7 @@ return view.extend({
 			bypBadgeEl = E('span');
 			bypCard.appendChild(E('h3', {}, [ 'Исключения ', bypBadgeEl ]));
 			bypBadge();
-			bypCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, (cfg.is_main
-				? 'Сайты и адреса из этого списка идут напрямую — мимо VPN во всех секциях, даже если входят в выбранный список. '
-				: 'Список этой секции: эти сайты и адреса идут напрямую, минуя её правила. У каждой секции свой список — правки здесь не меняют исключения других секций. ')
-				+ 'Например, включён «YouTube», а youtube.com нужно оставить без VPN — впишите его сюда.'));
+			bypCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Эти сайты и адреса всегда идут напрямую — мимо VPN во всех секциях, даже если входят в выбранный список. Например, включён «YouTube», а youtube.com нужно оставить без VPN — впишите его сюда.'));
 			bypCard.appendChild(E('h4', { 'style': 'margin:4px 0 8px' }, 'Домены'));
 			bypCard.appendChild(taByD);
 			bypCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один на строку, домен целиком. Поддомены исключаются сами: youtube.com — это и www.youtube.com, и m.youtube.com.'));
