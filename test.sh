@@ -7867,6 +7867,7 @@ _st_vpn_check() {
 }
 
 ST_SUB_VIA="$ST_DIR/sub.via"
+ST_SUB_VIA_ERR="$ST_DIR/sub.via.err"
 _zm_bin() { local d IFS=:; for d in ${PATH:-/usr/sbin:/usr/bin:/sbin:/bin}; do [ -n "$d" ] && [ -x "$d/$1" ] && [ ! -d "$d/$1" ] && { echo "$d/$1"; return 0; }; done; return 1; }
 
 ST_SUB_FELL="$ST_DIR/sub.node.fell"
@@ -8543,8 +8544,8 @@ steer_action() {
 			_job_running steer_lists && return 0
 			job_start steer_lists do_steer_lists "$([ "$mode" = missing ] && echo missing || echo all)" >/dev/null ;;
 		sub_via)
-			mkdir -p "$ST_DIR"
-			if [ "$mode" = on ]; then touch "$ST_SUB_VIA"; else rm -f "$ST_SUB_VIA"; fi
+			mkdir -p "$ST_VDIR"
+			if [ "$mode" = on ]; then touch "$ST_SUB_VIA"; else rm -f "$ST_SUB_VIA"; _st_sub_via_clear; fi
 			printf '{"ok":true}\n' ;;
 		wfix) _st_wfix_set "$mode" ;;
 		wfix_tick) _st_wfix_tick; printf '{"ok":true}\n' ;;
@@ -8570,7 +8571,7 @@ steer_action() {
 		engine_latest)
 			w=""
 			if [ -s "$STL_CACHE" ]; then w="$(head -n1 "$STL_CACHE")"
-			else w="$(_zm_tmo 10 stl_latest_real 2>/dev/null | head -n1)"; [ -s "$STL_CACHE" ] || w=""; fi
+			else w="$(_zm_tmo 10 stl_latest_real 2>/dev/null | head -n1)"; fi
 			_stl_ver_ok "$w" || w=""
 			printf '{"latest":"%s","legacy":"%s"}\n' "$w" "$STL_LEGACY" ;;
 		warp_own_get)
@@ -14935,18 +14936,26 @@ _fk_listsvia_patch() {
 _fk_subvia_patch() {
 	local f=/usr/bin/netshift tmp
 	[ -f "$f" ] || return 0
-	grep -q '^# ZM_SUBVIA 1$' "$f" && return 0
-	[ "$(grep -c '^            if ! wait_for_subscription_connectivity "\$section" "\$url" "\$service_proxy_address" 6 5 5; then$' "$f")" = 1 ] || return 0
+	grep -q '^# ZM_SUBVIA 2$' "$f" && return 0
+	grep -qF '            if ! wait_for_subscription_connectivity "$section" "$url" "$service_proxy_address" 6 5 5; then' "$f" ||
+		grep -qF '            if [ -n "$service_proxy_address" ] && ! wait_for_subscription_connectivity "$section" "$url" "$service_proxy_address" 2 3 5; then' "$f" || return 0
 	tmp="$f.zm-subvia"
-	awk '
-		NR == 1 { print; print "# ZM_SUBVIA 1"; next }
-		$0 == "            if ! wait_for_subscription_connectivity \"$section\" \"$url\" \"$service_proxy_address\" 6 5 5; then" {
-			print "            if [ -n \"$service_proxy_address\" ] && ! wait_for_subscription_connectivity \"$section\" \"$url\" \"$service_proxy_address\" 2 3 5; then"
-			print "                echolog \"Subscription server is unavailable through the VPN, updating the subscription directly this time\" \"warn\""
-			print "                service_proxy_address=\"\""
-			print "            fi"
-			c++
+	awk -v a1='            if ! wait_for_subscription_connectivity "$section" "$url" "$service_proxy_address" 6 5 5; then' \
+		-v a2='            if [ -n "$service_proxy_address" ] && ! wait_for_subscription_connectivity "$section" "$url" "$service_proxy_address" 2 3 5; then' '
+		function zm_blk() {
+			print "            # ZM_SUBVIA: with the via-VPN option on the subscription is never downloaded directly"
+			print "            if [ -n \"$service_proxy_address\" ] && ! wait_for_subscription_connectivity \"$section\" \"$url\" \"$service_proxy_address\" 8 5 5; then"
+			print "                echolog \"Subscription server is unreachable through the VPN - the subscription was not updated, keeping the previous server list\" \"warn\""
+			print "                if [ \"$(uci -q get netshift.settings.download_lists_via_proxy)\" != \"1\" ]; then"
+			print "                    echolog \"Subscription server is unavailable through the VPN, updating the subscription directly this time\" \"warn\""
+			print "                    service_proxy_address=\"\""
+			print "                fi"
 		}
+		NR == 1 { print; print "# ZM_SUBVIA 2"; next }
+		/^# ZM_SUBVIA 1$/ { next }
+		$0 == a1 { zm_blk(); c++; next }
+		$0 == a2 { v1 = 2; zm_blk(); c++; next }
+		v1 > 0 { v1--; next }
 		{ print }
 		END { exit c == 1 ? 0 : 1 }' "$f" > "$tmp" || { rm -f "$tmp"; return 0; }
 	if sh -n "$tmp" && chmod 0755 "$tmp"; then
@@ -30966,22 +30975,43 @@ _st_via_say() {
 	echo "$1" >&2
 }
 
+# Скачался ли именно файл списка. Пустой ответ и HTML-страница — это не список:
+# так провайдер или точка доступа отдаёт заглушку вместо файла, и записывать её как
+# список нельзя (иначе правила соберутся из мусора и отладка потом ничего не объяснит).
+_st_dl_ok() {
+	local h
+	[ -s "$1" ] || return 1
+	h="$(head -c 64 "$1" 2>/dev/null | tr -d ' \t\r\n' | cut -c1)"
+	[ "$h" != "<" ]
+}
+
 _st_fetch() {
-	local tried=""
+	local tried="" bad=""
 	if [ -f "$ST_DIR/lists.via" ]; then
 		if _st_via_dev; then
 			_st_via_say "   · Списки сервисов качаем через ${ST_VIA_C#*|}"
 			tried=1
-			curl -fsSL --interface "$ST_VIA_D" --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null && [ -s "$2" ] && return 0
-			_st_via_say "   · Через ${ST_VIA_C#*|} не скачалось — качаем напрямую"
+			if curl -fsSL --interface "$ST_VIA_D" --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null; then
+				_st_dl_ok "$2" && return 0
+				bad=1
+				rm -f "$2"
+			fi
+			_st_via_say "   · Через ${ST_VIA_C#*|} не скачалось$([ -n "$bad" ] && echo ' (вместо файла пришла страница — похоже, подменяет провайдер)') — качаем напрямую"
 		else
 			_st_via_say "   · Подключение Steer сейчас не работает — списки сервисов качаем напрямую"
 		fi
 	fi
-	curl -fsSL --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null && [ -s "$2" ] && return 0
-	[ -z "$tried" ] || return 1
-	_st_via_dev || return 1
-	curl -fsSL --interface "$ST_VIA_D" --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null && [ -s "$2" ]
+	if curl -fsSL --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null; then
+		_st_dl_ok "$2" && return 0
+		rm -f "$2"
+	fi
+	[ -z "$tried" ] || { rm -f "$2"; return 1; }
+	_st_via_dev || { rm -f "$2"; return 1; }
+	if curl -fsSL --interface "$ST_VIA_D" --connect-timeout 6 --max-time 60 -o "$2" "$1" 2>/dev/null; then
+		_st_dl_ok "$2" && return 0
+	fi
+	rm -f "$2"
+	return 1
 }
 
 _st_b4_raw() {
@@ -33052,10 +33082,13 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s],"pin":"%s","newest":"%s","legacy":"%s","main_vpn":%s,"nopq":{"mode":"%s","auto":"%s","on":%s}}\n' \
+	# Почему последняя попытка обновить подписку через VPN не удалась (для карточки подписки)
+	local svwhy="" svage=null
+	[ -f "$ST_SUB_VIA" ] && _st_sub_via_why && { svwhy="$ST_VIA_WHY"; svage="${ST_VIA_AGE:-null}"; }
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"sub_via_why":"%s","sub_via_age":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s],"pin":"%s","newest":"%s","legacy":"%s","main_vpn":%s,"nopq":{"mode":"%s","auto":"%s","on":%s}}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
-		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$([ -f "$ST_SUB_VIA" ] && echo true || echo false)" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_torrent)" "$(_st_quic)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
+		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$([ -f "$ST_SUB_VIA" ] && echo true || echo false)" "$(esc "$svwhy")" "$svage" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_torrent)" "$(_st_quic)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
 		"$(_st_owns "pkg kmod-amneziawg" || _st_owns "pkg amneziawg-tools" && echo true || echo false)" \
 		"$(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p" | grep -cvE '^zmwarp[0-9]*$')" \
 		"$(_st_xsets_json)" "$(esc "$pin")" "$(esc "$newest")" "$STL_LEGACY" \
@@ -33788,12 +33821,12 @@ _st_autogrp_sync() {
 	mkdir -p "$ST_RUN" "$ST_VDIR"
 	: > "$ST_SUB_GRPS.chk"; : > "$ST_SUB_GRPS.v2"
 	[ -f "$ST_SUB_GRPS.all" ] || : > "$ST_SUB_GRPS.all"
-	dv=""; vm=""
+	dv=""; vm=""; ST_SUB_VPN_WHY=""; ST_SUB_RT_WHY=""
 	if [ -f "$ST_SUB_VIA" ]; then
-		dv="$(_st_sub_vpn_dev 2>/dev/null)" && _st_sub_route_on "$dv" "$u" && vm=1 || { [ -n "$quiet" ] || echo "   ! Не удалось направить группы АВТО через VPN (VPN не поднят или маршрут занят) — остались прежними"; return 1; }
+		_st_sub_vpn_dev && dv="$ST_SUB_VPN_DEV" && _st_sub_route_on "$dv" "$u" && vm=1 || { [ -n "$quiet" ] || echo "   ! Группы АВТО через VPN не обновились: $(_st_sub_via_err) — остались прежними"; return 1; }
 	fi
 	rm -f "$t"
-	curl -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+--resolve $ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
+	curl ${vm:+-4} -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" ${vm:+--interface $dv} -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
 	[ -n "$vm" ] && _st_sub_route_off
 	if [ ! -s "$t" ]; then
 		rm -f "$t"
@@ -34077,6 +34110,7 @@ _st_sub_commit() {
 	mv -f "$ST_SUB.new" "$ST_SUB"
 	chmod 600 "$ST_SUB"
 	rm -f "$ST_SUB_NODES"
+	_st_sub_via_clear
 }
 
 _st_proto_names() {
@@ -34100,14 +34134,92 @@ _st_sub_check() {
 
 _st_sub_vpn_dev() {
 	local d
-	d="$(_st_vpn_dev 2>/dev/null)" || return 1
-	[ -n "$d" ] && [ -d "/sys/class/net/$d" ] && ip -o link show dev "$d" 2>/dev/null | grep -q '[<,]UP[,>]' && ip -4 -o addr show dev "$d" 2>/dev/null | grep -q 'inet ' || return 1
-	echo "$d"
+	ST_SUB_VPN_WHY=""; ST_SUB_VPN_DEV=""
+	d="$(_st_vpn_dev 2>/dev/null)" || d=""
+	if [ -z "$d" ] || [ ! -d "/sys/class/net/$d" ]; then
+		for d in $STL_VPN_DEVS; do [ -n "$d" ] && [ -d "/sys/class/net/$d" ] && break; done
+		[ -n "$d" ] && [ -d "/sys/class/net/$d" ] || d=""
+	fi
+	[ -n "$d" ] || { ST_SUB_VPN_WHY="VPN раздела ${ST_SEC:-main} не поднят: нет туннельного интерфейса"; return 1; }
+	ip -o link show dev "$d" 2>/dev/null | grep -q '[<,]UP[,>]' || { ST_SUB_VPN_WHY="интерфейс $d выключен"; return 1; }
+	ip -4 -o addr show dev "$d" 2>/dev/null | grep -q 'inet ' || { ST_SUB_VPN_WHY="у интерфейса $d нет адреса IPv4"; return 1; }
+	ST_SUB_VPN_DEV="$d"
+	return 0
+}
+
+_st_sub_via_err() {
+	if [ -n "$ST_SUB_RT_WHY" ]; then printf '%s' "$ST_SUB_RT_WHY"
+	elif [ -n "$ST_SUB_VPN_WHY" ]; then printf '%s' "$ST_SUB_VPN_WHY"
+	else printf '%s' "VPN не поднят или маршрут занят"; fi
+}
+
+# Причина последней неудачи обновления подписки через VPN. Храним рядом с отметкой sub.via,
+# чтобы её видел не только журнал задания, но и карточка подписки: иначе человек, включивший
+# «Обновлять подписку через VPN», видит только застывший список без объяснения.
+_st_sub_via_note() {
+	local line
+	[ -n "$1" ] || return 0
+	mkdir -p "$ST_VDIR" 2>/dev/null
+	# причина всегда одной строкой: перенос строки ломает и чтение, и вывод в карточке
+	line="$(printf '%s' "$1" | tr '\r\n\t' '   ' | sed 's/  */ /g; s/^ //; s/ $//')"
+	[ -n "$line" ] || return 0
+	{
+		printf '%s\n' "$(date +%s)"
+		printf '%s\n' "$line"
+	} > "$ST_SUB_VIA_ERR" 2>/dev/null
+	chmod 600 "$ST_SUB_VIA_ERR" 2>/dev/null
+	return 0
+}
+
+_st_sub_via_clear() { rm -f "$ST_SUB_VIA_ERR" 2>/dev/null; return 0; }
+
+# Читает заметку: ST_VIA_WHY — причина, ST_VIA_AGE — сколько секунд назад это было
+_st_sub_via_why() {
+	local t r n
+	ST_VIA_WHY=""; ST_VIA_AGE=""
+	[ -s "$ST_SUB_VIA_ERR" ] || return 1
+	t="$(sed -n '1p' "$ST_SUB_VIA_ERR" 2>/dev/null)"
+	r="$(sed -n '2p' "$ST_SUB_VIA_ERR" 2>/dev/null)"
+	r="$(printf '%s' "$r" | tr -d '\r')"
+	case "$t" in ''|*[!0-9]*) return 1 ;; esac
+	[ -n "$r" ] || return 1
+	n=$(( $(date +%s) - t ))
+	[ "$n" -ge 0 ] || n=0
+	ST_VIA_WHY="$r"; ST_VIA_AGE="$n"
+	return 0
+}
+
+_st_sub_host_ips() {
+	local h="$1" srv o ips a res=""
+	for srv in $2 ""; do
+		if [ -n "$srv" ]; then o="$(_zm_tmo 8 nslookup "$h" "$srv" 2>/dev/null)"
+		else o="$(_zm_tmo 8 nslookup "$h" 2>/dev/null)"; fi
+		ips="$(printf '%s\n' "$o" | awk '/^Name:/ { f = 1; next } f && /^Address/ { a = $0; sub(/^Address[ 0-9]*:[ \t]*/, "", a); sub(/[ \t#].*$/, "", a); if (a ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print a }')"
+		for a in $ips; do
+			case " $res " in *" $a "*) continue ;; esac
+			res="$res${res:+ }$a"
+		done
+	done
+	printf '%s' "$res"
+}
+
+_st_sub_route_ip() {
+	local a="$1" d="$2" src="$3" peer="$4"
+	if [ -n "$peer" ]; then
+		ip route replace "$a/32" via "$peer" dev "$d" src "$src" onlink table "$ST_SUB_RT" || return 1
+	else
+		ip route replace "$a/32" dev "$d" src "$src" table "$ST_SUB_RT" || return 1
+	fi
+	ip rule add pref "$ST_SUB_RT_PREF" to "$a/32" lookup "$ST_SUB_RT" || return 1
+	return 0
 }
 
 _st_sub_route_clean() {
 	while ip rule del pref "$ST_SUB_RT_PREF" >/dev/null 2>&1; do :; done
 	ip route flush table "$ST_SUB_RT" >/dev/null 2>&1
+	ST_SUB_RESOLVE=""
+	ST_SUB_RT_ALL=""
+	return 0
 }
 
 _st_sub_route_lock() {
@@ -34115,7 +34227,7 @@ _st_sub_route_lock() {
 	mkdir -p "$JOBS_DIR"
 	while ! mkdir "$ST_SUB_RT_LOCK" 2>/dev/null; do
 		if [ -n "$(find "$ST_SUB_RT_LOCK" -maxdepth 0 -mmin +15 2>/dev/null)" ]; then rmdir "$ST_SUB_RT_LOCK" 2>/dev/null; continue; fi
-		i=$((i + 1)); [ "$i" -le 900 ] || return 1
+		i=$((i + 1)); [ "$i" -le 60 ] || return 1
 		sleep 1
 	done
 	return 0
@@ -34129,28 +34241,36 @@ _st_sub_route_off() {
 }
 
 _st_sub_route_on() {
-	local d="$1" u="$2" auth h port ip ips src peer first
+	local d="$1" u="$2" auth h port ips src peer a rst b dnss="1.1.1.1 8.8.8.8"
+	ST_SUB_RT_WHY=""
 	auth="${u#*://}"; auth="${auth%%/*}"
 	case "$u" in https://*) port=443 ;; *) port=80 ;; esac
 	case "$auth" in *:*) port="${auth##*:}"; h="${auth%%:*}" ;; *) h="$auth" ;; esac
-	case "$h" in ''|*[!0-9.]*) ips="$(nslookup "$h" 2>/dev/null | awk '/^Name:/ { f = 1; next } f && /^Address/ { a = $0; sub(/^Address[ 0-9]*:[ \t]*/, "", a); sub(/[ \t#].*$/, "", a); if (a ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print a }' | awk '!s[$0]++')" ;; *) ips="$h" ;; esac
-	[ -n "$ips" ] || return 1
+	[ -n "$h" ] || { ST_SUB_RT_WHY="в ссылке подписки нет адреса сервера"; return 1; }
 	src="$(ip -4 -o addr show dev "$d" 2>/dev/null | awk '{ sub(/\/.*/, "", $4); print $4; exit }')"
+	[ -n "$src" ] || { ST_SUB_RT_WHY="у интерфейса $d нет адреса IPv4"; return 1; }
 	peer="$(ip -4 -o addr show dev "$d" 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "peer") { p = $(i + 1); sub(/\/.*/, "", p); print p; exit } }')"
-	[ -n "$src" ] || return 1
-	_st_sub_route_lock || return 1
+	_st_sub_route_lock || { ST_SUB_RT_WHY="маршрут занят другим обновлением подписки"; return 1; }
 	_st_sub_route_clean
-	for ip in $ips; do
-		if [ -n "$peer" ]; then
-			ip route replace "$ip/32" via "$peer" dev "$d" src "$src" onlink table "$ST_SUB_RT" || { _st_sub_route_off; return 1; }
-		else
-			ip route replace "$ip/32" dev "$d" src "$src" table "$ST_SUB_RT" || { _st_sub_route_off; return 1; }
-		fi
-		ip rule add pref "$ST_SUB_RT_PREF" to "$ip/32" lookup "$ST_SUB_RT" || { _st_sub_route_off; return 1; }
+	# Имя сервера подписки разрешаем через сам туннель: адреса публичных DNS известны заранее,
+	# их запросы уводим в VPN, чтобы ответ не подменял DNS провайдера
+	case "$h" in *[!0-9.]*)
+		command -v nslookup >/dev/null 2>&1 || { _st_sub_route_off; ST_SUB_RT_WHY="в системе нет nslookup — нечем узнать адрес сервера подписки"; return 1; }
+		for b in $dnss; do
+			_st_sub_route_ip "$b" "$d" "$src" "$peer" || { _st_sub_route_off; ST_SUB_RT_WHY="не удалось увести DNS в туннель $d"; return 1; }
+		done
+		ips="$(_st_sub_host_ips "$h" "$dnss")" ;;
+		*) ips="$h" ;; esac
+	[ -n "$ips" ] || { _st_sub_route_off; ST_SUB_RT_WHY="не удалось узнать адрес сервера подписки даже через VPN ($h)"; return 1; }
+	rst=""
+	for a in $ips; do
+		_st_sub_route_ip "$a" "$d" "$src" "$peer" || { _st_sub_route_off; ST_SUB_RT_WHY="не удалось направить $a в туннель $d"; return 1; }
+		case " $dnss " in *" $a "*) continue ;; esac
+		case "$h" in *[!0-9.]*) rst="$rst${rst:+ }--resolve $h:$port:$a" ;; esac
 	done
 	[ -w "/proc/sys/net/ipv4/conf/$d/rp_filter" ] && echo 2 > "/proc/sys/net/ipv4/conf/$d/rp_filter" 2>/dev/null
-	first="$(printf '%s\n' "$ips" | head -n1)"
-	ST_SUB_RESOLVE="$h:$port:$first"
+	ST_SUB_RESOLVE="$rst"
+	ST_SUB_RT_ALL=1
 	return 0
 }
 
@@ -34162,18 +34282,23 @@ _st_sub_happ_prep() {
 
 _st_sub_get_via() {
 	local c dv rc=1 u="$1"
-	c="$(_zm_bin curl)" || { echo "   · Через VPN подписку качать нечем (нет curl) — список не обновлён"; return 1; }
-	dv="$(_st_sub_vpn_dev)" || { echo "   ! VPN сейчас не поднят — подписку не обновили, остаётся прежний список"; return 1; }
-	_st_sub_route_on "$dv" "$u" || { echo "   ! Не удалось направить запрос подписки в VPN (маршрут занят или адрес сервера не узнан) — список не обновлён"; return 1; }
+	ST_SUB_VPN_WHY=""; ST_SUB_RT_WHY=""
+	c="$(_zm_bin curl)" || { _st_sub_via_note "в системе нет curl — качать нечем"; echo "   · Через VPN подписку качать нечем (нет curl) — список не обновлён"; return 1; }
+	_st_sub_vpn_dev || { _st_sub_via_note "$(_st_sub_via_err)"; echo "   ! $(_st_sub_via_err) — подписку не обновили, остаётся прежний список"; return 1; }
+	dv="$ST_SUB_VPN_DEV"
+	_st_sub_route_on "$dv" "$u" || { _st_sub_via_note "$(_st_sub_via_err)"; echo "   ! Не удалось направить запрос подписки в VPN ($(_st_sub_via_err)) — список не обновлён"; return 1; }
+	echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main})"
 	if [ -f "$ST_SUB_URL.happ" ]; then
 		_st_sub_happ_prep
-		echo "   · Подписку качаем как для Happ через VPN"
-		_st_sub_curl "$c" "" "$@" happ && rc=0
-		[ "$rc" = 0 ] || echo "   · Как для Happ подписка через VPN не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — пробуем как обычно"
+		_st_sub_curl "$c" "$dv" "$@" happ && rc=0
+		[ "$rc" = 0 ] || echo "   · Как для Happ через VPN не вышло${STL_SUB_ERR:+ ($STL_SUB_ERR)} — пробуем обычным клиентом, тоже через VPN"
 	fi
-	[ "$rc" = 0 ] || { _st_sub_curl "$c" "" "$@" && rc=0; }
+	if [ "$rc" != 0 ]; then _st_sub_curl "$c" "$dv" "$@" && rc=0; fi
 	_st_sub_route_off
-	[ "$rc" = 0 ] || echo "   ! Через VPN подписка не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — прежний список остаётся"
+	if [ "$rc" != 0 ]; then
+		_st_sub_via_note "через VPN подписка не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)}"
+		echo "   ! Через VPN подписка не скачалась${STL_SUB_ERR:+ ($STL_SUB_ERR)} — напрямую не качаем, прежний список остаётся"
+	fi
 	return $rc
 }
 
@@ -34190,9 +34315,9 @@ _st_sub_get() {
 }
 
 _st_sub_curl() {
-	local c="$1" dv="$2" u="$3" out="$4" info="$5" t="$4.via" h="$4.via.hdr" j id os md ua k v x try ifa=""
+	local c="$1" dv="$2" u="$3" out="$4" info="$5" t="$4.via" h="$4.via.hdr" j id os md ua k v x try ifa="" v4=""
 	STL_SUB_URL=""; STL_SUB_TITLE=""; STL_SUB_WARN=""; STL_SUB_ERR=""
-	[ -n "$dv" ] && ifa="--interface $dv"
+	[ -n "$dv" ] && { ifa="--interface $dv"; v4="-4"; }
 	j="$(_stl_t 10 steer sub-hwid 2>/dev/null)"
 	id="$(printf '%s' "$j" | jsonfilter -e '@.hwid' 2>/dev/null | tr -cd 'A-Za-z0-9._:-')"
 	os="$(printf '%s' "$j" | jsonfilter -e '@.os' 2>/dev/null | tr -d '\r\n')"
@@ -34201,10 +34326,10 @@ _st_sub_curl() {
 	for try in "$u" "${u%/}/json"; do
 		rm -f "$t" "$h"
 		if [ -n "$id" ]; then
-			"$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $ifa ${ST_SUB_RESOLVE:+--resolve $ST_SUB_RESOLVE} -A "$ua" \
+			"$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $v4 $ifa ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -A "$ua" \
 				-H "x-hwid: $id" -H "x-device-os: $os" -H "x-ver-os: $os" -H "x-device-model: $md" -D "$h" -o "$t" "$try" 2>/dev/null || rm -f "$t"
 		fi
-		[ -s "$t" ] || "$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $ifa ${ST_SUB_RESOLVE:+--resolve $ST_SUB_RESOLVE} -A "$ua" \
+		[ -s "$t" ] || "$c" -fsSL --compressed -m 60 --connect-timeout 10 --max-redirs 10 --max-filesize 67108864 -b "" $v4 $ifa ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -A "$ua" \
 			-D "$h" -o "$t" "$try" 2>/dev/null || rm -f "$t"
 		[ -s "$t" ] || { STL_SUB_ERR="панель не ответила"; continue; }
 		if [ "$(head -c 2 "$t" | od -An -tx1 | tr -d ' \n')" = 1f8b ]; then
@@ -35076,6 +35201,7 @@ _st_bind() {
 	ST_SUB_FELL="$d/sub.node.fell"; ST_NODE_POL="$d/node.pol"; ST_SUB_HOME="$d/sub.node.home"
 	ST_SUB_PICK="$d/sub.pick"; ST_LAT_MODE="$d/lat.mode"; ST_SUB_PING="$d/sub.ping"; ST_SUB_ORDER="$d/sub.order"
 	ST_SUB_GRP="$d/sub.group"; ST_SUB_GRPS="$d/sub.autogrp"
+	ST_SUB_VIA="$d/sub.via"; ST_SUB_VIA_ERR="$d/sub.via.err"
 	STL_VPN_DEVS="$STL_VPN_DEV ${STL_VPN_PFX}_vless ${STL_VPN_PFX}_hy2 ${STL_VPN_PFX}_trojan ${STL_VPN_PFX}_ss ${STL_VPN_PFX}_socks ${STL_VPN_PFX}_http ${STL_VPN_PFX}_vmess"
 }
 
@@ -37899,7 +38025,10 @@ _si_components() {
 		_si_row "DNS" "$([ "$(_si_j "$j" '@.dnsmode')" = router ] && echo через роутер || echo через туннель) · DoH $(_si_j "$j" '@.doh_mode')" ""
 		_si_row "Если туннель упал" "$([ "$(_si_j "$j" '@.onfail')" = drop ] && echo без интернета || echo напрямую)" ""
 		_si_row "Списки сервисов через VPN" "$(_si_yes "$(_si_j "$j" '@.lists_via')")" ""
-		_si_row "Подписка через VPN" "$(_si_yes "$(_si_j "$j" '@.sub_via')")" ""
+		sv=""; [ "$(_si_j "$j" '@.sub_via')" = true ] && sv="$(_si_j "$j" '@.sub_via_why')"
+		sa="$(_si_j "$j" '@.sub_via_age')"
+		case "$sa" in ''|*[!0-9]*) sa=0 ;; esac
+		_si_row "Подписка через VPN" "$(_si_yes "$(_si_j "$j" '@.sub_via')")$([ -n "$sv" ] && printf ' · не обновилась %s мин назад: %s' "$((sa / 60))" "$sv")" "$([ -n "$sv" ] && echo warn)"
 		_si_row "Автоперезапуск" "$(_si_every "$(_si_j "$j" '@.autorestart')")" ""
 		_si_end
 	fi
@@ -41641,6 +41770,9 @@ function cmd_set() {
 			if (x.name != sec && fold(x.label) == fold(label)) fail("секция «" + label + "» уже есть — выберите другое название");
 	let mode = s(d.mode);
 	if (index([ "links", "sub", "iface" ], mode) < 0) fail("неизвестный способ подключения");
+	// секция, настроенная вручную через outbound JSON, живёт без списка серверов: если в запросе серверов нет,
+	// её подключение не трогаем — иначе outbound_json затрётся и настроенный вручную выход пропадёт
+	let manual = !created && s(c.get(CFG, sec, "outbound_json")) != "";
 
 	let links = [];
 	for (let l in lines(d.links))
@@ -41656,6 +41788,7 @@ function cmd_set() {
 		if (!match(x, SCHEMES) && !(naive_ok && match(x, SCHEMES_NAIVE)) && !(ec.tuic && match(x, /^tuic:\/\/[^ \t\r\n]+$/i)) && !(ec.anytls && match(x, /^anytls:\/\/[^ \t\r\n]+$/i)))
 			fail(match(x, /^naive\+/i) ? (naive_ok ? "ссылке NaiveProxy нужны логин и пароль: naive+https://логин:пароль@сервер" : "NaiveProxy работает с движком Forkozz 0.9.11 и новее — обновите Forkozz") : match(x, /^(tuic|http|https|anytls|wireguard|hysteria):\/\//i) ? "Forkozz не поддерживает такие ссылки: " + substr(x, 0, 40) + " — подойдут vless, vmess, trojan, ss, socks5, hysteria2" + (naive_ok ? ", naive" : "") + more : "ссылка не поддерживается: " + substr(x, 0, 40));
 	let subs = uniq(lines(type(d.subs) == "array" && length(d.subs) ? d.subs : d.sub)), iface = trim(s(d.iface));
+	if (manual && !length(links) && !length(subs) && iface == "") mode = "keep";
 	if (mode == "links" && !length(links)) fail("добавьте хотя бы одну ссылку на сервер");
 	if (mode == "sub") {
 		if (!length(subs)) fail("вставьте ссылку на подписку");
@@ -41696,6 +41829,9 @@ function cmd_set() {
 	for (let x in sections(c, "section")) {
 		let n = x[".name"];
 		if (n == sec || !is_conn(x) || (n != p0.sec && index(p0.conns, n) < 0)) continue;
+		// выключенная секция движком пропускается целиком, поэтому дубли там безопасны: её можно заранее
+		// наполнить теми же списками и включить в аварию. Проверка повторится при включении.
+		if (n != p0.sec && s(x.disabled) == "1") continue;
 		for (let v in all) for (let w in all_ips(x)) if (device_ip_overlap(v, w))
 			fail("устройство " + v + " уже целиком идёт через секцию «" + sec_label(x, n == p0.sec) + "» — весь трафик устройства можно отдать только одной секции");
 		if (!device_scopes_overlap(full, device_ips(x))) continue;
@@ -41735,30 +41871,32 @@ function cmd_set() {
 	if (is_main || d.enabled !== false) c.delete(CFG, sec, "disabled"); else c.set(CFG, sec, "disabled", "1");
 	c.delete(CFG, sec, "global_proxy");
 
-	del_keys(c, sec, [ ...LINK_KEYS, "outbound_json", "subscription_url", "interface", "subscription_filter_exclude_keywords", "subscription_filter_include_keywords" ]);
-	if (mode == "iface") {
-		c.set(CFG, sec, "connection_type", "vpn");
-		c.delete(CFG, sec, "proxy_config_type");
-		c.set(CFG, sec, "interface", iface);
-		del_keys(c, sec, [ "zm_links", "zm_exclude", "zm_hide", "subscription_update_interval" ]);
-	} else {
-		c.set(CFG, sec, "connection_type", "proxy");
-		if (xstr != "") c.set(CFG, sec, "zm_exclude", xstr); else c.delete(CFG, sec, "zm_exclude");
-		if (mode == "links") {
-			c.set(CFG, sec, "proxy_config_type", "urltest");
-			c.set(CFG, sec, "zm_links", links);
-			c.delete(CFG, sec, "subscription_update_interval");
+	if (mode != "keep") {
+		del_keys(c, sec, [ ...LINK_KEYS, "outbound_json", "subscription_url", "interface", "subscription_filter_exclude_keywords", "subscription_filter_include_keywords" ]);
+		if (mode == "iface") {
+			c.set(CFG, sec, "connection_type", "vpn");
+			c.delete(CFG, sec, "proxy_config_type");
+			c.set(CFG, sec, "interface", iface);
+			del_keys(c, sec, [ "zm_links", "zm_exclude", "zm_hide", "subscription_update_interval" ]);
 		} else {
-			c.set(CFG, sec, "proxy_config_type", "subscription");
-			c.set(CFG, sec, "subscription_url", subs);
-			let iv = s(d.sub_interval);
-			if (index(SUB_IVS, iv) < 0) iv = "3h";
-			c.set(CFG, sec, "subscription_update_interval", iv);
-			c.delete(CFG, sec, "zm_links");
+			c.set(CFG, sec, "connection_type", "proxy");
+			if (xstr != "") c.set(CFG, sec, "zm_exclude", xstr); else c.delete(CFG, sec, "zm_exclude");
+			if (mode == "links") {
+				c.set(CFG, sec, "proxy_config_type", "urltest");
+				c.set(CFG, sec, "zm_links", links);
+				c.delete(CFG, sec, "subscription_update_interval");
+			} else {
+				c.set(CFG, sec, "proxy_config_type", "subscription");
+				c.set(CFG, sec, "subscription_url", subs);
+				let iv = s(d.sub_interval);
+				if (index(SUB_IVS, iv) < 0) iv = "3h";
+				c.set(CFG, sec, "subscription_update_interval", iv);
+				c.delete(CFG, sec, "zm_links");
+			}
+			apply_servers(c, sec);
 		}
-		apply_servers(c, sec);
+		write_sec_ext(c, sec, mode, d.x);
 	}
-	write_sec_ext(c, sec, mode, d.x);
 
 	set_lists(c, sec, { s: rsets, r: rsubs, n: rnets, l: lists }, services, domains, subnets);
 	if (own_on || !(length(keep.domains) || length(keep.subnets) || length(keep.lists))) {
@@ -41777,8 +41915,9 @@ function cmd_set() {
 			c.set(CFG, BYPASS, "zm_label", "Исключения");
 			c.set(CFG, BYPASS, "connection_type", "exclusion");
 			c.delete(CFG, BYPASS, "disabled");
-			set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], bdom, bsub);
-			c.delete(CFG, BYPASS, "zm_refs");
+			let bm = c.get_all(CFG, BYPASS) || {};
+			// списки и community-наборы, добавленные мимо панели, сохраняем: панель правит только домены и адреса
+			set_lists(c, BYPASS, sec_refs(bm), uniq(words(bm.community_lists)), bdom, bsub);
 			c.reorder(CFG, BYPASS, 1);
 		}
 		else if (c.get(CFG, BYPASS) != null) c.delete(CFG, BYPASS);
@@ -43190,6 +43329,7 @@ function cmd_diag() {
 	if (!dm) push(checks, { verdict: "fail", what: "DNS роутера", why: "dnsmasq не установлен — у роутера нет DNS, а устройства не получают адреса по DHCP", fix: "dns_fix" });
 	else if (!dmr) push(checks, { verdict: "fail", what: "DNS роутера", why: "dnsmasq не запущен — сайты по именам не открываются", fix: "dns_fix" });
 	else if (dok && ru != "" && !length(rz) && !flag(ks0.dont_touch_dhcp)) push(checks, { verdict: "warn", what: "DNS роутера", why: "запросы идут через Forkozz, но российские сайты пока не переключены на " + (ru == "yandex" ? "Яндекс DNS" : "DNS провайдера"), fix: "dns_fix" });
+	else if (dok && ru != "" && flag(ks0.dont_touch_dhcp)) push(checks, { verdict: "warn", what: "DNS роутера", why: "российские сайты должны идти через " + (ru == "yandex" ? "Яндекс DNS" : "DNS провайдера") + ", но включено «Не менять настройки DNS роутера» — пересылка доменов не применяется. Отключите её в NetShift или направьте dnsmasq на 127.0.0.42 вручную", fix: "dns_fix" });
 	else if (dok) add("ok", "DNS роутера", "запросы идут через Forkozz" + (ru == "yandex" && length(rz) ? ", российские сайты — через Яндекс DNS" : ru == "isp" && length(rz) ? ", российские сайты — через DNS провайдера" : ""));
 	else if (flag(ks0.dont_touch_dhcp)) add("warn", "DNS роутера", "включено «Не менять настройки DNS роутера» — направьте dnsmasq на 127.0.0.42 вручную, иначе сайты по доменам пойдут мимо Forkozz");
 	else push(checks, { verdict: "fail", what: "DNS роутера", why: "dnsmasq не направлен на Forkozz — сайты по доменам идут мимо него", fix: "dns_fix" });
@@ -51184,12 +51324,13 @@ return view.extend({
 			if (isNew && !nv) nv = cur;
 			if (!nv && !engineDlg.tried) {
 				engineDlg.tried = true;
-				return zm.steerAction('engine_latest', '').catch(function() { return {}; }).then(function(r) {
+				return zm.steerAction('engine_latest', '').then(function(r) {
 					if (r && r.latest && r.latest !== leg) data.newest = r.latest;
+				}, function() {}).then(function() {
+					engineDlg.tried = false;
 					return engineDlg(sw);
 				});
 			}
-			engineDlg.tried = false;
 			return zm.dialog({
 				wide: true,
 				title: sw ? 'Сменить версию ядра steer' : 'Какое ядро steer поставить?',
@@ -51708,6 +51849,20 @@ return view.extend({
 					renderSet();
 				}).catch(function() { zm.toast('Роутер не ответил', 'error'); });
 			}));
+			// Режим включён, но обновиться нечем: без этого человек видит только застывший
+			// список серверов и не догадывается, что виноват включённый тумблер.
+			if (data.sub_via) {
+				var svw = String(data.sub_via_why || ''), sva = parseInt(data.sub_via_age, 10);
+				if (!data.vpn_up || svw) {
+					var svt = !data.vpn_up
+						? 'VPN сейчас не поднят — подписка не обновится, пока туннель не заработает. Останется прежний список серверов.'
+						: 'Обновление через VPN не удалось' + (isNaN(sva) ? '' : ' (' + fmtAge(sva) + ')') + ': ' + svw + '. Подписка осталась прежней.';
+					setCard.appendChild(E('div', { 'style': 'margin:8px 0 0;display:flex;align-items:flex-start;gap:8px' }, [
+						badge('zm-warn', 'через VPN не обновилась'),
+						E('span', { 'class': 'zm-hint', 'style': 'margin:0' }, svt)
+					]));
+				}
+			}
 		}
 
 		function topBox() {
