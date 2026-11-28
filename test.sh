@@ -1,6 +1,6 @@
 #!/bin/sh
 read -r _ _ ZM_NEW_VER <<'ZM_VERSION_EOF'
-# Version: 5.919
+# Version: 5.999
 ZM_VERSION_EOF
 set -e
 
@@ -29157,6 +29157,10 @@ _stl_fo_take() {
 		e="${taken#*|$x@}"; e="${e%%|*}"
 		o="${e#*^}"
 		[ "${o#*^}" = "$out" ] && continue
+		# Владелец списка мог остаться без рабочего выхода (подписка пустая, туннель
+		# не поднялся). Список тогда фактически свободен: строить отказоустойчивую
+		# цепочку через мёртвый выход нельзя — ядро отклонит спеку целиком.
+		case "$outs" in *"\"${o#*^}\":{"*) ;; *) continue ;; esac
 		FO_OWNER="${e%%^*}"
 		case " $fob " in *" $o^$out "*) ;; *) fob="$fob${fob:+ }$o^$out" ;; esac
 	done
@@ -29167,9 +29171,13 @@ _stl_fo_apply() {
 	[ -n "$fob" ] || return 0
 	for own in $(printf '%s\n' $fob | cut -d'^' -f1 | awk '!s[$0]++'); do
 		oo="$(printf '%s\n' $fob | awk -F'^' -v k="$own" '$1 == k { print $2; exit }')"
+		# Лидер цепочки обязан существовать в спеке, иначе правило с таким выходом
+		# всё равно будет отброшено, а группа останется висеть с мёртвым участником.
+		case "$outs" in *"\"$oo\":{"*) ;; *) continue ;; esac
 		mem="\"$oo\""
 		for b in $(printf '%s\n' $fob | awk -F'^' -v k="$own" '$1 == k { print $3 }'); do
-			case ",$mem," in *",\"$b\","*) ;; *) mem="$mem,\"$b\"" ;; esac
+			case ",$mem," in *",\"$b\","*) continue ;; esac
+			case "$outs" in *"\"$b\":{"*) mem="$mem,\"$b\"" ;; esac
 		done
 		case "$mem" in *,*) ;; *) continue ;; esac
 		k="$(printf '%s\n' $gl | awk -F'=' -v m="$mem" '$2 == m { print $1; exit }')"
@@ -29190,7 +29198,7 @@ _stl_rule() {
 	local x w IFS0="$IFS" FO_OWNER=""
 	if [ -n "$taken" ]; then
 		x="$(printf '%s' "$srs,$dom,$pfx" | tr ',' '\n' | grep -m1 .)"
-		[ -z "$sfm$sfa" ] && [ -z "$ZM_STL_NOFO" ] && _stl_fo_take "$srs,$dom,$pfx"
+		[ -z "$sfm$sfa$sam$saa" ] && [ -z "$ZM_STL_NOFO" ] && _stl_fo_take "$srs,$dom,$pfx"
 		srs="$(_stl_untaken "$srs")"; dom="$(_stl_untaken "$dom")"; pfx="$(_stl_untaken "$pfx")"
 		if [ -z "$srs$dom$pfx" ]; then
 			w="${taken#*|$x@}"; w="${w%%|*}"; w="${w%%^*}"
@@ -29201,9 +29209,13 @@ _stl_rule() {
 			return 0
 		fi
 	fi
-	if [ -z "$sfm$sfa" ]; then
+	if [ -z "$sfm$sfa$sam$saa" ]; then
 		IFS=,
-		for x in $srs $dom $pfx; do [ -n "$x" ] && taken="${taken:-|}$x@${sec:-main}^$lid^$out|"; done
+		# Список считается занятым только у секции с реально описанным выходом:
+		# «мёртвая» секция не должна отнимать список у рабочей и глушить сервис.
+		case "$outs" in
+			*"\"$out\":{"*) for x in $srs $dom $pfx; do [ -n "$x" ] && taken="${taken:-|}$x@${sec:-main}^$lid^$out|"; done ;;
+		esac
 		IFS="$IFS0"
 	fi
 	body=""
@@ -29220,12 +29232,17 @@ _stl_rule() {
 	if [ -n "$sfm$sfa" ]; then
 		[ -n "$sfm" ] && r="{\"name\":$(_stl_js "$(_stl_ident "${lid}~m")"),\"for\":[$sfm],\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
 		[ -n "$sfa" ] && r="$r${r:+,}{\"name\":$(_stl_js "$(_stl_ident "${lid}~a")"),\"for\":[$sfa],\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
+	elif [ -n "$sam$saa" ]; then
+		# Секция с устройствами «весь трафик»: её сервисы привязаны к тем же устройствам,
+		# иначе список уезжает на всех, кому эта секция не назначена.
+		[ -n "$sam" ] && r="{\"name\":$(_stl_js "$(_stl_ident "${lid}~m")"),\"for\":[$sam],\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
+		[ -n "$saa" ] && r="$r${r:+,}{\"name\":$(_stl_js "$(_stl_ident "${lid}~a")"),\"for\":[$saa],\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
 	else
 		r="{\"name\":$(_stl_js "$lab"),\"to\":$(_stl_js "$lid"),\"out\":\"$out\"$x}"
 	fi
 	if [ -n "$top" ]; then
-		# Свой список секции стоит наверху — её исключения должны оказаться ещё выше.
-		[ -z "$xint" ] && [ -n "$xsec" ] && [ "$xsec" != main ] && [ "$xsec" != - ] && [ -n "$xd$xp" ] && { crules="$crules${crules:+,}$(_stl_xr " (свой список)")"; byp=1; xint=1; }
+		# Свой список секции стоит наверху: выше обычных правил, но ниже блока исключений,
+		# который _stl_spec выпускает первым (xdr/xglob).
 		crules="$crules${crules:+,}$r"
 	else rules="$rules${rules:+,}$r"; fi
 }
@@ -29321,27 +29338,20 @@ _stl_overs() {
 
 # Исключения дополнительной секции: правило встаёт прямо перед её сервисами и
 # действует для тех же клиентов, поэтому чужие секции оно не задевает.
-_stl_xr() {
-	local f="" n
-	[ -n "$sfm$sfa" ] && f=",\"for\":[$sfm${sfm:+${sfa:+,}}$sfa]"
-	n="$(_stl_js "Исключения$1 · «$(_st_sec_name "$xsec")»")"
-	printf '{"name":%s%s,"to":"%s","out":"%s","resolve":"realip"}' "$n" "$f" "$ST_EXCL_LIST${xsec#s}" "$ST_DIRECT_OUT"
-}
-
-_stl_xin() {
-	# Сервис custom уходит в верхнюю часть спеки — там исключения ставит _stl_rule, здесь не дублируем.
-	[ "$a" != custom ] || return 0
-	[ -z "$xint" ] && [ -n "$xsec" ] && [ "$xsec" != main ] && [ "$xsec" != - ] && [ -n "$xd$xp" ] && [ -n "$out" ] || return 0
-	xint=1
-	rules="$rules${rules:+,}$(_stl_xr)"
-	byp=1
+_stl_xscope() {
+	# Устройства, на которые действуют исключения секции: у основной — только её явный
+	# список «only» (иначе исключения глобальные), у прочих секций — все её устройства
+	# («only» и «весь трафик», без bypass-устройств).
+	local q="$xz"
+	[ "${xsec:-main}" = main ] || q="$xz $xc"
+	printf '%s' "$(printf '%s\n' $q | awk 'NF && !s[$0]++' | tr '\n' ' ' | sed 's/ $//')"
 }
 
 _stl_spec() {
 	local tab k a b c d m lists="" rules="" outs="" lan="" lid="" lab="" srs="" dom="" pfx=""
 	local clients="" drules="" cid dout byp="" xd="" xp="" xc="" xr="" x="" dnsj="" dnsn="" dnt=""
-	local xsec="" xrec="" xglob="" xdr="" xs xd2 xp2 xc2 xn xb xnm xint=""
-	local body wp=latency main="" mout="" out="" sec="" sfm="" sfa="" so="" t u dvs="" STL_CID="" mf="$1" mif="" cu="" crules="" taken="" svn="" fob=""
+	local xsec="" xrec="" xglob="" xdr="" xs xd2 xp2 xc2 xn xb xnm xz="" xf="" xq=""
+	local body wp=latency main="" mout="" out="" sec="" sfm="" sfa="" sam="" saa="" sall="" so="" t u dvs="" STL_CID="" mf="$1" mif="" cu="" crules="" taken="" svn="" fob=""
 	tab="$(printf '\t')"
 	mkdir -p "$STL_TMP"
 	xrec="$STL_TMP/xrec.$$"
@@ -29390,24 +29400,33 @@ _stl_spec() {
 			vpn) [ "$main" = vpn ] && { t="$(_stl_vpn_outs "$mf" "$a")"; [ -n "$t" ] && outs="$t${outs:+,}$outs"; } ;;
 			sec)
 				_stl_rule; lid=""; srs=""; dom=""; pfx=""; cu=""; svn=""
-				[ -n "$xd$xp" ] && [ "$xsec" != - ] && printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xc:--}" >> "$xrec"
-				xd=""; xp=""; xc=""; xsec="$a"; xint=""
-				sec="$a"; out=""; dnt="${a#s}"; sfm=""; sfa=""
+				[ -n "$xd$xp" ] && [ "$xsec" != - ] && { xq="$(_stl_xscope)"; printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xq:--}" >> "$xrec"; }
+				xd=""; xp=""; xc=""; xz=""; xsec="$a"
+				sec="$a"; out=""; dnt="${a#s}"; sfm=""; sfa=""; sam=""; saa=""; sall=""
 				if [ "$a" = main ]; then out="$mout"; sec=""; else
 					for t in $so; do [ "${t%%:*}" = "$a" ] && out="${t#*:}"; done
 				fi
 				[ -n "$out" ] || { xsec=-; continue; }
 				if [ "$out" = "$mout" ]; then dnt=""; elif [ "$out" = "$STL_WARP_OUT" ]; then dnt=w; fi
 				while IFS="$tab" read -r u d m x; do
-					[ "$u" = sdev ] && [ "$d" = "$a" ] && [ "$m" = only ] || continue
+					[ "$u" = sdev ] && [ "$d" = "$a" ] || continue
+					if [ "$m" = all ]; then
+						[ -n "$x" ] || continue
+						sall=1
+						_stl_client "$x"
+						case "$x" in *:*) sam="$sam${sam:+,}\"$STL_CID\"" ;; *) saa="$saa${saa:+,}\"$STL_CID\"" ;; esac
+						continue
+					fi
+					[ "$m" = only ] || continue
 					_stl_client "$x"
+					xz="$xz $STL_CID"
 					case "$x" in *:*) sfm="$sfm${sfm:+,}\"$STL_CID\"" ;; *) sfa="$sfa${sfa:+,}\"$STL_CID\"" ;; esac
 				done < "$mf"
 				x="" ;;
-			svc) _stl_rule; _stl_xin; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; svn="$b"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
-			srs) srs="$srs${srs:+,}$(_stl_js "$a")" ;;
-			dom) dom="$dom${dom:+,}$(_stl_js "$a")" ;;
-			pfx) pfx="$pfx${pfx:+,}$(_stl_js "$a")" ;;
+			svc) _stl_rule; lid="$(_stl_ident "${sec:+${sec}_}$a")"; lab="$(_stl_label "$b${sec:+ · ${sec#s}}" "${sec:+${sec}_}$a")"; svn="$b"; srs=""; dom=""; pfx=""; cu=""; [ "$a" = custom ] && cu=1 ;;
+			srs) srs="$srs${srs:+,}$(_stl_js "${b:-$a}")" ;;
+			dom) dom="$dom${dom:+,}$(_stl_js "${b:-$a}")" ;;
+			pfx) pfx="$pfx${pfx:+,}$(_stl_js "${b:-$a}")" ;;
 			xdom) if [ -n "$b" ]; then xd="$xd${xd:+,}$(_stl_js "$b")"; else xd="$xd${xd:+,}$(_stl_js "$a")"; fi ;;
 			xpfx) if [ -n "$b" ]; then xp="$xp${xp:+,}$(_stl_js "$b")"; else xp="$xp${xp:+,}$(_stl_js "$a")"; fi ;;
 			dev)
@@ -29421,6 +29440,7 @@ _stl_spec() {
 			sdev)
 				[ "$b" = all ] || continue
 				dout=""; for t in $so; do [ "${t%%:*}" = "$a" ] && dout="${t#*:}"; done
+				[ -n "$dout" ] || { [ "$a" = main ] && dout="$mout"; }
 				[ -n "$dout" ] || continue
 				case " $dvs " in *" $c "*) continue ;; esac
 				dvs="$dvs $c"
@@ -29433,7 +29453,7 @@ _stl_spec() {
 	_stl_fo_apply
 	grep -q "^over$tab" "$mf" && outs="$(_stl_overs "$outs" "$mf")"
 	[ -n "$crules" ] && rules="$crules${rules:+,}$rules"
-	[ -n "$xd$xp" ] && [ "$xsec" != - ] && printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xc:--}" >> "$xrec"
+	[ -n "$xd$xp" ] && [ "$xsec" != - ] && { xq="$(_stl_xscope)"; printf '%s\t%s\t%s\t%s\n' "${xsec:-main}" "${xd:--}" "${xp:--}" "${xq:--}" >> "$xrec"; }
 	# Исключения по секциям: у каждой секции свой список, правило привязано к её устройствам.
 	if [ -s "$xrec" ]; then
 		while IFS="$tab" read -r xs xd2 xp2 xc2; do
@@ -29446,23 +29466,64 @@ _stl_spec() {
 			[ -n "$xp2" ] && xb="$xb${xb:+,}\"prefixes_file\":[$xp2]"
 			lists="$lists${lists:+,}\"$xn\":{$xb}"
 			xnm="$(_stl_js "Исключения$([ "$xs" = main ] || printf ' · «%s»' "$(_st_sec_name "$xs")")")"
-			if [ "$xs" = main ]; then
+			if [ -n "$xc2" ]; then
+				xf=""
+				for cid in $(printf '%s\n' $xc2 | awk '!s[$0]++'); do xf="$xf${xf:+,}\"$cid\""; done
+				xdr="$xdr${xdr:+,}{\"name\":$(_stl_js "$(_stl_ident "x_${xs}")"),\"for\":[$xf],\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"scope\":\"device\",\"resolve\":\"realip\"}"
+			else
 				xglob="$xglob${xglob:+,}{\"name\":$xnm,\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"resolve\":\"realip\"}"
 			fi
-			for cid in $(printf '%s\n' $xc2 | awk '!s[$0]++'); do
-				xdr="$xdr${xdr:+,}{\"name\":$(_stl_js "$(_stl_ident "x_${xs}_$cid")"),\"for\":[\"$cid\"],\"to\":\"$xn\",\"out\":\"$ST_DIRECT_OUT\",\"scope\":\"device\",\"resolve\":\"realip\"}"
-			done
 			byp=1
 		done < "$xrec"
 	fi
 	rm -f "$xrec"
 	[ -n "$rules$drules$xdr$xglob" ] || return 1
 	[ -n "$byp" ] && outs="$outs${outs:+,}\"$ST_DIRECT_OUT\":{\"kind\":\"direct\"}"
-	[ -n "$xdr" ] && [ -n "$drules" ] && drules="$drules,"
-	[ -n "$xdr" ] && [ -n "$xglob" ] && xdr="$xdr,"
+	[ -n "$xglob" ] && [ -n "$drules" ] && drules="$drules,"
+	[ -n "$xdr" ] && [ -n "$drules$xglob" ] && xdr="$xdr,"
 	drules="$xdr$drules$xglob"
 	[ -n "$drules" ] && [ -n "$rules" ] && drules="$drules,"
 	rules="$drules$rules"
+	# Страховка: правило, указывающее на несуществующий выход, ядро отвергает вместе со всей
+	# спекой (Steer встаёт целиком). Такие правила выбрасываем поштучно.
+	if [ -n "$rules" ]; then
+		: > "$STL_TMP/drop.$$"
+		rules="$(printf '%s' "$rules" | awk -v o="$outs" -v D="$STL_TMP/drop.$$" '
+		{
+			# Режем по литералу "},{" через index(): в busybox awk (OpenWrt) третий
+			# аргумент split() — регулярка, и "},{" там не компилируется
+			# («bad regex»), из-за чего список правил выходил пустым.
+			n = 0; s = $0; sep = "},{"
+			while ((k = index(s, sep)) > 0) { p[++n] = substr(s, 1, k - 1); s = substr(s, k + 3) }
+			p[++n] = s
+			r = ""
+			for (i = 1; i <= n; i++) {
+				if (match(p[i], /"out":"[^"]*"/)) {
+					name = substr(p[i], RSTART + 7, RLENGTH - 8)
+					if (index(o, "\"" name "\":{") == 0) { print name > D; continue }
+				}
+				r = r (r == "" ? "" : "},{") p[i]
+			}
+			# Склейка после split("},{") теряет краевые скобки: восстанавливаем их,
+			# иначе при отбросе хвостовых правил JSON ломается (нет закрывающей "фигурной").
+			if (r != "") {
+				if (substr(r, 1, 1) != "{") r = "{" r
+				if (substr(r, length(r), 1) != "}") r = r "}"
+			}
+			printf "%s", r
+		}')"
+		if [ -s "$STL_TMP/drop.$$" ]; then
+			# Выходы, которых нет в спеке (подписка без рабочих узлов, интерфейс не задан):
+			# говорим об этом один раз и убираем их DNS — он тоже ссылается на выход.
+			for t in $(sort -u "$STL_TMP/drop.$$"); do
+				[ -z "$STL_DUP_SAID" ] && echo "   · правила с выходом «$t» пропущены — у него сейчас нет рабочего подключения" >&2
+				u=""; for d in $dnsn; do [ "${d#*:}" = "$t" ] || u="$u $d"; done; dnsn="${u# }"
+			done
+		fi
+		rm -f "$STL_TMP/drop.$$"
+		# После отсева ничего не осталось — применять нечего: пустую спеку ядру не отдаём.
+		[ -n "$rules" ] || return 2
+	fi
 	[ -n "$clients" ] && clients="\"clients\":{$clients},"
 	if [ -n "$dnsn" ]; then
 		dnsj=""
@@ -29517,7 +29578,13 @@ stl_apply() {
 	x="$(stl_version)"; _stl_ver_ok "$x" && ! _st_ver_lt "$x" 2.1.0 && tqok=1
 	mkdir -p "$STL_ETC" "$STL_TMP"
 	rm -f "$ST_DIR/nofam"
-	_stl_spec "$1" > "$new" || { rm -f "$new"; echo "ОШИБКА: в настройке нет ни одного списка"; return 1; }
+	_stl_spec "$1" > "$new"; x=$?
+	if [ "$x" != 0 ]; then
+		rm -f "$new"
+		if [ "$x" = 2 ]; then echo "ОШИБКА: ни у одного правила нет рабочего выхода — проверьте подписку, WARP или интерфейс на вкладке «Подключение»"
+		else echo "ОШИБКА: в настройке нет ни одного списка"; fi
+		return 1
+	fi
 	_stl_say "Проверяем правила: $(grep -o '"out":' "$new" | wc -l | tr -d ' ')"
 	err="$(_stl_check "$new")" && ck=1
 	while [ "$ck" = 0 ] && [ "$i" -lt 8 ]; do
@@ -40267,20 +40334,68 @@ function sec_list(c, p) {
 	return r;
 }
 
-function bypass_info(c) {
-	let m = c.get_all(CFG, BYPASS) || {};
+// Исключения основной секции живут в отдельной секции BYPASS, у остальных — в zm_byp_<sec>.
+// Имя считаем ТОЛЬКО здесь: раньше запись и чтение расходились, и список «переезжал»
+// из секции в секцию, а при сохранении копировался в чужую.
+function byp_name(sec, main) {
+	return sec == main ? BYPASS : "zm_byp_" + sec;
+}
+
+function byp_info(c, sec, main) {
+	let m = c.get_all(CFG, byp_name(sec, main)) || {};
 	return { domains: domain_lines(m), subnets: subnet_lines(m) };
 }
 
-function sec_bypass_info(c, sec) {
-	let byp_sec = "zm_byp_" + sec, m = c.get_all(CFG, byp_sec) || {};
-	return { domains: domain_lines(m), subnets: subnet_lines(m) };
+function bypass_info(c) {
+	return byp_info(c, "", BYPASS);
+}
+
+// Номер секции в конфиге (0-based). Cursor.get() с двумя аргументами отдаёт СТРОКУ типа,
+// а .index есть только у словаря пакета (get_all без секции): индексация строки в ucode —
+// это Reference error, а не null, поэтому раньше byp_pos() падал на живой секции.
+function sec_idx(c, name) {
+	let pkg = c.get_all(CFG), s = pkg ? pkg[name] : null;
+	return s && type(s[".index"]) == "int" ? s[".index"] : -1;
+}
+
+// Позиция секции исключений: строго ВЫШЕ своей секции. uci_reorder_section() ждёт 0-based
+// позицию в списке, из которого перемещаемая секция уже удалена, поэтому «сразу перед
+// секцией» — это si - 1, если исключения уже стояли выше неё, и si в остальных случаях.
+function byp_pos(c, sec, byp_sec, is_main) {
+	if (is_main) return 0;
+	let b = sec_idx(c, byp_sec), si = sec_idx(c, sec);
+	if (si < 0) return b >= 0 ? b : 0;
+	return (b >= 0 && b < si) ? si - 1 : si;
+}
+
+// Осиротевшие zm_byp_<main> из прошлых сборок: переносим содержимое в BYPASS и убираем секцию,
+// иначе она продолжает работать как «фантомное» глобальное исключение.
+// set_lists объявлена ниже: ucode связывает имя в момент компиляции функции, поэтому без
+// предобъявления вызов из byp_migrate() уходит в глобальную область, где его нет, — и падает
+// с «set_lists is not a function, got null».
+let set_lists;
+function byp_migrate(c, main) {
+	let legacy = "zm_byp_" + main;
+	if (main == "" || c.get(CFG, legacy) == null) return false;
+	let m = c.get_all(CFG, legacy) || {}, cur = c.get_all(CFG, BYPASS) || {};
+	let d = uniq([ ...domain_lines(cur), ...domain_lines(m) ]);
+	let n = uniq([ ...subnet_lines(cur), ...subnet_lines(m) ]);
+	if (length(d) || length(n)) {
+		if (c.get(CFG, BYPASS) == null) c.set(CFG, BYPASS, "section");
+		c.set(CFG, BYPASS, "zm_label", "Исключения · основная");
+		c.set(CFG, BYPASS, "connection_type", "exclusion");
+		c.delete(CFG, BYPASS, "disabled");
+		set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], d, n);
+	}
+	c.delete(CFG, legacy);
+	return true;
 }
 
 function legacy_bypass_info(c) {
 	let r = [];
 	c.foreach(CFG, "section", (m) => {
 		if (m[".name"] == BYPASS || s(m.connection_type) != "exclusion") return;
+		if (match(m[".name"], /^zm_byp_/)) return;
 		push(r, {
 			name: m[".name"], label: sec_label(m, false), enabled: s(m.disabled) != "1",
 			domains: domain_lines(m), subnets: subnet_lines(m),
@@ -41557,6 +41672,7 @@ function rs_info() {
 
 function cmd_get(want) {
 	let c = cursor(), p = pick(c), sec = p.sec, main = p.sec;
+	if (byp_migrate(c, main)) { c.save(CFG); c.commit(CFG); }
 	want = s(want);
 	if (want != "" && want != main && index(p.conns, want) >= 0) sec = want;
 	let m = c.get_all(CFG, sec) || {}, st = c.get_all(CFG, "settings") || {}, mm = c.get_all(CFG, main) || {};
@@ -41569,7 +41685,7 @@ function cmd_get(want) {
 		label: sec_label(m, sec == main),
 		enabled: sec == main || s(m.disabled) != "1",
 		sections: sec_list(c, p),
-		bypass: bypass_info(c),
+		bypass: byp_info(c, sec, main),
 		legacy_bypass: legacy_bypass_info(c),
 		exists: m[".type"] != null && sec_configured(m),
 		mode: mode == "json" ? "links" : mode,
@@ -41766,7 +41882,9 @@ function cmd_set() {
 	write_device_lists(c, sec, full, excl, all);
 
 	if (bp) {
-		let byp_sec = "zm_byp_" + sec;
+		// mainsec, а не main: в cmd_set нет переменной main — byp_name() получал null
+		// и исключения основной секции уезжали в zm_byp_<основная> вместо BYPASS.
+		let byp_sec = byp_name(sec, mainsec);
 		if (length(bdom) || length(bsub)) {
 			if (c.get(CFG, byp_sec) == null) c.set(CFG, byp_sec, "section");
 			c.set(CFG, byp_sec, "zm_label", "Исключения · " + (is_main ? "основная" : label));
@@ -41774,7 +41892,11 @@ function cmd_set() {
 			c.delete(CFG, byp_sec, "disabled");
 			set_lists(c, byp_sec, { s: [], r: [], n: [], l: [] }, [], bdom, bsub);
 			c.delete(CFG, byp_sec, "zm_refs");
-			c.reorder(CFG, byp_sec, is_main ? 1 : (c.get(CFG, sec) ? c.get(CFG, sec)[\".index"] + 1 : 10));
+			c.reorder(CFG, byp_sec, byp_pos(c, sec, byp_sec, is_main));
+		}
+		else if (byp_sec == BYPASS) {
+			// Основная секция: чистим списки, но саму BYPASS не удаляем — на неё смотрит движок.
+			if (c.get(CFG, BYPASS) != null) set_lists(c, BYPASS, { s: [], r: [], n: [], l: [] }, [], [], []);
 		}
 		else if (c.get(CFG, byp_sec) != null) c.delete(CFG, byp_sec);
 	}
@@ -43142,6 +43264,7 @@ function cmd_secdel(sec) {
 	if (sec == "" || sec == p.sec) fail("основную секцию удалить нельзя");
 	if (index(p.conns, sec) < 0) fail("такой секции нет");
 	c.delete(CFG, sec);
+	c.delete(CFG, byp_name(sec, p.sec));
 	for (let k in [ "dns_outbound_section", "download_lists_via_proxy_section" ])
 		if (s(c.get(CFG, "settings", k)) == sec) c.set(CFG, "settings", k, p.sec);
 	c.save(CFG);
@@ -70324,7 +70447,10 @@ return view.extend({
 			bypBadgeEl = E('span');
 			bypCard.appendChild(E('h3', {}, [ 'Исключения ', bypBadgeEl ]));
 			bypBadge();
-			bypCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, 'Эти сайты и адреса всегда идут напрямую — мимо VPN во всех секциях, даже если входят в выбранный список. Например, включён «YouTube», а youtube.com нужно оставить без VPN — впишите его сюда.'));
+			bypCard.appendChild(E('p', { 'class': 'zm-hint', 'style': 'margin-top:-6px' }, (cfg.is_main
+				? 'Сайты и адреса из этого списка идут напрямую — мимо VPN во всех секциях, даже если входят в выбранный список. '
+				: 'Список этой секции: эти сайты и адреса идут напрямую, минуя её правила. У каждой секции свой список — правки здесь не меняют исключения других секций. ')
+				+ 'Например, включён «YouTube», а youtube.com нужно оставить без VPN — впишите его сюда.'));
 			bypCard.appendChild(E('h4', { 'style': 'margin:4px 0 8px' }, 'Домены'));
 			bypCard.appendChild(taByD);
 			bypCard.appendChild(E('p', { 'class': 'zm-hint' }, 'Один на строку, домен целиком. Поддомены исключаются сами: youtube.com — это и www.youtube.com, и m.youtube.com.'));
