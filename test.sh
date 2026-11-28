@@ -8205,7 +8205,7 @@ steer_action() {
 			esac
 			( _st_bind "$w"; steer_action "$action" "$mode" ); return $? ;;
 	esac
-	case "$action" in diag|wfix_tick|explain|lists_bg|lists_cron) ;; *) rm -f "$ST_VPN_PROBE" ;; esac
+	case "$action" in diag|wfix_tick|explain|lists_bg|lists_cron|engine_latest) ;; *) rm -f "$ST_VPN_PROBE" ;; esac
 	case "$action" in
 		install|engine_ver|apply|start|stop|remove|warp_restart|warp_endpoint|warp_recreate|lists|engine|warp_setup|warp_fix|warp_fixkeys|warp_own|warp_mode|warp_iface|ext_pick|warp_pick|warp_remove|onfail|dnsmode|realip|cttl|torrent|quic|lan_set)
 			_st_running && { echo '{"error":"дождитесь окончания текущей операции"}'; return 1; }
@@ -8567,6 +8567,12 @@ steer_action() {
 			rm -f "$ST_RUN/dnslog.$$" ;;
 		wfix_reset)
 			rm -f "$ST_WFIX_STATE"; printf '{"ok":true}\n' ;;
+		engine_latest)
+			w=""
+			if [ -s "$STL_CACHE" ]; then w="$(head -n1 "$STL_CACHE")"
+			else w="$(_zm_tmo 10 stl_latest_real 2>/dev/null | head -n1)"; [ -s "$STL_CACHE" ] || w=""; fi
+			_stl_ver_ok "$w" || w=""
+			printf '{"latest":"%s","legacy":"%s"}\n' "$w" "$STL_LEGACY" ;;
 		warp_own_get)
 			local of="$ST_WARP_OWN"
 			[ -s "$of" ] || of="$ST_WARP_OWN_KEEP"
@@ -33046,13 +33052,14 @@ steer_status() {
 	if [ "$vup" = true ] && [ "$vexit" = vpn ] && [ "$off" = false ]; then
 		_st_vpn_live; case $? in 0) vlive=true ;; 1) vlive=false ;; esac
 	fi
-	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s],"pin":"%s","newest":"%s","legacy":"%s","nopq":{"mode":"%s","auto":"%s","on":%s}}\n' \
+	printf '{"running":%s,"phase":"%s","blocker":"%s","installed":%s,"stopped":%s,"version":"%s","steer_running":%s,"channels":%s,"warp_up":%s,"warp_colo":"%s","warp_host":"%s","warp_port":"%s","warp_hs_age":"%s","warp_rx":%s,"warp_tx":%s,"autorestart":"%s","dns_conflict":%s,"doh":"%s","doh_mode":"%s","exit":"%s","vpn_up":%s,"vpn_live":%s,"has_sub":%s,"sub_label":"%s","latest":"%s","ext":%s,"warp_on":%s,"warp_mode":"%s","warp_iface":"%s","warp_pick":"%s","onfail":"%s","warp_own_saved":%s,"tunnels":%s,"warp_active":"%s","catalog":%s,"wfix":%s,"lists_via":%s,"sub_via":%s,"lists":%s,"failopen":%s,"warp_failed":%s,"hosts_extra":%s,"dnsmode":"%s","realip":"%s","cttl":%s,"torrent":"%s","quic":"%s","devices":[%s],"services":[%s],"main_name":"%s","main_off":%s,"exit_want":"%s","main_tun":%s,"main_over":"%s","order":[%s],"sec_max":%s,"sec_vpn_max":%s,"sections":[%s],"awg_by_steer":%s,"awg_other":%s,"xsets":[%s],"pin":"%s","newest":"%s","legacy":"%s","main_vpn":%s,"nopq":{"mode":"%s","auto":"%s","on":%s}}\n' \
 		"$running" "$(esc "$phase")" "$(esc "$blk")" "$installed" "$off" "$(esc "$ver")" "$run" "${chans:-0}" "$warp_up" "$(esc "$colo")" \
 		"$(esc "$host")" "$(esc "$port")" "$age" "${rx:-0}" "${tx:-0}" "$(_st_cron_get)" "$dns" "$doh" "$(_doh_force_mode)" \
 		"$vexit" "$vup" "$vlive" "$vsub" "$(esc "$(_st_sub_label)")" "$(esc "$latest")" "$ext" "$won" "$(_st_warp_modename)" "$(esc "$(_st_ext_if)")" "$(_st_warp_pick)" "$(_st_onfail)" "$(_st_own_saved && echo true || echo false)" "$(_st_tunnels_json)" "$active" "$(_st_cat_json)" "$(_st_wfix_json)" "$([ -f "$ST_DIR/lists.via" ] && echo true || echo false)" "$([ -f "$ST_SUB_VIA" ] && echo true || echo false)" "$(_st_lists_json)" "$failed" "$wfail" "$(_hosts_extra)" "$(_st_dnsmode)" "$(_st_realip)" "$(_st_cttl)" "$(_st_torrent)" "$(_st_quic)" "$(_st_devs_json)" "$svc" "$(esc "$(_st_sec_name main)")" "$(_st_sec_off main && echo true || echo false)" "$(esc "$(cat "$ST_DIR/exit" 2>/dev/null)")" "$mtun" "$(_st_sec_over main)" "$(_st_order_json)" "$ST_SEC_MAX" "$ST_SEC_VPN_MAX" "$(_st_secs_json)" \
 		"$(_st_owns "pkg kmod-amneziawg" || _st_owns "pkg amneziawg-tools" && echo true || echo false)" \
 		"$(uci -q -X show network 2>/dev/null | sed -n "s/^network\.\([^.=]*\)\.proto='amneziawg'\$/\1/p" | grep -cvE '^zmwarp[0-9]*$')" \
 		"$(_st_xsets_json)" "$(esc "$pin")" "$(esc "$newest")" "$STL_LEGACY" \
+		"$([ "$vexit" = vpn ] && [ "$vsub" = true ] && _st_sec_with main _st_sec_vpn_json || echo null)" \
 		"$(_st_nopq_mode)" "$(esc "$(head -n1 "$ST_NOPQ_AUTO" 2>/dev/null)")" "$(_st_nopq_have && echo true || echo false)"
 }
 
@@ -51174,13 +51181,22 @@ return view.extend({
 			var leg = String(data.legacy || '2.0.5'), cur = String(data.version || ''), pinned = !!data.pin;
 			var nv = data.newest && data.newest !== leg ? String(data.newest) : '';
 			var isLeg = sw && pinned, isNew = sw && !pinned;
+			if (isNew && !nv) nv = cur;
+			if (!nv && !engineDlg.tried) {
+				engineDlg.tried = true;
+				return zm.steerAction('engine_latest', '').catch(function() { return {}; }).then(function(r) {
+					if (r && r.latest && r.latest !== leg) data.newest = r.latest;
+					return engineDlg(sw);
+				});
+			}
+			engineDlg.tried = false;
 			return zm.dialog({
 				wide: true,
 				title: sw ? 'Сменить версию ядра steer' : 'Какое ядро steer поставить?',
 				intro: sw ? 'Сейчас стоит ' + (cur || '—') + (pinned ? ', версия закреплена.' : '.') : 'Выбор можно поменять потом — кнопкой «Сменить версию» в карточке Steer.',
 				blocks: [
 					{ type: 'cards', id: 'v', value: sw ? (pinned ? 'latest' : 'legacy') : 'latest', options: [
-						{ id: 'latest', label: 'Последняя', sub: isNew ? 'стоит сейчас · ' + cur : nv ? 'версия ' + nv : 'новая версия', badge: isNew ? 'Стоит сейчас' : 'Рекомендуем', disabled: isNew,
+						{ id: 'latest', label: nv ? 'Steer ' + nv : 'Последняя', sub: isNew ? 'стоит сейчас' + (cur && cur !== nv ? ' · ' + cur : '') : nv ? 'последняя версия' : 'новая версия', badge: isNew ? 'Стоит сейчас' : 'Рекомендуем', disabled: isNew,
 							points: [ 'Все возможности панели и свежие исправления', 'Протоколы ставятся плагинами — меньше места', 'Панель сама находит обновления' ] },
 						{ id: 'legacy', label: 'Steer ' + leg, sub: isLeg ? 'стоит сейчас' : 'прежняя версия', badge: isLeg ? 'Стоит сейчас' : 'Без обновлений', tone: 'warn', disabled: isLeg,
 							points: [ 'Версия до перехода на плагины', 'Закрепляется — обновлений не будет', 'Нет «Торренты», «QUIC» и исправлений\u00a02.1' ] }
@@ -51489,8 +51505,8 @@ return view.extend({
 			var s = id === 'main' ? null : secObj(id), ex = secExit(id), kind = s ? s.kind : ex;
 			if (!s && ex === 'none') return [ 'Не подключено', 'выберите WARP или VPN' ];
 			if (kind === 'vpn') {
-				if (!s) return [ 'VPN' + (data.sub_label ? ' · ' + data.sub_label : ''), 'подписка или свои серверы' ];
-				var vp = s.vpn || {}, lab = vp.label || '', node = (vp.state && vp.state.up && vp.state.node) || vp.pinned || '';
+				if (!s && !(data.main_vpn && data.main_vpn.has)) return [ 'VPN' + (data.sub_label ? ' · ' + data.sub_label : ''), 'подписка или свои серверы' ];
+				var vp = (s ? s.vpn : data.main_vpn) || {}, lab = vp.label || '', node = (vp.state && vp.state.up && vp.state.node) || vp.pinned || '';
 				if (!vp.has) return [ 'VPN', 'подписка ещё не добавлена' ];
 				return [ 'VPN · ' + (node || lab || 'подписка'), (node && lab ? lab + ' · ' : '') + (vp.pinned ? 'узел выбран вручную' : 'узел выбирается сам') ];
 			}
