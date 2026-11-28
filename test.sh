@@ -33814,7 +33814,7 @@ _st_grps_json() {
 }
 
 _st_autogrp_sync() {
-	local quiet="$1" u t="$ST_RUN/ag.$$" n g dv
+	local quiet="$1" u t="$ST_RUN/ag.$$" n g dv viaarg
 	[ -s "$ST_SUB_URL" ] || { rm -f "$ST_SUB_GRPS" "$ST_SUB_GRPS.chk" "$ST_SUB_GRPS.all" "$ST_SUB_GRPS.v2" "$ST_SUB_GRP"; return 0; }
 	[ -s "$ZM_AG_JQ" ] || return 0
 	u="$(head -n1 "$ST_SUB_URL")"
@@ -33826,7 +33826,9 @@ _st_autogrp_sync() {
 		_st_sub_vpn_dev && dv="$ST_SUB_VPN_DEV" && _st_sub_route_on "$dv" "$u" && vm=1 || { [ -n "$quiet" ] || echo "   ! Группы АВТО через VPN не обновились: $(_st_sub_via_err) — остались прежними"; return 1; }
 	fi
 	rm -f "$t"
-	curl ${vm:+-4} -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" ${vm:+--interface $dv} -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
+	viaarg=""
+	[ -n "$vm" ] && ! _stl_redir_dev "$dv" && viaarg="--interface $dv"
+	curl ${vm:+-4} -fsSL --compressed -m 25 --connect-timeout 10 --max-redirs 10 -b "" $viaarg -A "Happ/1.0.0" ${ST_SUB_RESOLVE:+$ST_SUB_RESOLVE} -o "$t" "$u" 2>/dev/null || rm -f "$t"
 	[ -n "$vm" ] && _st_sub_route_off
 	if [ ! -s "$t" ]; then
 		rm -f "$t"
@@ -34287,7 +34289,12 @@ _st_sub_get_via() {
 	_st_sub_vpn_dev || { _st_sub_via_note "$(_st_sub_via_err)"; echo "   ! $(_st_sub_via_err) — подписку не обновили, остаётся прежний список"; return 1; }
 	dv="$ST_SUB_VPN_DEV"
 	_st_sub_route_on "$dv" "$u" || { _st_sub_via_note "$(_st_sub_via_err)"; echo "   ! Не удалось направить запрос подписки в VPN ($(_st_sub_via_err)) — список не обновлён"; return 1; }
-	echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main})"
+	[ -n "$STL_VER_C" ] || STL_VER_C="$(stl_version)"
+	if _stl_redir_dev "$dv"; then
+		echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main}; ядро steer $STL_VER_C уводит трафик роутера в туннель само)"
+	else
+		echo "   · Подписку качаем через VPN ($dv, раздел ${ST_SEC:-main})"
+	fi
 	if [ -f "$ST_SUB_URL.happ" ]; then
 		_st_sub_happ_prep
 		_st_sub_curl "$c" "$dv" "$@" happ && rc=0
@@ -34317,7 +34324,11 @@ _st_sub_get() {
 _st_sub_curl() {
 	local c="$1" dv="$2" u="$3" out="$4" info="$5" t="$4.via" h="$4.via.hdr" j id os md ua k v x try ifa="" v4=""
 	STL_SUB_URL=""; STL_SUB_TITLE=""; STL_SUB_WARN=""; STL_SUB_ERR=""
-	[ -n "$dv" ] && { ifa="--interface $dv"; v4="-4"; }
+	# Устройство выхода на ядре steer 2.1 и новее (zm_vpn, zmv_*) — это не точка маршрута,
+	# а метка выхода: в туннель запрос уводит таблица маршрутов ST_SUB_RT, а привязка сокета
+	# к такому устройству (--interface) отправляет его мимо туннеля — панель «не отвечает».
+	# Привязываемся только к старым ядрам, где отдельного перенаправления нет.
+	[ -n "$dv" ] && { _stl_redir_dev "$dv" || ifa="--interface $dv"; v4="-4"; }
 	j="$(_stl_t 10 steer sub-hwid 2>/dev/null)"
 	id="$(printf '%s' "$j" | jsonfilter -e '@.hwid' 2>/dev/null | tr -cd 'A-Za-z0-9._:-')"
 	os="$(printf '%s' "$j" | jsonfilter -e '@.os' 2>/dev/null | tr -d '\r\n')"
